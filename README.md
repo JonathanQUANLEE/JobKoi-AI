@@ -4,11 +4,9 @@
 
 面向个人求职的 BOSS 直聘岗位筛选与固定招呼语沟通工具。0.2 版本开始，GUI 是主入口；CLI 保留给技术用户和自动化测试。
 
-建议在发生招呼语之前，先在boss的web端进行一些条件的筛选
+建议先在 BOSS 网页端手动筛选城市、学历、活跃状态等条件，再开始处理岗位。BOSS 网页端的推荐流和 App 端并不完全一致，直接使用默认推荐可能会出现岗位相关性不足的情况。
 
-因为web的推流机制不会延续之前的app端，最开始给你推荐的岗位会跟你想要的岗位不够合适，一些筛选机制也没有app端的丰富
-
-以及对方要简历记得及时回复，这个自动发送附件简历的功能还没做
+目前还没有自动发送附件简历的功能。招聘者要求简历时，请及时手动回复。
 
 本项目只做三件事：
 
@@ -63,14 +61,17 @@ uv run python -m boss_zhipin.tauri
 GUI 中配置：
 
 - 运行模式：`scan`、`review`、`auto`
-- 岗位搜索词和 BOSS 起始页 URL
+- 岗位搜索词和本地筛选规则
+- BOSS 起始页 URL（仅 CLI 自动启动时使用；GUI 运行时复用当前浏览器页面）
 - 可选的必须包含关键词，留空表示不限制
 - 方向关键词，默认 `后端开发,ai`
 - 固定招呼语
 - 随机等待秒数、单次发送上限、每日发送上限
 - 是否 dry-run、是否遇验证码停止
 
-首次运行会打开独立 Chrome profile：`./chrome_profile/`。扫码登录一次后，cookie 会保存在这个目录里，后续运行通常不需要重复登录。
+GUI 的正确流程是：先点击“打开手动浏览器”，在 BOSS 页面完成登录和网页筛选，再回到 GUI 点击“开始”。GUI 会复用当前受控浏览器页面，不会自动根据 `BOSS_START_URL` 跳转，也不会自动点击 profile 中的城市、学历等页面筛选控件。
+
+首次打开会使用独立 Chrome profile：`./chrome_profile/`。扫码登录一次后，cookie 会保存在这个目录里，后续运行通常不需要重复登录。
 
 ## 运行模式
 
@@ -98,6 +99,8 @@ uv run main.py --profile backend-intern
 uv run main.py --profile ai-intern
 ```
 
+CLI 会按 profile 的 `search` 和 `page_filters` 配置自动打开起始页并尝试点击 BOSS 页面筛选；GUI 则使用上面介绍的“手动筛选当前页面”流程。
+
 内置 profile：
 
 | 文件 | 作用 |
@@ -109,6 +112,9 @@ uv run main.py --profile ai-intern
 | `profiles/shenzhen-ai.yml` | 深圳 AI 应用实习 |
 
 profile 支持继承。例如 `backend-intern.yml` 只写和 `base.yml` 不同的部分。
+
+请不要把个人求职条件、个人招呼语或其他本地配置提交到仓库。个人 profile 可以放在 `profiles/` 下使用，但应加入 `.gitignore`；仓库只提交不包含个人信息的示例配置。
+GUI 会优先加载 `gui-default.yml`；如果该文件不存在，则加载 profile 列表中的第一个文件。首次使用前请确认当前选中的 profile 和筛选条件。
 
 ## Profile 配置
 
@@ -153,7 +159,7 @@ send:
 
 | 字段 | 可选值 |
 |---|---|
-| `scope` | `title` / `description` / `company` / `boss` / `location` / `all` |
+| `scope` | `title` / `description` / `title_description` / `company` / `boss` / `location` / `all` |
 | `match` | `contains` / `regex` / `exact` |
 | `case_sensitive` | `true` / `false` |
 
@@ -179,15 +185,19 @@ page_filters:
 
 页面筛选只是减少噪声，本地 `filters` 才是最终兜底。默认 `strict: false`，页面控件点不上时只记录 warning 并继续；如果你希望页面筛选失败就停止，改成 `strict: true`。
 
+上面的自动点击行为仅适用于 CLI。GUI 使用当前浏览器页面，因此请在 BOSS 网页端手动完成页面筛选；`boss_active` 配置仍会作为本地岗位规则参与判断。
+
 ## `.env` 字段速查
 
 完整模板见 [`.env.example`](.env.example)。常用字段：
+
+`.env` 主要用于 CLI。GUI 不会自动读取 `.env`，GUI 的运行配置以界面表单和保存的 profile 为准。
 
 | 字段 | 作用 |
 |---|---|
 | `BOSS_USR_NAME` | 你的名字，用于运行前校验和记录 |
 | `BOSS_LABEL` | 岗位搜索词 |
-| `BOSS_START_URL` | BOSS 起始页 URL，可粘贴你手动筛好的搜索页 |
+| `BOSS_START_URL` | CLI 的 BOSS 起始页 URL，可粘贴你手动筛好的搜索页；GUI 使用当前浏览器页面 |
 | `BOSS_FIXED_GREETING` | 固定招呼语 |
 | `BOSS_SCAN_ONLY` | `1` 表示扫描模式 |
 | `BOSS_REVIEW_BEFORE_SEND` | `1` 表示逐条审核 |
@@ -202,7 +212,9 @@ page_filters:
 | `BOSS_SCAN_MAX_JOBS` | 扫描岗位上限 |
 | `BOSS_CHROME_PROFILE` | Chrome profile 目录 |
 
-如果 BOSS 一打开总是本地城市，可以先在浏览器里手动选城市和岗位，把最终 URL 填到 `BOSS_START_URL`。GUI 也提供这个输入框。
+`BOSS_CHROME_PROFILE`、`SCAN_MATCH_LOG_PATH` 和 `LETTER_LOG_PATH` 属于启动时读取的路径配置。CLI 如需自定义这些路径，建议在启动命令前设置进程环境变量；GUI 的运行配置以界面表单和 profile 为准。
+
+如果 CLI 打开后总是本地城市，可以先在浏览器里手动选城市和岗位，再把最终 URL 填到 `BOSS_START_URL`。GUI 请点击“打开手动浏览器”，然后直接在 BOSS 页面完成导航和筛选。
 
 ## 日志
 
@@ -243,6 +255,8 @@ BOSS_AUTO_SEND_DAILY_LIMIT=80
 
 `auto` 模式每次发送后会在最小值和最大值之间随机等待。
 
+`delay_min`、`delay_max`、`max_sent` 和 `daily_sent_limit` 主要用于 `auto` 模式；`scan` 模式的扫描数量由 `BOSS_SCAN_MAX_JOBS` 控制。`scan` 不需要填写固定招呼语，`review` 和 `auto` 才会校验招呼语。
+
 ### 发送后跳到聊天页怎么办？
 
 当前流程会在发送后尝试回到岗位列表；如果 BOSS 弹出“留在此页”，会自动点击并继续处理下一条。
@@ -255,6 +269,7 @@ BOSS_AUTO_SEND_DAILY_LIMIT=80
 ├── profiles/
 ├── greetings/
 ├── tauri-ui/
+├── src-tauri/
 ├── src/boss_zhipin/
 │   ├── cli.py
 │   ├── config/
@@ -269,6 +284,7 @@ BOSS_AUTO_SEND_DAILY_LIMIT=80
 
 ```bash
 uv run pytest -q
+pnpm --dir tauri-ui test
 pnpm --dir tauri-ui build
 ```
 

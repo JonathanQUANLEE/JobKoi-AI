@@ -30,6 +30,8 @@ uv run python -m boss_zhipin.tauri
 
 The first run opens Chrome with `./chrome_profile/`. Scan the QR code once; later runs reuse the saved login state.
 
+For the GUI workflow, click **Open manual browser** first, log in and apply any BOSS page filters in Chrome, then return to the GUI and click **Start**. The GUI reuses the current controlled page; it does not automatically navigate to `BOSS_START_URL` or click profile page filters. Use the CLI with a profile when you want those settings applied automatically.
+
 ## Modes
 
 | Mode | Behavior |
@@ -48,6 +50,8 @@ uv run main.py --profile ai-intern
 ```
 
 Profiles live in `profiles/` and support inheritance.
+
+Do not commit personal job criteria, greetings, or private profiles. Keep personal profile files local and commit only sanitized examples.
 
 ## Verification
 
