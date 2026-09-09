@@ -1,0 +1,25 @@
+"""GUI 层共享工具——给 ``boss_zhipin.tauri`` (PyTauri 桌面 App) 用，**不依赖** PyTauri 本身。
+
+CLI ``boss_zhipin.cli`` 不调本包；CLI 行为不受 ``gui/`` 任何代码影响。
+
+模块清单：
+
+- ``events`` —— ``ProgressEvent`` (Pydantic) + ``emit(kind, **payload)``。业务代码
+  ``website_oper.write_response`` 在关键节点调 ``emit()``；callback=None 时 no-op，
+  CLI 模式行为零变化。GUI 入口用 ``set_emit_callback`` 注册一个 PyTauri Channel
+  send 函数即可订阅。
+- ``runner`` —— ``start_run(coro_factory, on_event)`` / ``stop_run()`` /
+  ``is_running()``，把主循环包成可取消 asyncio Task，task 内 emit
+  ``loop_ended(reason)``。
+- ``log_bridge`` —— ``CallbackHandler`` 把 ``logging.LogRecord`` 喂给 callback。
+- ``run_state`` —— 缓存最近进度事件，给 ``get_run_state`` 恢复运行面板。
+
+桌面 App 入口在 ``boss_zhipin/tauri/__init__.py``：``uv sync`` 后
+``uv run python -m boss_zhipin.tauri``（tauri 是 default group，不用 ``--extra``）。
+
+关键约束（见 ``project-nicegui-uvloop-incompat`` memory）：
+- PyTauri 起 app 时必须 ``start_blocking_portal("asyncio")``，不能 trio /
+  uvloop——uvloop 跟 nodriver 的 Chrome stop+restart 不兼容。
+- ``boss_zhipin/tauri/capabilities/default.toml`` 必须 grant ``pytauri:default``，
+  否则前端 ``pyInvoke`` 全部被 Tauri ACL 拦。
+"""

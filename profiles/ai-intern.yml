@@ -1,0 +1,56 @@
+search:
+  query: AI应用开发实习
+page_filters:
+  strict: false
+  city:
+    enabled: false
+    values: []
+  education:
+    enabled: false
+    values: []
+  boss_active:
+    enabled: true
+    values:
+    - 3日内活跃
+    - 本周活跃
+    - 今日活跃
+    - 刚刚活跃
+filters:
+  title:
+    required:
+      enabled: false
+      scope: title
+      match: contains
+      case_sensitive: false
+      keywords: []
+    any:
+      enabled: true
+      scope: title
+      match: contains
+      case_sensitive: false
+      keywords:
+      - ai
+      - AI
+      - 大模型
+      - LLM
+      - RAG
+      - 后端开发
+      - 全栈
+    exclude:
+      enabled: false
+      scope: title
+      match: contains
+      case_sensitive: false
+      keywords: []
+send:
+  mode: auto
+  greeting_file: ./greetings/default.txt
+  delay_min: 10
+  delay_max: 60
+  max_sent: 10
+  daily_sent_limit: 80
+  stop_on_captcha: true
+state:
+  seen_jobs_file: ./logs/seen_jobs.jsonl
+  sent_log_file: ./logs/sent_jobs.jsonl
+  skipped_log_file: ./logs/skipped_jobs.jsonl

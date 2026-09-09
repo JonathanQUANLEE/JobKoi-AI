@@ -1,0 +1,7 @@
+ACM铜牌&agent系统&后端开发
+有一段ai应用开发实习，实践经验丰富,累计开源pr数10+，累计贡献上万行代码
+熟悉Go，C++,Python，agent系统设计，RAG，数据库，中间件
+井冈山大学计科本科
+可实习六个月以上，一周内到岗
+个人博客:https://4evour.github.io
+仓库地址:https://github.com/4evour

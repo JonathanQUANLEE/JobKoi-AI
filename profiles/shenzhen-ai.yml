@@ -1,0 +1,21 @@
+extends: ai-intern.yml
+
+search:
+  query: 深圳AI应用开发实习
+
+page_filters:
+  city:
+    enabled: true
+    values:
+      - 深圳
+
+filters:
+  location:
+    any:
+      # 页面城市筛选点不上时，本地地点规则继续兜底。
+      enabled: true
+      scope: location
+      match: contains
+      case_sensitive: false
+      keywords:
+        - 深圳

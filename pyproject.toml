@@ -1,0 +1,78 @@
+[project]
+name = "bosszhipin-job-bot"
+version = "0.2.0"
+description = "Profile-driven BOSS Zhipin job screening and greeting bot."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "4evour" },
+]
+dependencies = [
+    "python-dotenv>=1.1.0",
+    "PyYAML>=6.0",
+    "nodriver>=0.48.1",
+]
+
+[project.optional-dependencies]
+# Phase D standalone .app 的嵌入式 Python 环境用：跟 tauri 一样但**不带**
+# pytauri-wheel——standalone 模式 ext_mod 由我们自己的 Rust binary 提供，
+# 不需要 wheel 里那份预编译 binary（白占几十 MB）。
+# 用法见 scripts/build_standalone.sh（``uv pip install '$REPO[standalone]'``）。
+# 留在 optional-dependencies（不挪到 dependency-groups）是因为 PEP 508
+# ``pkg[extras]`` 语法只认 optional-dependencies。
+standalone = [
+    "pydantic>=2.0",
+    "anyio>=4.0",
+    "pytauri==0.8.*",
+]
+
+[project.scripts]
+# uv run boss-zhipin 等价于 uv run python -m boss_zhipin / uv run main.py
+boss-zhipin = "boss_zhipin.cli:_cli_main"
+
+[build-system]
+# Phase D-pre 改造：项目以 src/ 布局变成可安装 package，给 Phase D 用
+# pytauri standalone 把整个包装进 embedded Python interpreter 准备。
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+# wheel 里必须带上 Tauri 的非 Python 文件，否则 standalone bundle（Phase D）
+# 装出来 context_factory 找不到 Tauri.toml / frontend，桌面 App 直接起不来。
+# editable install（uv sync）指回源码树所以感知不到——别因为本地能跑就删这段。
+"boss_zhipin.tauri" = [
+    "Tauri.toml",
+    "capabilities/*.toml",
+    "frontend/**",
+]
+
+[tool.pytest.ini_options]
+# 兜底：没做 editable install（裸 venv + pip install pytest）也能跑测试。
+# uv sync 流程不依赖这行，但贡献者用别的环境管理时少踩一个坑。
+pythonpath = ["src"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
+# Tauri 桌面 App 依赖。放在 dependency-groups（而不是 optional-dependencies）
+# 是为了能进 ``[tool.uv].default-groups``——这样裸 ``uv sync`` 也会装上，
+# 用户不用记 ``--extra tauri``。CLI-only 用户可以 ``uv sync --no-group tauri``
+# 跳过。
+tauri = [
+    "pydantic>=2.0",
+    "anyio>=4.0",
+    "pytauri==0.8.*",
+    "pytauri-wheel==0.8.*",
+]
+
+[tool.uv]
+# 默认就装 tauri 组——桌面 App 是主交互方式，让 ``uv sync`` 开箱即用。
+# 不想装的（纯 CLI / CI 跑测试）：``uv sync --no-group tauri``。
+# 注意：dev 也得显式列出，因为这里一旦设了 default-groups，uv 不再自动
+# 包含 dev 组。
+default-groups = ["dev", "tauri"]

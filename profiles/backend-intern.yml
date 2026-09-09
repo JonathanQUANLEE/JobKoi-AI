@@ -1,0 +1,11 @@
+extends: base.yml
+
+search:
+  query: 后端开发实习
+
+filters:
+  title:
+    any:
+      # 后端 profile 只匹配标题里的“后端开发”，避免正文噪声影响。
+      keywords:
+        - 后端开发

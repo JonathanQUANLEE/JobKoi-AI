@@ -1,0 +1,252 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ink: #f4f4f4;
+  --paper: #0b0c0a;
+  --panel: #11130f;
+  --panel-2: #171a14;
+  --grid: #30342b;
+  --muted-fg: #9ca38f;
+  --signal: #00e676;
+  --danger: #ff3b30;
+}
+
+@layer base {
+  html,
+  body {
+    min-height: 100%;
+    background: var(--paper);
+    color: var(--ink);
+  }
+
+  body {
+    @apply font-mono antialiased;
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus {
+    outline: none;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--signal);
+    color: #000;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply border border-[var(--grid)] bg-[var(--panel)] p-4;
+  }
+
+  .panel-title {
+    @apply mb-4 border-b border-[var(--grid)] pb-2 text-xs font-semibold uppercase tracking-widest text-[var(--signal)];
+  }
+
+  .field-label {
+    @apply mb-1 block text-[11px] uppercase tracking-widest text-[var(--muted-fg)];
+  }
+
+  .field-input,
+  .field-select,
+  .field-textarea {
+    @apply w-full border border-[var(--grid)] bg-[var(--paper)] px-3 py-2 text-sm text-[var(--ink)] outline-none;
+  }
+
+  .field-input:focus,
+  .field-select:focus,
+  .field-textarea:focus {
+    border-color: var(--signal);
+  }
+
+  .field-textarea {
+    @apply resize-y leading-relaxed;
+  }
+
+  .readonly-line {
+    @apply border border-[var(--grid)] bg-[var(--panel-2)] px-3 py-2 text-sm text-[var(--signal)];
+  }
+
+  .mode-button {
+    @apply min-h-20 border border-[var(--grid)] bg-[var(--paper)] p-3 text-left transition-colors;
+  }
+
+  .mode-button:hover {
+    border-color: var(--signal);
+  }
+
+  .mode-button.active {
+    border-color: var(--signal);
+    background: #07120b;
+  }
+
+  .btn-primary,
+  .btn-secondary,
+  .btn-ghost {
+    @apply inline-flex h-10 items-center justify-center border px-4 text-xs font-semibold uppercase tracking-widest transition-colors;
+  }
+
+  .btn-primary {
+    border-color: var(--signal);
+    background: var(--signal);
+    color: #000;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: transparent;
+    color: var(--signal);
+  }
+
+  .btn-secondary {
+    border-color: var(--grid);
+    background: var(--panel);
+    color: var(--ink);
+  }
+
+  .btn-secondary:hover:not(:disabled),
+  .btn-ghost:hover:not(:disabled) {
+    border-color: var(--signal);
+    color: var(--signal);
+  }
+
+  .btn-ghost {
+    border-color: transparent;
+    background: transparent;
+    color: var(--muted-fg);
+  }
+
+  .btn-primary:disabled,
+  .btn-secondary:disabled,
+  .btn-ghost:disabled {
+    @apply cursor-not-allowed opacity-40;
+  }
+
+  .checkbox-line {
+    @apply inline-flex items-center gap-2 text-sm text-[var(--ink)];
+  }
+
+  .checkbox-line input {
+    @apply h-4 w-4;
+    accent-color: var(--signal);
+  }
+
+  .option-picker {
+    @apply mb-2 flex flex-wrap gap-2;
+  }
+
+  .option-chip {
+    @apply border border-[var(--grid)] bg-[var(--panel-2)] px-2 py-1 text-xs text-[var(--muted-fg)] transition-colors;
+  }
+
+  .option-chip:hover,
+  .option-chip.active {
+    border-color: var(--signal);
+    color: var(--signal);
+  }
+
+  .status-on,
+  .status-idle {
+    @apply border px-3 py-2 text-xs uppercase tracking-widest;
+  }
+
+  .status-on {
+    border-color: var(--signal);
+    color: var(--signal);
+  }
+
+  .status-idle {
+    border-color: var(--grid);
+    color: var(--muted-fg);
+  }
+
+  .message-line {
+    @apply text-sm text-[var(--signal)];
+  }
+
+  .risk-box {
+    @apply mt-3 border border-[var(--danger)] bg-[var(--panel-2)] p-3 text-xs leading-relaxed text-[var(--ink)];
+  }
+
+  .stat-grid {
+    @apply grid grid-cols-2 gap-3;
+  }
+
+  .stat-cell {
+    @apply border border-[var(--grid)] bg-[var(--panel-2)] p-3;
+  }
+
+  .review-title {
+    @apply border border-[var(--signal)] bg-[#07120b] p-3 text-sm font-semibold text-[var(--signal)];
+  }
+
+  .review-greeting {
+    @apply max-h-48 overflow-y-auto whitespace-pre-wrap border border-[var(--grid)] bg-black p-3 text-xs leading-relaxed text-[var(--ink)];
+  }
+
+  .event-list {
+    @apply h-80 overflow-y-auto text-xs;
+  }
+
+  .event-row {
+    @apply grid grid-cols-[150px_minmax(0,1fr)] gap-3 border-b border-[var(--grid)] py-2;
+  }
+
+  .event-row.error {
+    color: var(--danger);
+  }
+
+  .event-row.warning .event-title {
+    color: #ffcc66;
+  }
+
+  .event-row.success .event-title {
+    color: var(--signal);
+  }
+
+  .event-meta {
+    @apply min-w-0 space-y-1;
+  }
+
+  .event-time {
+    @apply block text-[10px] text-[var(--muted-fg)];
+  }
+
+  .event-title {
+    @apply block break-words font-semibold text-[var(--ink)];
+  }
+
+  .event-body {
+    @apply min-w-0 space-y-1;
+  }
+
+  .event-summary {
+    @apply block break-words text-[var(--ink)];
+  }
+
+  .event-details {
+    @apply block break-all text-[10px] leading-relaxed text-[var(--muted-fg)];
+  }
+
+  .event-kind {
+    @apply uppercase tracking-widest text-[var(--muted-fg)];
+  }
+
+  .event-payload {
+    @apply break-all text-[var(--ink)];
+  }
+
+  .log-box {
+    @apply h-80 overflow-y-auto whitespace-pre-wrap border border-[var(--grid)] bg-black p-3 text-xs leading-relaxed text-[var(--signal)];
+  }
+
+  .empty-text {
+    @apply break-all text-xs text-[var(--muted-fg)];
+  }
+}

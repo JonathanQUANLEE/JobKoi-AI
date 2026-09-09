@@ -1,0 +1,60 @@
+search:
+  query: 后端开发实习
+
+page_filters:
+  # 页面筛选失败只警告并继续，本地规则继续兜底。
+  strict: false
+
+  city:
+    enabled: false
+    values: []
+
+  education:
+    enabled: false
+    values: []
+
+  boss_active:
+    enabled: false
+    values: []
+
+filters:
+  title:
+    required:
+      enabled: false
+      scope: title
+      match: contains
+      case_sensitive: false
+      keywords: []
+
+    any:
+      enabled: true
+      scope: title
+      match: contains
+      case_sensitive: false
+      keywords:
+        - 后端开发
+        - ai
+
+    exclude:
+      enabled: true
+      scope: title
+      match: contains
+      case_sensitive: false
+      keywords:
+        - 销售
+        - 客服
+        - 培训
+
+send:
+  mode: auto
+  greeting_file: ./greetings/default.txt
+  delay_min: 10
+  delay_max: 60
+  max_sent: 50
+  daily_sent_limit: 80
+  stop_on_captcha: true
+
+state:
+  seen_jobs_file: ./logs/seen_jobs.jsonl
+  sent_log_file: ./logs/sent_jobs.jsonl
+  skipped_log_file: ./logs/skipped_jobs.jsonl
