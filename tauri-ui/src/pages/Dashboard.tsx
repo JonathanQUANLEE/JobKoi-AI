@@ -298,14 +298,17 @@ export default function Dashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // Hero 标题 30秒 逐行阶梯动效循环状态 (第1行 -> 第2行 -> 第3行 依序显现并循环)
+  // Hero 标题逐行阶梯动效循环状态 (第1行 -> 第2行 -> 第3行 依序显现并停留 10 秒循环)
   const [heroAnimCycle, setHeroAnimCycle] = useState(0);
   const [heroAnimStep, setHeroAnimStep] = useState(1);
   const [heroAnimFading, setHeroAnimFading] = useState(false);
 
   useEffect(() => {
-    const CYCLE_MS = 30000;
+    // 3行文字依次显现约 5.3s，全部显现后停留 10s，淡出 0.45s，随后自动开启新一轮循环
+    const STAY_MS = 10000;
+    const ANIM_TOTAL_MS = 5300;
     const FADE_OUT_MS = 450;
+    const CYCLE_MS = ANIM_TOTAL_MS + STAY_MS + FADE_OUT_MS;
 
     const fadeTimer = setTimeout(() => {
       setHeroAnimFading(true);
