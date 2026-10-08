@@ -3,14 +3,21 @@
 @tailwind utilities;
 
 :root {
-  --ink: #f4f4f4;
-  --paper: #0b0c0a;
-  --panel: #11130f;
-  --panel-2: #171a14;
-  --grid: #30342b;
-  --muted-fg: #9ca38f;
-  --signal: #00e676;
-  --danger: #ff3b30;
+  /* 借鉴 Hunt Now (hunt.now) 暖暗夜设计系统与便当盒（Bento Grid）美学 */
+  --ink: #f5f5f4;          /* 暖石白 text */
+  --paper: #0f0e0d;        /* 沉浸式暖黑底色 */
+  --panel: #181614;        /* 便当盒卡片主表面 */
+  --panel-2: #221f1c;      /* 浮层与输入框表面 */
+  --panel-hover: #292622;  /* 卡片悬停高亮 */
+  --grid: #322e29;         /* 细腻微暖边框 */
+  --muted-fg: #a8a29e;     /* 暖灰次级文字 */
+  --signal: #10b981;       /* 翡翠绿 (正常/已就绪) */
+  --signal-subtle: rgba(16, 185, 129, 0.12);
+  --accent: #f59e0b;       /* Hunt Now 标志性暖金琥珀色 */
+  --accent-hover: #d97706;
+  --accent-subtle: rgba(245, 158, 11, 0.12);
+  --danger: #ef4444;
+  --card-radius: 20px;
 }
 
 @layer base {
@@ -22,8 +29,25 @@
   }
 
   body {
-    @apply font-mono antialiased;
-    font-variant-numeric: tabular-nums;
+    @apply font-sans antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    letter-spacing: -0.012em;
+  }
+
+  /* 平滑精致滚动条 */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #38332c;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #4d463d;
   }
 
   :focus {
@@ -31,39 +55,46 @@
   }
 
   :focus-visible {
-    outline: 2px solid var(--signal);
+    outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
 
   ::selection {
-    background: var(--signal);
+    background: var(--accent);
     color: #000;
   }
 }
 
 @layer components {
+  /* 便当盒（Bento Grid）主卡片 */
   .panel {
-    @apply border border-[var(--grid)] bg-[var(--panel)] p-4;
+    @apply border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm transition-all;
+    border-radius: var(--card-radius);
+  }
+
+  .panel:hover {
+    border-color: rgba(245, 158, 11, 0.25);
   }
 
   .panel-title {
-    @apply mb-4 border-b border-[var(--grid)] pb-2 text-xs font-semibold uppercase tracking-widest text-[var(--signal)];
+    @apply mb-4 flex items-center justify-between border-b border-[var(--grid)] pb-3 text-xs font-bold uppercase tracking-wider text-[var(--ink)];
   }
 
   .field-label {
-    @apply mb-1 block text-[11px] uppercase tracking-widest text-[var(--muted-fg)];
+    @apply mb-1.5 block text-xs font-medium text-[var(--muted-fg)];
   }
 
   .field-input,
   .field-select,
   .field-textarea {
-    @apply w-full border border-[var(--grid)] bg-[var(--paper)] px-3 py-2 text-sm text-[var(--ink)] outline-none;
+    @apply w-full rounded-xl border border-[var(--grid)] bg-[var(--paper)] px-3.5 py-2.5 text-sm text-[var(--ink)] transition-all placeholder:text-stone-600;
   }
 
   .field-input:focus,
   .field-select:focus,
   .field-textarea:focus {
-    border-color: var(--signal);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-subtle);
   }
 
   .field-textarea {
@@ -71,70 +102,87 @@
   }
 
   .readonly-line {
-    @apply border border-[var(--grid)] bg-[var(--panel-2)] px-3 py-2 text-sm text-[var(--signal)];
+    @apply rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] px-3.5 py-2 text-sm text-[var(--signal)];
   }
 
+  /* 模式切换卡片（Bento 按钮） */
   .mode-button {
-    @apply min-h-20 border border-[var(--grid)] bg-[var(--paper)] p-3 text-left transition-colors;
+    @apply min-h-20 rounded-2xl border border-[var(--grid)] bg-[var(--paper)] p-4 text-left transition-all cursor-pointer;
   }
 
   .mode-button:hover {
-    border-color: var(--signal);
+    border-color: var(--accent);
+    transform: translateY(-1px);
+    background: var(--panel-2);
   }
 
   .mode-button.active {
-    border-color: var(--signal);
-    background: #07120b;
+    border-color: var(--accent);
+    background: var(--accent-subtle);
+    box-shadow: 0 0 0 1px var(--accent);
   }
 
+  /* 现代化交互按钮（带触感微缩放） */
   .btn-primary,
   .btn-secondary,
   .btn-ghost {
-    @apply inline-flex h-10 items-center justify-center border px-4 text-xs font-semibold uppercase tracking-widest transition-colors;
+    @apply inline-flex h-9 items-center justify-center rounded-xl px-4 text-xs font-semibold tracking-wide transition-all select-none;
   }
 
   .btn-primary {
-    border-color: var(--signal);
-    background: var(--signal);
-    color: #000;
+    background: var(--accent);
+    color: #1c1917;
+    box-shadow: 0 2px 10px rgba(245, 158, 11, 0.25);
   }
 
   .btn-primary:hover:not(:disabled) {
-    background: transparent;
-    color: var(--signal);
+    background: var(--accent-hover);
+    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);
+    transform: translateY(-1px);
+  }
+
+  .btn-primary:active:not(:disabled) {
+    transform: scale(0.97);
   }
 
   .btn-secondary {
-    border-color: var(--grid);
-    background: var(--panel);
+    border: 1px solid var(--grid);
+    background: var(--panel-2);
     color: var(--ink);
   }
 
-  .btn-secondary:hover:not(:disabled),
-  .btn-ghost:hover:not(:disabled) {
-    border-color: var(--signal);
-    color: var(--signal);
+  .btn-secondary:hover:not(:disabled) {
+    border-color: var(--muted-fg);
+    background: var(--panel-hover);
+  }
+
+  .btn-secondary:active:not(:disabled) {
+    transform: scale(0.97);
   }
 
   .btn-ghost {
-    border-color: transparent;
     background: transparent;
     color: var(--muted-fg);
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--panel-2);
+    color: var(--ink);
   }
 
   .btn-primary:disabled,
   .btn-secondary:disabled,
   .btn-ghost:disabled {
-    @apply cursor-not-allowed opacity-40;
+    @apply cursor-not-allowed opacity-40 shadow-none transform-none;
   }
 
   .checkbox-line {
-    @apply inline-flex items-center gap-2 text-sm text-[var(--ink)];
+    @apply inline-flex items-center gap-2.5 text-sm text-[var(--ink)] cursor-pointer select-none;
   }
 
   .checkbox-line input {
-    @apply h-4 w-4;
-    accent-color: var(--signal);
+    @apply h-4 w-4 rounded border-stone-700 bg-stone-900;
+    accent-color: var(--accent);
   }
 
   .option-picker {
@@ -142,36 +190,39 @@
   }
 
   .option-chip {
-    @apply border border-[var(--grid)] bg-[var(--panel-2)] px-2 py-1 text-xs text-[var(--muted-fg)] transition-colors;
+    @apply rounded-lg border border-[var(--grid)] bg-[var(--panel-2)] px-2.5 py-1 text-xs text-[var(--muted-fg)] transition-all cursor-pointer;
   }
 
   .option-chip:hover,
   .option-chip.active {
-    border-color: var(--signal);
-    color: var(--signal);
+    border-color: var(--accent);
+    color: var(--ink);
+    background: var(--accent-subtle);
   }
 
   .status-on,
   .status-idle {
-    @apply border px-3 py-2 text-xs uppercase tracking-widest;
+    @apply rounded-full px-3 py-1 text-xs font-medium tracking-wide flex items-center gap-1.5;
   }
 
   .status-on {
-    border-color: var(--signal);
-    color: var(--signal);
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
   }
 
   .status-idle {
-    border-color: var(--grid);
+    background: rgba(168, 162, 158, 0.1);
     color: var(--muted-fg);
+    border: 1px solid var(--grid);
   }
 
   .message-line {
-    @apply text-sm text-[var(--signal)];
+    @apply text-xs font-medium text-amber-400;
   }
 
   .risk-box {
-    @apply mt-3 border border-[var(--danger)] bg-[var(--panel-2)] p-3 text-xs leading-relaxed text-[var(--ink)];
+    @apply mt-3 rounded-xl border border-red-500/30 bg-red-950/20 p-3.5 text-xs leading-relaxed text-red-200;
   }
 
   .stat-grid {
@@ -179,23 +230,27 @@
   }
 
   .stat-cell {
-    @apply border border-[var(--grid)] bg-[var(--panel-2)] p-3;
+    @apply rounded-2xl border border-[var(--grid)] bg-[var(--panel-2)] p-4;
   }
 
   .review-title {
-    @apply border border-[var(--signal)] bg-[#07120b] p-3 text-sm font-semibold text-[var(--signal)];
+    @apply rounded-t-2xl border border-emerald-500/40 bg-emerald-950/30 p-3.5 text-sm font-semibold text-emerald-300;
   }
 
   .review-greeting {
-    @apply max-h-48 overflow-y-auto whitespace-pre-wrap border border-[var(--grid)] bg-black p-3 text-xs leading-relaxed text-[var(--ink)];
+    @apply max-h-48 overflow-y-auto whitespace-pre-wrap rounded-b-2xl border border-t-0 border-[var(--grid)] bg-black/60 p-3.5 text-xs leading-relaxed text-[var(--ink)];
   }
 
   .event-list {
-    @apply h-80 overflow-y-auto text-xs;
+    @apply h-80 overflow-y-auto text-xs pr-1;
   }
 
   .event-row {
-    @apply grid grid-cols-[150px_minmax(0,1fr)] gap-3 border-b border-[var(--grid)] py-2;
+    @apply grid grid-cols-[140px_minmax(0,1fr)] gap-3 border-b border-[var(--grid)] py-2.5 transition-colors;
+  }
+
+  .event-row:hover {
+    background: rgba(255, 255, 255, 0.02);
   }
 
   .event-row.error {
@@ -203,7 +258,7 @@
   }
 
   .event-row.warning .event-title {
-    color: #ffcc66;
+    color: #fbbf24;
   }
 
   .event-row.success .event-title {
@@ -215,11 +270,11 @@
   }
 
   .event-time {
-    @apply block text-[10px] text-[var(--muted-fg)];
+    @apply block text-[10px] text-[var(--muted-fg)] font-mono;
   }
 
   .event-title {
-    @apply block break-words font-semibold text-[var(--ink)];
+    @apply block break-words font-medium text-[var(--ink)];
   }
 
   .event-body {
@@ -235,7 +290,7 @@
   }
 
   .event-kind {
-    @apply uppercase tracking-widest text-[var(--muted-fg)];
+    @apply uppercase tracking-wider text-[var(--muted-fg)] text-[10px];
   }
 
   .event-payload {
@@ -243,10 +298,93 @@
   }
 
   .log-box {
-    @apply h-80 overflow-y-auto whitespace-pre-wrap border border-[var(--grid)] bg-black p-3 text-xs leading-relaxed text-[var(--signal)];
+    @apply h-80 overflow-y-auto whitespace-pre-wrap rounded-2xl border border-[var(--grid)] bg-black/70 p-4 font-mono text-xs leading-relaxed text-emerald-400;
   }
 
   .empty-text {
     @apply break-all text-xs text-[var(--muted-fg)];
+  }
+
+  /* ==========================================================================
+     Hunt Now (https://www.hunt.now/) 像素级视觉风格与动效系统
+     ========================================================================== */
+
+  .dot-pattern {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+    background-size: 24px 24px;
+    mask-image: radial-gradient(ellipse 65% 55% at 50% 45%, #000 65%, transparent 100%);
+    -webkit-mask-image: radial-gradient(ellipse 65% 55% at 50% 45%, #000 65%, transparent 100%);
+  }
+
+  .fx-glow {
+    position: absolute;
+    left: 50%;
+    top: 3rem;
+    width: 46rem;
+    max-width: 90%;
+    height: 18rem;
+    transform: translateX(-50%);
+    border-radius: 9999px;
+    background: radial-gradient(circle, rgba(255, 87, 34, 0.22) 0%, rgba(255, 42, 85, 0.14) 38%, transparent 70%);
+    filter: blur(64px);
+    pointer-events: none;
+  }
+
+  .text-gradient {
+    background: linear-gradient(100deg, #ff5722 10%, #ff3b5c 50%, #ff2a55 90%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .beam {
+    position: relative;
+  }
+
+  .beam::before {
+    content: "";
+    position: absolute;
+    inset: -1.5px;
+    border-radius: inherit;
+    pointer-events: none;
+    background: conic-gradient(from var(--beam-angle, 0deg), transparent 0 65%, #ff5722 80%, #ff2a55 92%, transparent 100%);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    padding: 1.5px;
+    animation: 3.5s linear infinite beam-spin;
+    opacity: 0.85;
+    transition: opacity 0.3s;
+  }
+
+  .beam:focus-within::before {
+    opacity: 1;
+  }
+
+  @keyframes rise-in {
+    0% {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .rise-in {
+    animation: 0.35s ease-out both rise-in;
+  }
+}
+
+@property --beam-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes beam-spin {
+  to {
+    --beam-angle: 360deg;
   }
 }

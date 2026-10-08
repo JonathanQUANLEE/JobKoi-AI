@@ -754,10 +754,22 @@ def _split_boss_line(line: str) -> tuple[str, str]:
     return parts[0], parts[1]
 
 
+def normalize_job_key(key: str) -> str:
+    """规范去重 key：job_detail 链接剥掉查询参数。
+
+    DOM 卡片和搜索 API 对同一岗位可能给出带不同查询参数的链接
+    （?ka=... / ?securityId=...），不剥掉会绕过去重导致重复发送。
+    """
+    key = (key or "").strip()
+    if key.startswith("http") and "?" in key:
+        return key.split("?", 1)[0]
+    return key
+
+
 def job_key(job: JobPosting) -> str:
     """生成岗位去重 key；详情 URL 优先，其次用标题/公司/地点/BOSS。"""
     if job.detail_url:
-        return job.detail_url
+        return normalize_job_key(job.detail_url)
     parts = [job.title, job.company, job.location, job.boss_name]
     if any(part.strip() for part in parts):
         return "|".join(parts)
@@ -950,6 +962,66 @@ async def scroll_to_load_more_jobs(timeout: float = 8.0) -> bool:
     return False
 
 
+async def reload_current_page(url: str = "") -> bool:
+    """刷新当前受控 tab（nodriver 原生 CDP Page.reload）。
+
+    推荐流滚到底、翻页也没有之后，用它整页刷新换一批新推荐。
+    注意不能用 ``tab.evaluate("location.reload()")``：页面跳转时 JS 上下文
+    直接销毁，evaluate 永远等不到返回值，必然超时失败（实测踩坑）。
+    CDP ``Tab.reload()`` 由浏览器进程执行，不依赖页面 JS 上下文。
+    ``url`` 参数保留兼容旧签名，但刷新总是停留在当前 URL。
+    """
+    global _tab
+    if _tab is None:
+        log.warning("刷新页面失败：还没有受控 tab")
+        return False
+    try:
+        await asyncio.wait_for(_tab.reload(), timeout=20)
+    except Exception as e:
+        log.warning("刷新页面失败（CDP reload）: %s", e)
+        return False
+    await _wait_url_stable(stable_for=2.0, timeout=30)
+    log.info("已刷新页面，当前URL: %s", _tab.url)
+    return True
+
+
+_PAGE_IN_URL_RE = re.compile(r"[?&]page=(\d+)")
+
+
+async def navigate_next_search_page() -> bool:
+    """搜索结果页翻页：解析当前 URL 的 page 参数，导航到下一页。
+
+    DOM 里的“下一页”按钮在 BOSS 页面上点不中（实测整轮 0 次成功），改走
+    URL 翻页（CDP 导航，不依赖页面 JS 上下文）。推荐流（job-recommend）没有
+    分页概念，直接返回 False 交给刷新逻辑。翻超出末页时 BOSS 会改写/丢掉
+    page 参数，借此判定没有更多页。
+    """
+    global _tab
+    if _tab is None:
+        return False
+    url = _tab.url
+    if "job-recommend" in url:
+        return False
+    m = _PAGE_IN_URL_RE.search(url)
+    next_page = (int(m.group(1)) if m else 1) + 1
+    if m:
+        next_url = url[: m.start(1)] + str(next_page) + url[m.end(1) :]
+    else:
+        next_url = url + ("&" if "?" in url else "?") + f"page={next_page}"
+    try:
+        await asyncio.wait_for(_tab.get(next_url), timeout=30)
+    except Exception as e:
+        log.warning("翻页到第 %d 页失败: %s", next_page, e)
+        return False
+    await asyncio.sleep(2)
+    m2 = _PAGE_IN_URL_RE.search(_tab.url)
+    if not m2 or int(m2.group(1)) != next_page:
+        log.info("第 %d 页翻不动（当前URL: %s），没有更多分页了", next_page, _tab.url)
+        return False
+    log.info("已翻到搜索结果第 %d 页", next_page)
+    return True
+
+
 async def click_next_page_if_present(timeout: float = 3.0) -> bool:
     """列表滚动没有新岗位时，尝试点击分页里的“下一页”。"""
     next_xpaths = (
@@ -1031,8 +1103,37 @@ async def wait_for_css(selector: str, timeout: float = 50) -> bool:
     return el is not None
 
 
+def _message_sending_disabled() -> bool:
+    """用户要求：只允许点“立即沟通”，禁止把任何招呼语 / 简历内容发给对方。
+
+    默认开启（硬保险）。确需恢复自动发送时，显式设置 ``BOSS_CLICK_ONLY=0``。
+    """
+    return os.getenv("BOSS_CLICK_ONLY", "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+    )
+
+
+def send_resume_after_greeting_enabled() -> bool:
+    """F2 开关：打招呼后自动点「发简历」（默认关，opt-in）。
+
+    与 ``BOSS_CLICK_ONLY``（管文本消息）**分开设闸**——发简历是独立动作，
+    由 profile 的 ``send.send_resume_after_greeting`` 桥接到
+    ``BOSS_SEND_RESUME_AFTER_GREETING`` 控制。两个闸互不影响。
+    """
+    return os.getenv("BOSS_SEND_RESUME_AFTER_GREETING", "0").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
 async def send_chat_message(text: str) -> None:
     """把 text 打进 ``#chat-input``，优先点击发送按钮。"""
+    if _message_sending_disabled():
+        log.info("BOSS_CLICK_ONLY 生效：已跳过发送招呼语（只点击'立即沟通'）")
+        return
     chat = await _tab.select("#chat-input", timeout=10)
     if not chat:
         raise RuntimeError("chat input (#chat-input) 未找到")
@@ -1056,7 +1157,12 @@ async def click_send_resume(timeout: float = 5) -> bool:
     """发送招呼语后尝试点击“发简历”。
 
     按钮不存在时静默返回 False，不影响已经完成的招呼语发送。
+    闸门：``BOSS_SEND_RESUME_AFTER_GREETING``（F2 开关，默认关）——与
+    文本消息的 ``BOSS_CLICK_ONLY`` 硬保险相互独立。
     """
+    if not send_resume_after_greeting_enabled():
+        log.info("BOSS_SEND_RESUME_AFTER_GREETING 未开启：跳过点击'发简历'")
+        return False
     try:
         button = await _tab.find("发简历", best_match=True, timeout=timeout)
     except Exception:

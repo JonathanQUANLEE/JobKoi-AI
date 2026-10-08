@@ -75,14 +75,118 @@ export type BrowserPageState = {
   loaded_job_count: number;
 };
 
-// ---------- wrappers ----------
+// ---------- agent（智能助手，里程碑 1） ----------
+
+export type AgentChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+/** agent 声明的工具意图（白名单在后端净化，前端只透传）。 */
+export type AgentAction = {
+  type: "get_stats" | "preview_jobs" | "prepare_run";
+  params?: { n?: number };
+};
+
+/** agent_chat 的返回：可预期错误也走返回值（status=error），保持聊天历史。 */
+export type AgentChatResult = {
+  status: "ok" | "error";
+  code?: string;
+  message?: string;
+  reply?: string;
+  /** 与 profileForm 的 BuiltProfileData 同构（snake_case 原样透传）。 */
+  profile?: Record<string, unknown> | null;
+  action?: AgentAction | null;
+};
+
+/** agent_execute_action 的返回（get_stats / preview_jobs）。 */
+export type AgentToolResult = {
+  status: "ok" | "error";
+  type: string;
+  text: string;
+  data?: Record<string, unknown>;
+  code?: string;
+  message?: string;
+};
+
+export type LLMPreset = {
+  id: string;
+  label: string;
+  base_url: string;
+  default_model: string;
+  signup_hint: string;
+};
+
+export type LLMConfig = {
+  base_url: string;
+  /** 后端返回的脱敏掩码（如 sk-o****3456）；空串表示未配置。 */
+  api_key: string;
+  model: string;
+  configured: boolean;
+  presets: LLMPreset[];
+};
+
+export type SaveLLMConfigResult = {
+  status: string;
+  api_key: string;
+  configured: boolean;
+};
+
+// ---------- 简历管理（F1） ----------
+
+export type ResumeItem = {
+  name: string;
+  size: number;
+  mtime: string;
+  is_default: boolean;
+};
+
+export type ResumeListResult = {
+  resumes: ResumeItem[];
+};
+
+// ---------- F3：BOSS 新回复检测 ----------
+
+export type ReplyCheckResult = {
+  status: "ok" | "error";
+  code?: string;
+  message?: string;
+  unread?: number;
+  new_replies?: boolean;
+  chat_url?: string;
+};
+
+// ---------- 多平台适配层 ----------
+
+export type PlatformItem = {
+  id: string;
+  name: string;
+  tagline: string;
+  daily_limit: number;
+  theme_color: string;
+  is_supported: boolean;
+  is_logged_in: boolean;
+  status_text: string;
+};
+
+export type PlatformListResult = {
+  platforms: PlatformItem[];
+};
 
 export const ipc = {
+  listPlatforms: () => pyInvoke<PlatformListResult>("list_platforms", {}),
+  openPlatformLogin: (platformId: string) =>
+    pyInvoke<{ status: string; platform?: string; url?: string; message?: string }>(
+      "open_platform_login",
+      { platformId },
+    ),
   startRun: (config: RunConfig, progressChannel: unknown, logChannel: unknown) =>
     pyInvoke<{ status: string }>("start_run", { config, progressChannel, logChannel }),
   stopRun: () => pyInvoke<{ status: string }>("stop_run", {}),
   shutdownBrowser: () => pyInvoke<{ status: string }>("shutdown_browser", {}),
-  openManualBrowser: () => pyInvoke<BrowserPageState>("open_manual_browser", { url: "" }),
+  openManualBrowser: (url?: string) =>
+    pyInvoke<BrowserPageState>("open_manual_browser", { url: url ?? "" }),
+  checkBossReplies: () => pyInvoke<ReplyCheckResult>("check_boss_replies", {}),
   listProfiles: () => pyInvoke<{ profiles: ProfileSummary[] }>("list_profiles", {}),
   getProfile: (name: string) => pyInvoke<LoadedProfile>("get_profile", { name }),
   saveProfile: (name: string, data: ProfileData) =>
@@ -94,4 +198,18 @@ export const ipc = {
     pyInvoke<{ status: string; decision: string }>("submit_review_decision", { decision }),
   getRunState: () => pyInvoke<RunState>("get_run_state", {}),
   getBrowserPageState: () => pyInvoke<BrowserPageState>("get_browser_page_state", {}),
+  agentChat: (
+    message: string,
+    history: AgentChatMessage[],
+    currentForm: Record<string, unknown>,
+  ) =>
+    pyInvoke<AgentChatResult>("agent_chat", { message, history, currentForm }),
+  agentExecuteAction: (type: string, params: Record<string, unknown>) =>
+    pyInvoke<AgentToolResult>("agent_execute_action", { type, params }),
+  getLLMConfig: () => pyInvoke<LLMConfig>("get_llm_config", {}),
+  saveLLMConfig: (baseUrl: string, apiKey: string, model: string) =>
+    pyInvoke<SaveLLMConfigResult>("save_llm_config", { baseUrl, apiKey, model }),
+  listResumes: () => pyInvoke<ResumeListResult>("list_resumes", {}),
+  setDefaultResume: (name: string) =>
+    pyInvoke<{ status: string; name: string }>("set_default_resume", { name }),
 };

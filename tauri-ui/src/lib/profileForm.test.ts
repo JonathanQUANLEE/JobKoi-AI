@@ -25,6 +25,9 @@ describe("buildProfileData", () => {
       maxSent: "50",
       dailyLimit: "80",
       stopOnCaptcha: true,
+      sendResumeAfterGreeting: true,
+      autoResumeOnReply: false,
+      aiGreeting: false,
     });
 
     expect(data).toEqual({
@@ -71,6 +74,9 @@ describe("buildProfileData", () => {
         max_sent: 50,
         daily_sent_limit: 80,
         stop_on_captcha: true,
+        send_resume_after_greeting: true,
+        auto_send_resume_on_reply: false,
+        ai_greeting: false,
       },
       state: {
         seen_jobs_file: "./logs/seen_jobs.jsonl",
@@ -103,6 +109,9 @@ describe("buildProfileData", () => {
       maxSent: "",
       dailyLimit: "80",
       stopOnCaptcha: false,
+      sendResumeAfterGreeting: false,
+      autoResumeOnReply: false,
+      aiGreeting: false,
     });
 
     expect(data.search.query).toBe("");
@@ -147,6 +156,9 @@ describe("buildProfileData", () => {
       maxSent: "50",
       dailyLimit: "80",
       stopOnCaptcha: true,
+      sendResumeAfterGreeting: false,
+      autoResumeOnReply: false,
+      aiGreeting: false,
     });
 
     expect(data.filters.title.required.scope).toBe("title_description");

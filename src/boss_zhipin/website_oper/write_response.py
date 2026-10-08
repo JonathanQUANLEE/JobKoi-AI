@@ -27,6 +27,7 @@ import json
 import logging
 import os
 import random
+import re
 from pathlib import Path
 from typing import Literal
 
@@ -226,8 +227,59 @@ def _read_seen_job_keys(path: Path | None) -> set[str]:
                 continue
             key = str(data.get("job_key") or data.get("key") or "").strip()
             if key:
-                keys.add(key)
+                # 历史记录统一规范化（剥查询参数），保证新旧格式互相命中。
+                keys.add(finding_jobs.normalize_job_key(key))
     return keys
+
+
+def _normalize_company(name: str) -> str:
+    """公司名规范化，用于"同一家公司只打一次招呼"。
+
+    去掉所有空白、大小写归一，并剥掉常见法律后缀，避免
+    "阿里巴巴集团" 和 "阿里巴巴（中国）有限公司" 被当成两家公司。
+    """
+    s = re.sub(r"[\s\u3000]+", "", str(name or "")).lower()
+    # 先去掉括号及其内容：阿里巴巴（中国）有限公司 -> 阿里巴巴有限公司
+    s = re.sub(r"[\(（\[][^)）\]]*[\)）\]]", "", s)
+    for suffix in (
+        "股份有限公司",
+        "有限责任公司",
+        "有限公司",
+        "集团公司",
+        "公司",
+        "集团",
+    ):
+        if s.endswith(suffix) and len(s) > len(suffix):
+            s = s[: -len(suffix)]
+            break
+    return s
+
+
+def _read_contacted_companies(path: Path | None) -> set[str]:
+    """读 sent 日志里已经联系过的公司名集合。
+
+    用户要求：一家公司点过一次就记下来，以后这家公司的岗位全部跳过，
+    免得天天只盯着同一家刷、其它公司反而投不到。
+    """
+    if path is None or not path.exists():
+        return set()
+    companies: set[str] = set()
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not data.get("sent"):
+                continue
+            job = data.get("job") or {}
+            name = _normalize_company(job.get("company") or "")
+            if name:
+                companies.add(name)
+    return companies
 
 
 def _append_jsonl(path: Path | None, record: dict) -> None:
@@ -426,10 +478,16 @@ def _sent_today_count(path: Path | None, *, profile: str) -> int:
                 continue
             if not bool(record.get("sent")):
                 continue
+            # 用本机时间戳（ts_local）算自然日；UTC 的 ts 在北京时间 0-8 点会
+            # 把今天凌晨的发送错分到昨天，导致每日限额失效（实测踩坑）。
+            ts_local = str(record.get("ts_local") or "").strip()
             try:
-                ts_date = datetime.fromisoformat(
-                    str(record.get("ts", "")).replace("Z", "+00:00")
-                ).date()
+                if ts_local:
+                    ts_date = datetime.fromisoformat(ts_local).date()
+                else:
+                    ts_date = datetime.fromisoformat(
+                        str(record.get("ts", "")).replace("Z", "+00:00")
+                    ).astimezone().date()
             except ValueError:
                 continue
             if ts_date == today:
@@ -674,6 +732,326 @@ async def _ask_gui_review_decision(
     return decision
 
 
+# ---------- 搜索结果 API 直读流程（BOSS 搜索页 DOM 无翻页入口的兜底） ----------
+
+
+def _use_search_api_flow(url: str) -> bool:
+    """起始页是岗位搜索页时走 API 直读，绕过 DOM 虚拟列表。
+
+    实测搜索页 DOM 只懒加载 ~30 张卡、无翻页按钮、URL page 参数被无视；
+    登录态下 wapi 搜索接口翻页正常。推荐流（job-recommend）没有搜索 API，
+    仍走 DOM 循环（自带滚动/刷新逻辑）。
+    """
+    return "/web/geek/jobs" in (url or "")
+
+
+async def _open_job_detail_page(url: str, timeout: float = 30) -> bool:
+    tab = finding_jobs.get_tab()
+    if tab is None or not url:
+        return False
+    try:
+        await asyncio.wait_for(tab.get(url), timeout=timeout)
+    except Exception as e:
+        log.warning("打开详情页失败 %s: %s", url, e)
+        return False
+    await asyncio.sleep(2)
+    return True
+
+
+_DETAIL_JD_SELECTORS = (
+    ".job-sec-text",
+    ".job-detail-section .job-sec-text",
+    ".detail-content",
+)
+
+
+async def _extract_detail_jd() -> str:
+    """抓详情页职位描述；取不到返回空串（退化为只按标题筛选）。"""
+    best = ""
+    for selector in _DETAIL_JD_SELECTORS:
+        try:
+            text = await finding_jobs.get_text_by_css(selector, timeout=3)
+        except Exception:
+            text = None
+        if text and len(text.strip()) > len(best):
+            best = text.strip()
+        if len(best) >= 100:
+            break
+    return best
+
+
+async def _send_greeting_on_detail_page(greeting: str) -> str:
+    """在详情页点击“立即沟通”。返回状态：
+
+    用户明确要求：只点“立即沟通”就进入下一个，**不发送任何招呼语、不发简历**，
+    等对方回复后由本人自行沟通。因此这里点到即算完成，不再进入聊天输入框。
+
+    - ``sent``：已点击“立即沟通”（没有发送任何内容）
+    - ``already_contacted``：按钮是“继续沟通/继续聊天”，此前已沟通过，绝不重复打扰
+    - ``no_button``：页面上没有沟通按钮
+
+    详情页按钮是 ``a.btn-startchat``（诊断实测：ka=go_chat_done_* /
+    ceiling_job_detail_gochat），跟搜索面板的 ``op-btn-chat`` 不是一套类名。
+    """
+    # 点击前最后一道防线：本地去重即使漏了，BOSS 按钮变“继续沟通”也能拦住。
+    button_text = (
+        await finding_jobs.get_text_by_css("a.btn-startchat", timeout=3) or ""
+    ).strip()
+    if "继续沟通" in button_text or "继续聊天" in button_text:
+        return "already_contacted"
+    contact_xpath = "//a[contains(@class, 'btn-startchat')]"
+    if not await finding_jobs.click_by_xpath(contact_xpath, timeout=10):
+        return "no_button"
+    # 用户明确要求：只点“立即沟通”就进入下一个，不发送任何招呼语，也不发简历，
+    # 等对方回复后再由本人自己沟通。
+    # 另外 send_chat_message / click_send_resume 内部各有一道闸（BOSS_CLICK_ONLY /
+    # BOSS_SEND_RESUME_AFTER_GREETING），即使别的代码路径调到它们也不会真的发出去。
+    await finding_jobs.click_stay_on_page_if_present(timeout=3)
+    await finding_jobs.dismiss_greeting_dialog(timeout=3)
+    # F2（opt-in，默认关）：打招呼后自动点“发简历”。开关由 profile 的
+    # send.send_resume_after_greeting 桥接，用户在 GUI 勾选才生效。
+    if finding_jobs.send_resume_after_greeting_enabled():
+        await finding_jobs.click_send_resume(timeout=5)
+    return "sent"
+
+
+async def _run_search_api_flow(
+    *,
+    usr_name: str,
+    url: str,
+    dry_run: bool,
+    scan_only: bool,
+    greeting: str,
+) -> None:
+    """API 直读搜索结果：按页枚举 → 逐个开详情页 → 本地筛选 → 发送。
+
+    每页都是登录态页面上下文里的 wapi 请求；详情页复用 DOM 流的立即沟通/
+    留在此页/发简历原语。筛选、去重、限额、日志与 DOM 流同一套。
+    """
+    from boss_zhipin.website_oper import job_api
+
+    if not scan_only:
+        validation = validate_letter(greeting)
+        if not validation.ok:
+            raise RuntimeError("固定招呼语未通过发送校验: " + ", ".join(validation.reasons))
+
+    seen_jobs_path = _state_path("BOSS_SEEN_JOBS_FILE")
+    sent_log_path = _state_path("BOSS_SENT_LOG_FILE")
+    skipped_log_path = _state_path("BOSS_SKIPPED_LOG_FILE")
+    filters = _profile_filters()
+    stop_on_captcha = _stop_on_captcha_enabled()
+    delay_min, delay_max = _auto_send_delay_range()
+    max_sent = _auto_send_max_sent()
+    daily_limit = _auto_send_daily_limit()
+    sent_count = 0
+    daily_sent_count = _sent_today_count(sent_log_path, profile=_profile_name())
+    seen_job_keys: set[str] = _read_seen_job_keys(seen_jobs_path)
+    contacted_companies: set[str] = _read_contacted_companies(sent_log_path)
+    if contacted_companies:
+        log.info(
+            "已联系过的公司 %d 家，这些公司的岗位将全部跳过", len(contacted_companies)
+        )
+    query = job_api.search_query_from_url(url)
+    tab = finding_jobs.get_tab()
+    if tab is None:
+        raise RuntimeError("受控 tab 不存在，无法执行 API 直读流程")
+
+    _emit_progress(
+        "api_flow_started",
+        usr_name=usr_name,
+        daily_sent=daily_sent_count,
+        dry_run=dry_run,
+        scan=scan_only,
+    )
+    log.info(
+        "[api-flow] 启动：dry_run=%s scan=%s 今日已发 %d 条", dry_run, scan_only,
+        daily_sent_count,
+    )
+
+    page = 1
+    while page <= 100:
+        if max_sent is not None and sent_count >= max_sent:
+            log.info("本轮已发送 %d 条，达到单次上限，结束", sent_count)
+            break
+        if daily_limit is not None and daily_sent_count >= daily_limit:
+            log.info("今日已发送 %d 条，达到每日上限，结束", daily_sent_count)
+            break
+        try:
+            api_jobs = await job_api.fetch_search_page(tab, query, page)
+        except RuntimeError as e:
+            log.warning("第 %d 页搜索接口失败，结束：%s", page, e)
+            _emit_progress("api_flow_error", page=page, message=str(e))
+            break
+        if not api_jobs:
+            log.info("第 %d 页没有岗位，搜索结果已全部取完，结束", page)
+            break
+        for api_job in api_jobs:
+            if max_sent is not None and sent_count >= max_sent:
+                break
+            if daily_limit is not None and daily_sent_count >= daily_limit:
+                break
+            job = job_api.to_job_posting(api_job)
+            dedupe_key = finding_jobs.job_key(job)
+            if dedupe_key in seen_job_keys:
+                continue
+            seen_job_keys.add(dedupe_key)
+            _log_seen(seen_jobs_path, job=job, job_key=dedupe_key, send_mode="auto")
+
+            # 公司级去重：这家公司已经点过"立即沟通"，全部岗位跳过，
+            # 把名额让给还没联系过的公司。
+            company_key = _normalize_company(job.company)
+            if company_key and company_key in contacted_companies:
+                _log_skipped(
+                    skipped_log_path,
+                    job=job,
+                    job_key=dedupe_key,
+                    send_mode="auto",
+                    reason="company_already_contacted",
+                    details={
+                        "stage": "company_dedupe",
+                        "company": job.company,
+                        "job_title": job.title,
+                    },
+                )
+                _emit_progress(
+                    "job_skipped",
+                    title=job.title,
+                    reason="company_already_contacted",
+                    detail=job.company,
+                )
+                continue
+
+            if not await _open_job_detail_page(job.detail_url):
+                _log_skipped(
+                    skipped_log_path,
+                    job=job,
+                    job_key=dedupe_key,
+                    send_mode="auto",
+                    reason="detail_open_failed",
+                    details={"stage": "detail_page", "job_title": job.title},
+                )
+                continue
+            if stop_on_captcha and await finding_jobs.captcha_visible():
+                log.warning("详情页检测到验证码/安全验证，按 BOSS_STOP_ON_CAPTCHA 停止")
+                _emit_progress("captcha_stopped", title=job.title)
+                return
+            jd_text = await asyncio.wait_for(_extract_detail_jd(), timeout=20)
+            if not jd_text:
+                log.info("详情页 JD 未取到，按标题筛选：%s", job.title)
+            job = _job_with_derived_fields(
+                job_api.to_job_posting(api_job, description=jd_text), jd_text
+            )
+            filter_posting = _to_filter_posting(job, jd_text)
+            match = match_posting(filter_posting, filters)
+            if not match.matched:
+                _log_skipped(
+                    skipped_log_path,
+                    job=job,
+                    job_key=dedupe_key,
+                    send_mode="auto",
+                    reason="filtered_out",
+                    details={
+                        "stage": "profile_filter",
+                        "reason": match.reason,
+                        "job_title": job.title,
+                    },
+                )
+                _emit_progress(
+                    "job_skipped", title=job.title, reason="filtered_out",
+                    detail=match.reason,
+                )
+                continue
+            button_text = (
+                await finding_jobs.get_text_by_css("a.btn-startchat", timeout=3) or ""
+            ).strip()
+            if "继续沟通" in button_text or "继续聊天" in button_text:
+                _log_skipped(
+                    skipped_log_path,
+                    job=job,
+                    job_key=dedupe_key,
+                    send_mode="auto",
+                    reason="already_contacted",
+                    details={
+                        "stage": "contact_status",
+                        "button_text": button_text,
+                        "job_title": job.title,
+                    },
+                )
+                continue
+            if scan_only or dry_run:
+                _log_sent(
+                    sent_log_path,
+                    job=job,
+                    job_key=dedupe_key,
+                    send_mode="auto",
+                    status="dry_run",
+                    details={"stage": "api_flow", "job_title": job.title},
+                    dry_run=True,
+                    sent=False,
+                )
+                sent_count += 1
+                log.info("[DRY-RUN] 命中 %s（%s），不真实发送", job.title, job.company)
+                continue
+            try:
+                # nodriver 的 send_keys/select 在元素失效时会无限等待，包一层
+                # 硬超时兜底；超时后下一个岗位会重新导航，状态自愈。
+                status = await asyncio.wait_for(
+                    _send_greeting_on_detail_page(greeting), timeout=120
+                )
+            except asyncio.TimeoutError:
+                log.warning("发送超时（120s），跳过：%s", job.title)
+                status = "failed"
+            except Exception as e:
+                log.warning("发送异常（%s）：%s", job.title, e)
+                status = "failed"
+            if status == "sent":
+                sent_count += 1
+                daily_sent_count += 1
+                # 记下这家公司，后面它家的岗位一律跳过。
+                if company_key:
+                    contacted_companies.add(company_key)
+                _log_sent(
+                    sent_log_path,
+                    job=job,
+                    job_key=dedupe_key,
+                    send_mode="auto",
+                    status="sent",
+                    details={"stage": "api_flow", "job_title": job.title},
+                    dry_run=False,
+                    sent=True,
+                )
+                _emit_progress(
+                    "job_sent", title=job.title, company=job.company, sent=sent_count,
+                )
+                log.info(
+                    "✅ [api-flow] 已发送 #%d：%s（%s）", sent_count, job.title,
+                    job.company,
+                )
+            else:
+                reason = "already_contacted" if status == "already_contacted" else "send_failed"
+                _log_skipped(
+                    skipped_log_path,
+                    job=job,
+                    job_key=dedupe_key,
+                    send_mode="auto",
+                    reason=reason,
+                    details={"stage": "send", "button_state": status,
+                             "job_title": job.title},
+                )
+                if status == "already_contacted":
+                    log.info("⏭️ [api-flow] 该岗位此前已沟通过，跳过：%s", job.title)
+            await asyncio.sleep(random.uniform(delay_min, delay_max))
+        log.info(
+            "[api-flow] 第 %d 页处理完成（本页 %d 个岗位），本轮累计发送 %d",
+            page,
+            len(api_jobs),
+            sent_count,
+        )
+        page += 1
+    _emit_progress("api_flow_finished", total=sent_count, page=page)
+    log.info("[api-flow] 结束：本轮发送 %d 条，翻到第 %d 页", sent_count, page)
+
+
 async def send_response_and_go_back(response: str) -> None:
     """在 BOSS 沟通页发送 ``response`` 然后退回到列表。"""
     await finding_jobs.send_chat_message(response)
@@ -704,6 +1082,33 @@ async def click_contact_and_send_response(response: str) -> None:
     if not await finding_jobs.wait_for_css("#chat-input", timeout=50):
         raise RuntimeError("chat input (#chat-input) 未找到")
     await send_response_and_go_back(response)
+
+
+async def _compose_greeting(job_description: str, fixed_greeting: str) -> tuple[str, str]:
+    """F5：review 模式下组合招呼语。返回 ``(greeting, source)``。
+
+    ``BOSS_AI_GREETING=1``（profile send.ai_greeting，默认关）时按 JD 让
+    LLM 生成一条，**先过 validate_letter**；任何失败（未配置/超时/校验不过）
+    都降级固定招呼语——review 流程永不因 AI 挂掉而中断。
+    auto 模式不调用本函数：AI 生成必须逐条预览确认（已拍板）。
+    """
+    enabled = os.getenv("BOSS_AI_GREETING", "0").strip().lower() in ("1", "true", "yes")
+    if enabled:
+        from boss_zhipin.agent import greeting_generator
+
+        try:
+            result = await greeting_generator.generate_greeting(
+                job_description, fixed_greeting
+            )
+        except Exception as e:  # noqa: BLE001 — AI 任何意外都降级，不挡主流程
+            log.warning("AI 招呼语生成异常，降级固定招呼语: %s", e)
+            result = {"status": "error", "message": str(e)}
+        if result.get("status") == "ok":
+            return str(result["greeting"]), "ai"
+        log.warning(
+            "AI 招呼语不可用，降级固定招呼语: %s", result.get("message", "未知原因")
+        )
+    return fixed_greeting, "fixed"
 
 
 async def send_job_descriptions_to_chat(
@@ -775,6 +1180,22 @@ async def send_job_descriptions_to_chat(
     )
     await finding_jobs.log_in()
     _emit_progress("login_ok")
+    # 起始页是岗位搜索页（/web/geek/jobs）时走 API 直读：DOM 虚拟列表没有
+    # 翻页入口（实测滚动/按钮/URL 参数三路都不通），wapi 翻页是唯一全量通道。
+    # review 模式需要逐条人工确认，仍走 DOM 循环；tab 缺失时回退 DOM 流程。
+    if (
+        _use_search_api_flow(actual_url)
+        and not review_before_send
+        and finding_jobs.get_tab() is not None
+    ):
+        await _run_search_api_flow(
+            usr_name=usr_name,
+            url=actual_url,
+            dry_run=dry_run,
+            scan_only=scan_only,
+            greeting=fixed_greeting,
+        )
+        return
     if use_current_page:
         _emit_progress(
             "page_filter",
@@ -813,6 +1234,10 @@ async def send_job_descriptions_to_chat(
     # 返回 None。连续 N 次拿不到就当列表到底了停掉，否则 job_index 会无限涨。
     MAX_CONSECUTIVE_MISSES = 5
     MAX_CONSECUTIVE_DUPLICATES = 20
+    # 列表真到底（滚动/翻页都拉不到新岗位）时，整页刷新推荐流再试的次数。
+    # 只要期间出现过任何新岗位就重新计数，防止在干涸的 feed 上无限刷。
+    MAX_FEED_RELOADS = 3
+    barren_reloads = 0
     sent_count = 0
     daily_sent_count = _sent_today_count(sent_log_path, profile=_profile_name())
     seen_job_keys: set[str] = _read_seen_job_keys(seen_jobs_path)
@@ -832,6 +1257,20 @@ async def send_job_descriptions_to_chat(
     def advance_window() -> None:
         nonlocal window_index
         window_index += 1
+
+    async def reload_feed_and_restart() -> bool:
+        """列表到底后整页刷新推荐流，从头再扫。返回是否刷新成功。"""
+        nonlocal window_index, consecutive_misses, consecutive_duplicates
+        nonlocal barren_reloads
+        reloaded = await finding_jobs.reload_current_page()
+        if not reloaded:
+            return False
+        barren_reloads += 1
+        window_index = 1
+        consecutive_misses = 0
+        consecutive_duplicates = 0
+        await asyncio.sleep(3)
+        return True
 
     while True:
         try:
@@ -905,9 +1344,30 @@ async def send_job_descriptions_to_chat(
                     else:
                         advance_position()
                     if consecutive_duplicates >= MAX_CONSECUTIVE_DUPLICATES:
+                        if await finding_jobs.navigate_next_search_page():
+                            log.info("当前页全是已投过的岗位，已翻到下一页继续")
+                            window_index = 1
+                            consecutive_duplicates = 0
+                            await asyncio.sleep(2)
+                            continue
+                        if barren_reloads < MAX_FEED_RELOADS:
+                            log.info(
+                                "连续 %d 个重复岗位，刷新推荐流换一批（第 %d/%d 次）",
+                                MAX_CONSECUTIVE_DUPLICATES,
+                                barren_reloads + 1,
+                                MAX_FEED_RELOADS,
+                            )
+                            _emit_progress(
+                                "feed_reload",
+                                attempt=barren_reloads + 1,
+                                limit=MAX_FEED_RELOADS,
+                            )
+                            if await reload_feed_and_restart():
+                                continue
                         log.info(
-                            "连续 %d 个重复岗位，推测当前列表没有新岗位，结束",
+                            "连续 %d 个重复岗位，刷新 %d 次仍无新岗位，结束",
                             MAX_CONSECUTIVE_DUPLICATES,
+                            barren_reloads,
                         )
                         _emit_progress("feed_exhausted", total=job_index - 1)
                         break
@@ -918,6 +1378,8 @@ async def send_job_descriptions_to_chat(
                     _log_seen(
                         seen_jobs_path, job=job, job_key=dedupe_key, send_mode=send_mode
                     )
+                    # 出现新岗位说明这批 feed 还有货，刷新次数重新计数。
+                    barren_reloads = 0
                 consecutive_duplicates = 0
                 _emit_progress(
                     "job_found",
@@ -1306,7 +1768,10 @@ async def send_job_descriptions_to_chat(
                         continue
 
                     if review_before_send:
-                        response = fixed_greeting
+                        # F5（opt-in）：AI 按 JD 生成招呼语（过校验），失败降级固定。
+                        response, greeting_source = await _compose_greeting(
+                            job_description, fixed_greeting
+                        )
                         validation = validate_letter(response)
                         if not validation.ok:
                             log.warning(
@@ -1473,6 +1938,11 @@ async def send_job_descriptions_to_chat(
                     window_index = 1
                     await asyncio.sleep(1)
                     continue
+                if await finding_jobs.navigate_next_search_page():
+                    consecutive_misses = 0
+                    window_index = 1
+                    await asyncio.sleep(2)
+                    continue
                 latest_loaded_count = await finding_jobs.get_loaded_job_count()
                 if loaded_count and window_index > loaded_count and latest_loaded_count >= window_index:
                     log.info(
@@ -1490,9 +1960,24 @@ async def send_job_descriptions_to_chat(
                     await asyncio.sleep(1)
                     continue
                 if consecutive_misses >= MAX_CONSECUTIVE_MISSES:
+                    if barren_reloads < MAX_FEED_RELOADS:
+                        log.info(
+                            "连续 %d 个岗位拿不到，刷新推荐流换一批（第 %d/%d 次）",
+                            MAX_CONSECUTIVE_MISSES,
+                            barren_reloads + 1,
+                            MAX_FEED_RELOADS,
+                        )
+                        _emit_progress(
+                            "feed_reload",
+                            attempt=barren_reloads + 1,
+                            limit=MAX_FEED_RELOADS,
+                        )
+                        if await reload_feed_and_restart():
+                            continue
                     log.info(
-                        "连续 %d 个岗位拿不到，推测已到推荐 feed 列表底部，结束",
+                        "连续 %d 个岗位拿不到，刷新 %d 次仍拉不到新岗位，结束",
                         MAX_CONSECUTIVE_MISSES,
+                        barren_reloads,
                     )
                     _emit_progress("feed_exhausted", total=job_index - 1)
                     break

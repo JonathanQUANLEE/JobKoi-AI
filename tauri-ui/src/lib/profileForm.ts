@@ -27,6 +27,12 @@ export type ProfileFormValues = {
   maxSent: string;
   dailyLimit: string;
   stopOnCaptcha: boolean;
+  /** F2：BOSS 打招呼后自动点“发简历”（默认关，opt-in）。 */
+  sendResumeAfterGreeting: boolean;
+  /** F3：检测到招聘者回复后自动进会话发简历（默认关，opt-in）。 */
+  autoResumeOnReply: boolean;
+  /** F5：review 模式用 AI 按 JD 生成招呼语（默认关，opt-in）。 */
+  aiGreeting: boolean;
 };
 
 type RuleBlock = {
@@ -63,6 +69,9 @@ export type BuiltProfileData = {
     max_sent: number;
     daily_sent_limit: number;
     stop_on_captcha: boolean;
+    send_resume_after_greeting: boolean;
+    auto_send_resume_on_reply: boolean;
+    ai_greeting: boolean;
   };
   state: {
     seen_jobs_file: string;
@@ -111,6 +120,9 @@ export function buildProfileData(values: ProfileFormValues): BuiltProfileData {
       max_sent: numberOrDefault(values.maxSent, 50),
       daily_sent_limit: numberOrDefault(values.dailyLimit, 80),
       stop_on_captcha: values.stopOnCaptcha,
+      send_resume_after_greeting: values.sendResumeAfterGreeting,
+      auto_send_resume_on_reply: values.autoResumeOnReply,
+      ai_greeting: values.aiGreeting,
     },
     state: {
       seen_jobs_file: "./logs/seen_jobs.jsonl",

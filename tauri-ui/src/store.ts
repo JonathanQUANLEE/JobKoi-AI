@@ -2,11 +2,12 @@
  * 单页 GUI 内多个区域会同时读写这些状态，用全局 store 可以避免层层传参。 */
 import { create } from "zustand";
 import { useCallback } from "react";
-import type { ProgressEvent } from "./lib/ipc";
+import type { AgentChatMessage, LLMConfig, ProgressEvent } from "./lib/ipc";
 import { type Lang, detectLang, translate } from "./lib/i18n";
 
 const MAX_EVENTS = 500;
 const MAX_LOGS = 1000;
+const MAX_AGENT_MESSAGES = 200;
 
 type RunState = {
   running: boolean;
@@ -23,6 +24,19 @@ type RunState = {
 
   // UI 语言：启动时按系统 locale 探测，仅保存在当前前端会话。
   lang: Lang;
+
+  // ---------- agent 智能助手（里程碑 1） ----------
+  agentMessages: AgentChatMessage[];
+  agentPending: boolean;
+  agentProfilePreview: Record<string, unknown> | null;
+  llmConfig: LLMConfig | null;
+  llmSettingsOpen: boolean;
+
+  pushAgentMessage: (message: AgentChatMessage) => void;
+  setAgentPending: (pending: boolean) => void;
+  setAgentProfilePreview: (profile: Record<string, unknown> | null) => void;
+  setLLMConfig: (config: LLMConfig | null) => void;
+  setLLMSettingsOpen: (open: boolean) => void;
 
   setRunning: (running: boolean) => void;
   pushEvent: (ev: ProgressEvent) => void;
@@ -54,6 +68,21 @@ export const useRunStore = create<RunState>((set) => ({
   restoredPageFilters: [],
 
   lang: detectLang(),
+
+  agentMessages: [],
+  agentPending: false,
+  agentProfilePreview: null,
+  llmConfig: null,
+  llmSettingsOpen: false,
+
+  pushAgentMessage: (message) =>
+    set((s) => ({
+      agentMessages: [...s.agentMessages, message].slice(-MAX_AGENT_MESSAGES),
+    })),
+  setAgentPending: (agentPending) => set({ agentPending }),
+  setAgentProfilePreview: (agentProfilePreview) => set({ agentProfilePreview }),
+  setLLMConfig: (llmConfig) => set({ llmConfig }),
+  setLLMSettingsOpen: (llmSettingsOpen) => set({ llmSettingsOpen }),
 
   setRunning: (running) => set({ running }),
   pushEvent: (ev) =>

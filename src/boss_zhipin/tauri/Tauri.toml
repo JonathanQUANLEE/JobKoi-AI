@@ -8,7 +8,7 @@
 # tag 把两份一起覆盖，平时不用手动对齐。（tauri.conf.json 是 JSON 不能写注释，
 # 所以这条提醒只放这里。）
 "$schema" = "https://schema.tauri.app/config/2"
-productName = "BOSS Zhipin Helper"
+productName = "JobHunter · 智能求职锦鲤助手"
 version = "0.2.0"
 identifier = "com.longsizhuo.boss-zhipin"
 
@@ -21,9 +21,18 @@ frontendDist = "./frontend"
 withGlobalTauri = true
 
 [[app.windows]]
-title = "BOSS Zhipin Helper"
+title = "JobHunter · 智能求职锦鲤助手"
 label = "main"
-width = 1000
-height = 720
-minWidth = 600
-minHeight = 400
+theme = "Dark"
+width = 1240
+height = 820
+minWidth = 900
+minHeight = 600
+
+[bundle]
+icon = [
+  "icons/32x32.png",
+  "icons/128x128.png",
+  "icons/icon.ico",
+  "icons/icon.png"
+]

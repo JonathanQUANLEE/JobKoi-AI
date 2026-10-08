@@ -30,6 +30,20 @@ def test_tauri_ipc_commands_match_gui_v02_contract():
         "get_run_state",
         "get_browser_page_state",
         "submit_review_decision",
+        # agent 里程碑 1（对话式智能助手）
+        "agent_chat",
+        "get_llm_config",
+        "save_llm_config",
+        # F1 简历管理
+        "list_resumes",
+        "set_default_resume",
+        # F4 工具执行层
+        "agent_execute_action",
+        # F3 新回复检测
+        "check_boss_replies",
+        # 多平台适配层（多平台选择与扫码登录）
+        "list_platforms",
+        "open_platform_login",
     }
 
 
