@@ -25,6 +25,7 @@ import {
 import { ipc, type AgentChatMessage, type LoadedProfile, type ProfileSummary, type ProgressEvent, type RunConfig } from "../lib/ipc";
 import { summarizeAgentProfile } from "../lib/agentPreview";
 import { optionLabel, type Lang } from "../lib/i18n";
+import { TextEffect } from "@/components/core/text-effect";
 import ResumePanel from "../components/ResumePanel";
 import PlatformHub from "../components/PlatformHub";
 import AgentPanel from "../components/AgentPanel";
@@ -296,6 +297,31 @@ export default function Dashboard() {
     }, 4500);
     return () => clearInterval(timer);
   }, []);
+
+  // Hero 标题 30秒 逐行阶梯动效循环状态 (第1行 -> 第2行 -> 第3行 依序显现并循环)
+  const [heroAnimCycle, setHeroAnimCycle] = useState(0);
+  const [heroAnimStep, setHeroAnimStep] = useState(1);
+  const [heroAnimFading, setHeroAnimFading] = useState(false);
+
+  useEffect(() => {
+    const CYCLE_MS = 30000;
+    const FADE_OUT_MS = 450;
+
+    const fadeTimer = setTimeout(() => {
+      setHeroAnimFading(true);
+    }, CYCLE_MS - FADE_OUT_MS);
+
+    const resetTimer = setTimeout(() => {
+      setHeroAnimFading(false);
+      setHeroAnimStep(1);
+      setHeroAnimCycle((c) => c + 1);
+    }, CYCLE_MS);
+
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(resetTimer);
+    };
+  }, [heroAnimCycle]);
 
   function handleNextRecBatch() {
     setIsRotatingRec(true);
@@ -767,17 +793,55 @@ export default function Dashboard() {
                     <span className="text-stone-300">倾听你的背景与诉求</span>
                   </div>
 
-                  {/* 主标题 */}
-                  <h1 className="text-balance text-[2rem] font-bold leading-tight tracking-tight text-stone-100 sm:text-[2.75rem] sm:leading-[1.15]">
-                    <span className="inline-block whitespace-pre">向 AI 顾问说出你的情况，</span>
-                    <span className="text-gradient inline-block">定制专属求职画像</span>
-                  </h1>
+                  {/* 主标题与副标题 (30秒逐行渐显动效流: 第1行 -> 第2行 -> 第3行) */}
+                  <div
+                    className={`w-full transition-opacity duration-500 ease-out ${
+                      heroAnimFading ? "opacity-0" : "opacity-100"
+                    }`}
+                  >
+                    {/* 第 1 行: 主标题 */}
+                    <h1 className="text-balance text-[2rem] font-bold leading-tight tracking-tight text-stone-100 sm:text-[2.75rem] sm:leading-[1.15]">
+                      <TextEffect
+                        key={`hero-l1-${heroAnimCycle}`}
+                        preset="fade-in-blur"
+                        speedReveal={1.1}
+                        speedSegment={0.3}
+                        trigger={heroAnimStep >= 1}
+                        onAnimationComplete={() => setHeroAnimStep((s) => Math.max(s, 2))}
+                        as="span"
+                        className="inline-block"
+                      >
+                        向 AI 顾问说出你的情况，<span className="text-gradient">定制专属求职画像</span>
+                      </TextEffect>
+                    </h1>
 
-                  {/* 副标题 */}
-                  <p className="mt-3.5 max-w-2xl mx-auto whitespace-pre-line text-balance text-[14px] leading-relaxed text-stone-400 sm:text-[15.5px]">
-                    告诉我你的毕业年份、专业技能、意向城市或期望薪资。{"\n"}
-                    AI 顾问将与你深度交流，自动提炼精准投递规则并配置防封风控。
-                  </p>
+                    {/* 第 2 行 & 第 3 行: 副标题 (顺序衔接) */}
+                    <div className="mt-3.5 max-w-2xl mx-auto text-balance text-[14px] leading-relaxed text-stone-400 sm:text-[15.5px] space-y-1">
+                      <TextEffect
+                        key={`hero-l2-${heroAnimCycle}`}
+                        preset="fade-in-blur"
+                        speedReveal={1.1}
+                        speedSegment={0.3}
+                        trigger={heroAnimStep >= 2}
+                        onAnimationComplete={() => setHeroAnimStep((s) => Math.max(s, 3))}
+                        as="p"
+                        className="m-0"
+                      >
+                        告诉我你的毕业年份、专业技能、意向城市或期望薪资。
+                      </TextEffect>
+                      <TextEffect
+                        key={`hero-l3-${heroAnimCycle}`}
+                        preset="fade-in-blur"
+                        speedReveal={1.1}
+                        speedSegment={0.3}
+                        trigger={heroAnimStep >= 3}
+                        as="p"
+                        className="m-0"
+                      >
+                        AI 顾问将与你深度交流，自动提炼精准投递规则并配置防封风控。
+                      </TextEffect>
+                    </div>
+                  </div>
 
                   {/* Hunt Now 标志性 Beam Composer (宽屏大气光轨 AI 顾问对话舱) */}
                   <div className="relative mt-8 w-full max-w-5xl">

@@ -1,8 +1,14 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import path from "path";
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
   build: {
     // 必须指向 Python 包内 Tauri.toml 的 frontendDist（"./frontend" 相对
     // src/boss_zhipin/tauri/ 解析）。包目录挪了这里要同步改，否则前端构建
