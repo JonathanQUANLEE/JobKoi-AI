@@ -80,29 +80,29 @@ const BACKGROUND_TAGS = [
 const JOBSEEKER_SITUATION_BATCHES = [
   [
     {
-      role: "电气工程应届生",
-      tag: "智能硬件·双休",
+      role: "电气工程应届",
+      tag: "智能硬件双休",
       userText: "我是电气工程及自动化应届生，熟练模电数电与PLC，想在深圳或广州找硬件研发或电气工程师，期望月薪10-13k，双休不加班。",
       city: "深圳,广州,东莞",
       query: "硬件研发工程师",
     },
     {
-      role: "计算机26届本科",
-      tag: "AI应用·后端研发",
+      role: "计算机26届",
+      tag: "AI应用研发",
       userText: "我是计算机专业2026届应届生，熟悉Python、FastAPI和常见大模型Agent，想在深圳找AI后端研发岗位，期望月薪12-16k。",
       city: "深圳,杭州,北京",
       query: "Python后端工程师",
     },
     {
       role: "文科转码求职",
-      tag: "前端开发·不内卷",
+      tag: "前端开发不卷",
       userText: "文科专业转码，有1年前端自学和实战经验，熟练Vue3与React，想在广州找初级前端或全栈开发岗位，抗拒无效加班。",
       city: "广州,深圳",
       query: "前端开发工程师",
     },
     {
-      role: "3年经验产品经理",
-      tag: "B端SaaS·高薪",
+      role: "3年经验产品",
+      tag: "B端SaaS高薪",
       userText: "我有3年互联网产品经理经验，主导过B端SaaS与用户增长业务，想在深圳或上海寻找产品经理机会，期望月薪20k+。",
       city: "深圳,上海,北京",
       query: "产品经理",
@@ -110,29 +110,29 @@ const JOBSEEKER_SITUATION_BATCHES = [
   ],
   [
     {
-      role: "双休文职/新媒体",
-      tag: "内容策划·社媒",
+      role: "双休文职运营",
+      tag: "新媒体策划",
       userText: "新闻传播专业毕业1年，擅长文案策划与小红书运营，想在广州或成都找双休不加班的新媒体运营，期望薪资7-9k。",
       city: "广州,成都,深圳",
       query: "新媒体运营",
     },
     {
-      role: "大模型算法实习",
-      tag: "985硕·日常实习",
+      role: "大模型实习生",
+      tag: "985硕校招",
       userText: "985研二在读，人工智能多模态大模型方向，想在北京或上海找算法日常实习或校招实习，支持转正优先。",
       city: "北京,上海,深圳",
       query: "大模型算法工程师",
     },
     {
-      role: "财务分析/会计",
-      tag: "初级证书·正规双休",
+      role: "财务分析会计",
+      tag: "双休正规名企",
       userText: "财务管理专业毕业2年，有初级会计证，想在深圳找正规双休企业做总账会计或财务分析，期望月薪9-11k。",
       city: "深圳,广州,上海",
       query: "财务会计",
     },
     {
-      role: "制造业管培生",
-      tag: "工业工程·名企",
+      role: "智能制造管培",
+      tag: "精益生产大厂",
       userText: "工业工程应届毕业生，英语六级，想在珠三角寻找智能制造或精益生产管培生岗位，要求规范管理大厂。",
       city: "深圳,东莞,广州",
       query: "生产管理管培生",
@@ -141,28 +141,28 @@ const JOBSEEKER_SITUATION_BATCHES = [
   [
     {
       role: "全栈开发远程",
-      tag: "Node/React·弹性",
+      tag: "弹性工作制",
       userText: "全栈工程师，熟悉Node.js与React/Next.js，想找支持远程办公或弹性工作制的科技团队，期望月薪18k。",
       city: "深圳,杭州",
       query: "全栈开发工程师",
     },
     {
-      role: "科技出海商务BD",
-      tag: "英语流利·大客户",
+      role: "科技出海商务",
+      tag: "海外大客户BD",
       userText: "2年海外商务BD经验，英语流利，想看深圳科技出海或跨境科技公司的大客户销售拓展岗位，底薪12k+提成。",
       city: "深圳,广州,上海",
       query: "海外商务BD",
     },
     {
       role: "UI/UX体验设计",
-      tag: "Figma·设计系统",
+      tag: "Figma杭州",
       userText: "UI/UX设计师2年经验，熟练Figma与设计系统构建，想在杭州找注重设计体验的互联网团队，期望月薪14-17k。",
       city: "杭州,上海,深圳",
       query: "UI设计师",
     },
     {
       role: "机械结构工程",
-      tag: "SolidWorks·助理",
+      tag: "硬件助理工程师",
       userText: "机械设计制造专业应届本科，熟练SolidWorks与CAD，想在东莞或深圳找结构工程师或硬件助理岗位，双休。",
       city: "东莞,深圳,广州",
       query: "结构工程师",
@@ -755,9 +755,9 @@ export default function Dashboard() {
                 <div className="dot-pattern absolute inset-0 -z-10" aria-hidden="true" />
                 <div className="fx-glow" aria-hidden="true" />
 
-                <div className="mx-auto flex max-w-[46rem] flex-col items-center text-center">
+                <div className="mx-auto flex max-w-5xl flex-col items-center text-center">
                   {/* 顶部 AI 顾问就绪徽章 */}
-                  <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-950/40 px-3.5 py-1 text-xs text-emerald-300 backdrop-blur">
+                  <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-950/40 px-4 py-1.5 text-xs text-emerald-300 backdrop-blur shadow-sm">
                     <span className="relative flex size-2">
                       <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
                       <span className="relative inline-flex size-2 rounded-full bg-emerald-400"></span>
@@ -768,21 +768,21 @@ export default function Dashboard() {
                   </div>
 
                   {/* 主标题 */}
-                  <h1 className="text-balance text-[1.85rem] font-bold leading-tight tracking-tight text-stone-100 sm:text-[2.5rem] sm:leading-[1.18]">
+                  <h1 className="text-balance text-[2rem] font-bold leading-tight tracking-tight text-stone-100 sm:text-[2.75rem] sm:leading-[1.15]">
                     <span className="inline-block whitespace-pre">向 AI 顾问说出你的情况，</span>
                     <span className="text-gradient inline-block">定制专属求职画像</span>
                   </h1>
 
                   {/* 副标题 */}
-                  <p className="mt-3 max-w-xl mx-auto whitespace-pre-line text-balance text-[14px] leading-relaxed text-stone-400 sm:text-[15px]">
+                  <p className="mt-3.5 max-w-2xl mx-auto whitespace-pre-line text-balance text-[14px] leading-relaxed text-stone-400 sm:text-[15.5px]">
                     告诉我你的毕业年份、专业技能、意向城市或期望薪资。{"\n"}
                     AI 顾问将与你深度交流，自动提炼精准投递规则并配置防封风控。
                   </p>
 
-                  {/* Hunt Now 标志性 Beam Composer (动态光轨 AI 顾问对话舱) */}
-                  <div className="relative mt-7 w-full max-w-[46rem]">
+                  {/* Hunt Now 标志性 Beam Composer (宽屏大气光轨 AI 顾问对话舱) */}
+                  <div className="relative mt-8 w-full max-w-5xl">
                     <div
-                      className="absolute -inset-x-6 -inset-y-4 -z-10 rounded-[2.5rem] bg-gradient-to-b from-[#ff5722]/15 via-transparent to-transparent blur-2xl"
+                      className="absolute -inset-x-8 -inset-y-4 -z-10 rounded-[2.5rem] bg-gradient-to-b from-[#ff5722]/15 via-transparent to-transparent blur-2xl"
                       aria-hidden="true"
                     />
                     <form
@@ -792,7 +792,7 @@ export default function Dashboard() {
                       }}
                       className="beam w-full rounded-[1.75rem] border border-white/10 bg-[#181614]/95 text-left shadow-2xl backdrop-blur-xl transition-all focus-within:border-[#ff5722]/60 focus-within:ring-2 focus-within:ring-[#ff5722]/20"
                     >
-                      <div className="relative px-5 pt-4 sm:px-6 sm:pt-5">
+                      <div className="relative px-6 pt-5 sm:px-7 sm:pt-6">
                         <textarea
                           rows={2}
                           value={heroInputText}
@@ -804,13 +804,13 @@ export default function Dashboard() {
                             }
                           }}
                           placeholder={PLACEHOLDERS[placeholderIndex]}
-                          className="block min-h-[3.6rem] w-full resize-none bg-transparent text-base sm:text-[17px] leading-7 text-stone-100 outline-none placeholder:text-stone-500"
+                          className="block min-h-[3.8rem] w-full resize-none bg-transparent text-base sm:text-[17px] leading-7 text-stone-100 outline-none placeholder:text-stone-500"
                         />
                       </div>
 
-                      <div className="flex items-center gap-2 px-3 pb-3 pt-1 sm:px-4">
-                        <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
-                          <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-[#ff5722]/20 to-[#ff2a55]/20 border border-[#ff5722]/40 px-2.5 py-1 text-xs font-semibold text-[#ff5722]">
+                      <div className="flex items-center gap-3 px-4 pb-3.5 pt-1 sm:px-5">
+                        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:none] py-0.5">
+                          <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-[#ff5722]/20 to-[#ff2a55]/20 border border-[#ff5722]/40 px-3 py-1.5 text-xs font-semibold text-[#ff5722] shadow-sm">
                             <Bot className="size-3.5" />
                             告诉顾问
                           </span>
@@ -821,15 +821,15 @@ export default function Dashboard() {
                               onClick={() => {
                                 setHeroInputText((prev) => (prev ? `${prev}，${tag}` : tag));
                               }}
-                              className="shrink-0 rounded-full border border-white/10 bg-stone-900/60 px-2.5 py-1 text-xs text-stone-300 hover:border-white/30 hover:text-white transition-all cursor-pointer"
+                              className="shrink-0 rounded-full border border-white/10 bg-white/[0.05] hover:bg-white/[0.1] hover:border-white/25 px-3 py-1.5 text-xs text-stone-300 hover:text-white transition-all cursor-pointer shadow-sm whitespace-nowrap"
                             >
                               + {tag}
                             </button>
                           ))}
                         </div>
 
-                        <span className="hidden shrink-0 text-[11px] text-stone-500 lg:block">
-                          <kbd className="font-sans">Enter</kbd> 发送对话 · <kbd className="font-sans">Shift+Enter</kbd> 换行
+                        <span className="hidden shrink-0 items-center gap-1 text-[11px] text-stone-500 xl:inline-flex">
+                          <kbd className="font-sans px-1.5 py-0.5 rounded-md bg-stone-900 border border-stone-800 text-stone-400">Enter</kbd> 发送
                         </span>
 
                         <button
@@ -849,8 +849,8 @@ export default function Dashboard() {
                     </form>
                   </div>
 
-                  {/* 输入框下方：求职者个人背景情况案例（带 ↗ 与 “换一批”动画） */}
-                  <div className="mt-5 flex flex-wrap justify-center gap-2 text-[13px] opacity-100">
+                  {/* 输入框下方：求职者个人背景情况案例（严格单行排列，带 ↗ 与 “换一批”动画） */}
+                  <div className="mt-5 flex items-center justify-center gap-2.5 text-xs flex-nowrap overflow-x-auto [scrollbar-width:none] w-full px-2">
                     {JOBSEEKER_SITUATION_BATCHES[recBatchIndex].map((item) => (
                       <button
                         key={item.role}
@@ -859,9 +859,9 @@ export default function Dashboard() {
                           setHeroInputText(item.userText);
                           handleHeroChatSubmit(item.userText);
                         }}
-                        className="group inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-[#1c1917]/70 px-3.5 py-1.5 text-stone-300 backdrop-blur transition-all hover:border-[#ff5722]/50 hover:text-white hover:bg-[#25201d] cursor-pointer"
+                        className="group shrink-0 inline-flex items-center gap-2 rounded-full border border-white/10 bg-[#1c1917]/80 hover:bg-[#25201d] hover:border-[#ff5722]/50 px-3.5 py-1.5 text-stone-300 hover:text-white backdrop-blur transition-all shadow-sm cursor-pointer whitespace-nowrap"
                       >
-                        <span className="size-1.5 rounded-full bg-[#ff5722] group-hover:scale-125 transition-transform" />
+                        <span className="size-1.5 rounded-full bg-[#ff5722] group-hover:scale-125 transition-transform shadow-[0_0_6px_rgba(255,87,34,0.6)]" />
                         <span className="font-medium">{item.role}</span>
                         <span className="text-[11px] text-stone-400 group-hover:text-stone-300">· {item.tag}</span>
                         <ArrowUpRight className="size-3 text-stone-500 transition-colors group-hover:text-[#ff5722]" />
@@ -871,7 +871,7 @@ export default function Dashboard() {
                     <button
                       type="button"
                       onClick={handleNextRecBatch}
-                      className="group inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-stone-400 hover:text-white border border-transparent hover:border-stone-800 transition-all cursor-pointer"
+                      className="group shrink-0 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-[#1c1917]/60 hover:bg-[#25201d] hover:border-white/20 px-3 py-1.5 text-stone-400 hover:text-white transition-all shadow-sm cursor-pointer whitespace-nowrap"
                       title="换一批求职者情况案例"
                     >
                       <RotateCw className={`size-3.5 transition-transform duration-300 ${isRotatingRec ? "rotate-180" : ""}`} />
@@ -881,7 +881,7 @@ export default function Dashboard() {
 
                   {/* 人与 Agent 对话交互展示区（发送对话或点击情况案例后优雅展开） */}
                   {(heroChatMessages.length > 0 || heroChatting) && (
-                    <div className="rise-in mt-6 w-full max-w-[46rem] rounded-2xl border border-[#ff5722]/40 bg-gradient-to-b from-[#1c1917]/95 to-[#12100e]/95 p-5 shadow-2xl backdrop-blur-xl text-left">
+                    <div className="rise-in mt-6 w-full max-w-5xl rounded-2xl border border-[#ff5722]/40 bg-gradient-to-b from-[#1c1917]/95 to-[#12100e]/95 p-5 shadow-2xl backdrop-blur-xl text-left">
                       <div className="flex items-center justify-between pb-3 border-b border-stone-800/80 mb-3.5">
                         <span className="text-xs font-bold text-stone-200 flex items-center gap-1.5">
                           <Bot className="size-4 text-[#ff5722]" />

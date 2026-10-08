@@ -35,24 +35,6 @@ export default {
         // 配合 uppercase 小标签使用
         widest: "0.18em",
       },
-      borderRadius: {
-        // 全站零圆角，覆盖默认的 sm/DEFAULT/md 等
-        DEFAULT: "0",
-        sm: "0",
-        md: "0",
-        lg: "0",
-        xl: "0",
-        "2xl": "0",
-        full: "0",
-      },
-      boxShadow: {
-        // 强制无阴影
-        none: "none",
-        DEFAULT: "none",
-        sm: "none",
-        md: "none",
-        lg: "none",
-      },
     },
   },
   plugins: [],

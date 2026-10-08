@@ -320,9 +320,9 @@
     position: absolute;
     left: 50%;
     top: 3rem;
-    width: 46rem;
-    max-width: 90%;
-    height: 18rem;
+    width: 58rem;
+    max-width: 95%;
+    height: 20rem;
     transform: translateX(-50%);
     border-radius: 9999px;
     background: radial-gradient(circle, rgba(255, 87, 34, 0.22) 0%, rgba(255, 42, 85, 0.14) 38%, transparent 70%);
