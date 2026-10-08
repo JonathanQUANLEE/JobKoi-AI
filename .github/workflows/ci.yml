@@ -38,35 +38,44 @@ jobs:
       - name: Smoke import check
         # 没有真测试也能拦下"改名 / 移文件 / import 烂掉"那一类回归。
         # 每多一个核心模块就往这里加一行。
+        # 2026-10-08 清理：0.2 收敛后 LLM/RAG/vectorization 全家（providers /
+        # models.* / vectorization / gui.env_io / gui.llm_config / gui.resume_io /
+        # gui.history / gui.updates / gui.diagnostics / diagnose / audit.telemetry）
+        # 已从磁盘删除，但这些 import 行一直留着——CI smoke 实际是坏的。
+        # 本行集 = 磁盘上真实存在的核心模块。
         run: |
           # Phase D-pre 后：业务代码全部进 boss_zhipin/，根目录 main.py 仅
           # 是向后兼容 shim。CI 同时校验两侧：(1) 包导入，(2) main.py shim 能 import。
           uv run python -c "import main"
           uv run python -c "import boss_zhipin"
-          uv run python -c "from boss_zhipin.providers import LLM_PRESETS, is_llm_configured, LLM_API_KEY_ENV, LLM_BASE_URL_ENV, LLM_MODEL_ENV"
-          uv run python -c "from boss_zhipin.cli import _cli_main, run_provider, ensure_llm_configured, is_llm_configured, RECOMMEND_URL, LLM_PRESETS"
+          uv run python -c "from boss_zhipin.cli import _cli_main, run_automation, RECOMMEND_URL"
           uv run python -c "from boss_zhipin.paths import is_standalone, app_data_dir, ensure_app_data_cwd, APP_IDENTIFIER"
           uv run python -c "from boss_zhipin.audit import validate_letter, log_attempt"
-          uv run python -c "from boss_zhipin.audit.telemetry import record_llm_call, telemetry_summary, estimate_cost_cny"
           uv run python -c "from boss_zhipin.utils.retry import retry_with_backoff"
-          uv run python -c "from boss_zhipin.vectorization import VectorStore, embed_resume, text_hash, split_text"
-          uv run python -c "from boss_zhipin.models.llm import generate_letter, _build_client, _provider_label, current_provider_label"
-          uv run python -c "from boss_zhipin.models.prompts import assistant_instructions, DEFAULT_LETTER_PROMPT, LETTER_PROMPT_ENV"
-          uv run python -c "from boss_zhipin.models.job_matcher import should_apply, keyword_match, llm_match_score, extract_keywords_from_text, extract_resume_text"
+          uv run python -c "from boss_zhipin.config.profiles import load_profile"
+          uv run python -c "from boss_zhipin.config.filter_rules import match_posting, explain_posting_match"
           uv run python -c "from boss_zhipin.website_oper.finding_jobs import open_browser_with_options, log_in, get_tab, send_chat_message, shutdown, _strip_jd_noise, _clear_singleton_locks, _reap_profile_chrome"
           uv run python -c "from boss_zhipin.website_oper.write_response import send_job_descriptions_to_chat, send_response_and_go_back"
+          uv run python -c "from boss_zhipin.website_oper.job_api import fetch_search_page, parse_api_job, to_job_posting"
           uv run python -c "from scripts.dump_boss_page import PROBE_JS, TARGET_URL, main"
           uv run python -c "from boss_zhipin.gui.events import ProgressEvent, EventKind, emit, set_emit_callback"
           uv run python -c "from boss_zhipin.gui.runner import start_run, stop_run, is_running, get_task, reset"
           uv run python -c "from boss_zhipin.gui.log_bridge import CallbackHandler, install, uninstall"
-          uv run python -c "from boss_zhipin.gui.env_io import read_env, write_env, field_meta, KNOWN_KEYS, read_language, write_language, LANG_ENV, read_letter_prompt, write_letter_prompt, LETTER_PROMPT_ENV"
           uv run python -c "from boss_zhipin.gui.i18n import msg"
-          uv run python -c "from boss_zhipin.gui.diagnostics import build_ai_help"
-          uv run python -c "from boss_zhipin.diagnose import main"
-          uv run python -c "from boss_zhipin.gui.llm_config import read_llm_config, write_llm_config"
-          uv run python -c "from boss_zhipin.gui.resume_io import store_resume, current_resume, DEFAULT_RESUME_PATH"
-          uv run python -c "from boss_zhipin.gui.history import read_letters"
-          uv run python -c "from boss_zhipin.gui.updates import check_latest_release, is_newer, current_version, REPO"
+          uv run python -c "from boss_zhipin.gui.profile_io import list_profiles, get_profile, save_profile"
+          uv run python -c "from boss_zhipin.gui.run_state import record, get_state, reset"
+          uv run python -c "from boss_zhipin.gui.review_control import request_review, decide, get_state, reset"
+          # agent 里程碑 1（对话式智能助手后端）
+          uv run python -c "from boss_zhipin.agent.presets import LLM_PRESETS"
+          uv run python -c "from boss_zhipin.agent.llm_client import chat_completion_with_retry, chat_completion, LLMClientError, LLMRetryableError"
+          uv run python -c "from boss_zhipin.agent.config_io import read_config, write_config, mask_key, merge_saved_key, AgentConfig"
+          uv run python -c "from boss_zhipin.agent.profile_generator import generate, sanitize_profile, parse_llm_json"
+          # 里程碑 2+3（统计/简历/预览/AI 招呼语/回复检测）
+          uv run python -c "from boss_zhipin.gui.stats_io import query_stats, format_stats"
+          uv run python -c "from boss_zhipin.gui.resume_io import list_resumes, set_default_resume, get_default_resume"
+          uv run python -c "from boss_zhipin.gui.preview import preview_jobs"
+          uv run python -c "from boss_zhipin.agent.greeting_generator import generate_greeting"
+          uv run python -c "from boss_zhipin.website_oper.message_check import check_new_replies, reset"
 
       - name: 跑 pytest
         run: uv run pytest tests/ -v --tb=short

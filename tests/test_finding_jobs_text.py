@@ -66,6 +66,9 @@ def test_send_chat_message_clicks_send_button(monkeypatch):
         chat = _FakeChat()
         monkeypatch.setattr(finding_jobs, "_tab", _FakeTab(button=button, chat=chat))
         monkeypatch.setattr(finding_jobs.asyncio, "sleep", _fast_sleep)
+        # 显式关闭 click-only 硬保险才测真实发送路径（默认是开的，见
+        # test_message_sending_disabled_by_default）。
+        monkeypatch.setenv("BOSS_CLICK_ONLY", "0")
 
         await finding_jobs.send_chat_message("你好")
 
@@ -80,10 +83,33 @@ def test_send_chat_message_falls_back_to_enter_when_button_missing(monkeypatch):
         chat = _FakeChat()
         monkeypatch.setattr(finding_jobs, "_tab", _FakeTab(chat=chat))
         monkeypatch.setattr(finding_jobs.asyncio, "sleep", _fast_sleep)
+        monkeypatch.setenv("BOSS_CLICK_ONLY", "0")
 
         await finding_jobs.send_chat_message("你好")
 
         assert chat.keys == ["你好", "\n"]
+
+    asyncio.run(scenario())
+
+
+def test_message_sending_disabled_by_default(monkeypatch):
+    """click-only 硬保险默认开启：send_chat_message / click_send_resume 都不发。
+
+    用户明确要求 BOSS 只点"立即沟通"建立会话，禁止把任何招呼语/简历发给
+    对方（2026-10 起的既定行为，测试固化防止回归）。
+    """
+
+    async def scenario():
+        chat = _FakeChat()
+        button = _FakeButton()
+        monkeypatch.setattr(finding_jobs, "_tab", _FakeTab(button=button, chat=chat))
+        monkeypatch.setattr(finding_jobs.asyncio, "sleep", _fast_sleep)
+        monkeypatch.delenv("BOSS_CLICK_ONLY", raising=False)
+
+        await finding_jobs.send_chat_message("你好")
+        assert chat.keys == []
+        assert await finding_jobs.click_send_resume() is False
+        assert button.clicked is False
 
     asyncio.run(scenario())
 
@@ -93,6 +119,8 @@ def test_click_send_resume_is_optional(monkeypatch):
         button = _FakeButton()
         monkeypatch.setattr(finding_jobs, "_tab", _FakeTab(button=button))
         monkeypatch.setattr(finding_jobs.asyncio, "sleep", _fast_sleep)
+        # F2 开关（与消息硬保险 BOSS_CLICK_ONLY 分开设闸）
+        monkeypatch.setenv("BOSS_SEND_RESUME_AFTER_GREETING", "1")
         assert await finding_jobs.click_send_resume() is True
         assert button.clicked is True
 
@@ -100,6 +128,24 @@ def test_click_send_resume_is_optional(monkeypatch):
         assert await finding_jobs.click_send_resume() is False
 
     asyncio.run(scenario())
+
+
+def test_resume_send_gate_independent_of_click_only(monkeypatch):
+    """F2：发简历闸与消息闸独立——消息硬保险开着，发简历开关也能单独开。"""
+
+    async def scenario():
+        chat = _FakeChat()
+        button = _FakeButton()
+        monkeypatch.setattr(finding_jobs, "_tab", _FakeTab(button=button, chat=chat))
+        monkeypatch.setattr(finding_jobs.asyncio, "sleep", _fast_sleep)
+        monkeypatch.delenv("BOSS_CLICK_ONLY", raising=False)  # 默认开：不发消息
+        monkeypatch.setenv("BOSS_SEND_RESUME_AFTER_GREETING", "1")
+
+        await finding_jobs.send_chat_message("你好")
+        assert chat.keys == []  # 消息仍被硬保险拦住
+
+        assert await finding_jobs.click_send_resume() is True
+        assert button.clicked is True  # 发简历按 F2 开关放行
 
 
 def test_strips_leading_ui_noise():

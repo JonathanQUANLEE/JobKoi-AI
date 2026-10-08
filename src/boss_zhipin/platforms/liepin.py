@@ -1,0 +1,59 @@
+"""猎聘平台适配器实现。"""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from typing import Any
+
+from boss_zhipin.platforms.base import BasePlatform, PlatformInfo
+
+log = logging.getLogger(__name__)
+
+
+class LiepinPlatform(BasePlatform):
+    @property
+    def platform_id(self) -> str:
+        return "liepin"
+
+    def _get_profile_dir(self) -> Path:
+        return self.root_dir / "liepin_profile"
+
+    def check_login(self) -> bool:
+        profile_dir = self._get_profile_dir()
+        if not profile_dir.is_dir():
+            return False
+        cookie_candidates = [
+            profile_dir / "Default" / "Network" / "Cookies",
+            profile_dir / "Default" / "Cookies",
+        ]
+        return any(c.is_file() and c.stat().st_size > 0 for c in cookie_candidates)
+
+    def get_info(self) -> PlatformInfo:
+        is_logged = self.check_login()
+        return PlatformInfo(
+            id=self.platform_id,
+            name="猎聘 Liepin",
+            tagline="中高端与海归名企岗 · 每日限额 100 · 必须发招呼语",
+            daily_limit=100,
+            theme_color="#ff7033",
+            is_supported=True,
+            is_logged_in=is_logged,
+            status_text="已就绪 (免密免登)" if is_logged else "未登录 (需扫码)",
+        )
+
+    async def open_login_browser(self) -> dict[str, Any]:
+        import nodriver as uc
+        from nodriver import Config
+
+        cfg = Config()
+        cfg.user_data_dir = str(self._get_profile_dir())
+        cfg.headless = False
+        browser = await uc.start(config=cfg)
+        tab = await browser.get("https://www.liepin.com/login", new_window=True)
+        try:
+            await tab.activate()
+            await tab.bring_to_front()
+        except Exception:
+            pass
+        return {"status": "opened", "platform": "liepin", "url": "https://www.liepin.com/login"}

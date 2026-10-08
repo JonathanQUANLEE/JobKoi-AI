@@ -176,6 +176,35 @@ class TestApplyProfileToEnv:
         assert "BOSS_AUTO_SEND_FIXED_GREETING" not in os.environ
         assert "BOSS_FIXED_GREETING" not in os.environ
 
+    def test_apply_profile_bridges_f2f3f5_switches(self, monkeypatch, tmp_path):
+        """F2/F3/F5 开关桥接：true 设 env、false 设 False、缺失时清残留。"""
+        monkeypatch.setenv("BOSS_SEND_RESUME_AFTER_GREETING", "1")  # 模拟跨 run 残留
+
+        main.apply_profile_to_env(
+            {
+                "send": {
+                    "mode": "scan",
+                    "send_resume_after_greeting": True,
+                    "auto_send_resume_on_reply": False,
+                }
+            },
+            base_dir=tmp_path,
+        )
+
+        assert os.environ["BOSS_SEND_RESUME_AFTER_GREETING"] == "True"
+        assert os.environ["BOSS_AUTO_RESUME_ON_REPLY"] == "False"
+        # profile 没写 ai_greeting → 残留被清（DRY_RUN 同款坑的防护）
+        assert "BOSS_AI_GREETING" not in os.environ
+
+    def test_apply_profile_clears_stale_switches(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("BOSS_AI_GREETING", "1")
+        monkeypatch.setenv("BOSS_SEND_RESUME_AFTER_GREETING", "1")
+
+        main.apply_profile_to_env({"send": {"mode": "scan"}}, base_dir=tmp_path)
+
+        assert "BOSS_AI_GREETING" not in os.environ
+        assert "BOSS_SEND_RESUME_AFTER_GREETING" not in os.environ
+
     def test_missing_greeting_file_exits(self, monkeypatch, tmp_path, capsys):
         with pytest.raises(SystemExit) as exc:
             main.apply_profile_to_env(

@@ -1,0 +1,112 @@
+"""简历文件的本地管理（``resume/`` 目录）。
+
+用户把简历（PDF / Word / 图片）放进仓库根的 ``resume/`` 目录，本模块负责
+列出文件和维护「默认简历」标记（存 ``resume/default.txt``，纯文本一行文件名）。
+
+设计要点：
+- 只认白名单扩展名，不递归子目录——简历目录是用户手动放文件的扁平目录；
+- ``set_default_resume`` 校验文件名是**纯文件名**（拒绝 ``../`` 路径穿越）；
+- 目录里个人简历已被 ``.gitignore`` 覆盖（/resume/*.pdf / *.docx / *.png），
+  ``default.txt`` 一行文件名也算个人信息，一并 ignore（见 .gitignore）。
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+from pathlib import Path
+
+log = logging.getLogger(__name__)
+
+# repo root（resume_io.py → gui → boss_zhipin → src → repo）
+ROOT = Path(__file__).resolve().parent.parent.parent.parent
+DEFAULT_RESUME_DIR = ROOT / "resume"
+
+RESUME_EXTENSIONS = frozenset({".pdf", ".doc", ".docx", ".png", ".jpg", ".jpeg"})
+DEFAULT_MARKER_FILENAME = "default.txt"
+
+
+def list_resumes(resume_dir: Path | None = None) -> list[dict]:
+    """列出简历文件（按修改时间倒序）。目录不存在返回空列表。"""
+    base = _ensure_dir(resume_dir)
+    if not base.exists():
+        return []
+    items: list[dict] = []
+    default_name = get_default_resume_name(base)
+    for path in base.iterdir():
+        if not path.is_file() or path.suffix.lower() not in RESUME_EXTENSIONS:
+            continue
+        stat = path.stat()
+        items.append(
+            {
+                "name": path.name,
+                "size": stat.st_size,
+                "mtime": datetime.fromtimestamp(stat.st_mtime).strftime(
+                    "%Y-%m-%d %H:%M"
+                ),
+                "is_default": path.name == default_name,
+            }
+        )
+    items.sort(key=lambda item: item["mtime"], reverse=True)
+    return items
+
+
+def set_default_resume(name: str, resume_dir: Path | None = None) -> dict:
+    """把某个简历设为默认。校验纯文件名 + 文件存在，然后写标记文件。"""
+    base = _ensure_dir(resume_dir)
+    clean = _validate_resume_name(name)
+    target = base / clean
+    if not target.is_file():
+        raise ValueError(f"简历文件不存在: {clean}")
+    marker = base / DEFAULT_MARKER_FILENAME
+    marker.write_text(clean, encoding="utf-8")
+    return {"name": clean, "status": "saved"}
+
+
+def get_default_resume(resume_dir: Path | None = None) -> dict | None:
+    """返回默认简历条目；未设置或文件已删返回 None。"""
+    base = _ensure_dir(resume_dir)
+    name = get_default_resume_name(base)
+    if not name:
+        return None
+    target = base / name
+    if not target.is_file():
+        return None
+    stat = target.stat()
+    return {
+        "name": name,
+        "size": stat.st_size,
+        "mtime": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
+        "is_default": True,
+    }
+
+
+def get_default_resume_name(resume_dir: Path) -> str:
+    """读标记文件里的默认简历名；损坏/未设置返回空串。"""
+    marker = resume_dir / DEFAULT_MARKER_FILENAME
+    if not marker.is_file():
+        return ""
+    try:
+        return marker.read_text(encoding="utf-8").strip()
+    except OSError as e:
+        log.warning("读默认简历标记失败: %s", e)
+        return ""
+
+
+def _ensure_dir(resume_dir: Path | None) -> Path:
+    base = resume_dir or DEFAULT_RESUME_DIR
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
+def _validate_resume_name(name: str) -> str:
+    """只接受纯文件名：非空、无路径分隔符、无 ``..``、扩展名在白名单。"""
+    clean = (name or "").strip()
+    if not clean:
+        raise ValueError("简历文件名不能为空")
+    if "/" in clean or "\\" in clean or ".." in clean:
+        raise ValueError("简历文件名不合法（不允许路径）")
+    path = Path(clean)
+    if path.suffix.lower() not in RESUME_EXTENSIONS:
+        raise ValueError(f"不支持的简历类型: {path.suffix or '(无扩展名)'}")
+    return clean

@@ -100,6 +100,15 @@ def apply_profile_to_env(
     _set_env_if_present("BOSS_AUTO_SEND_MAX_SENT", send_config, "max_sent")
     _set_env_if_present("BOSS_AUTO_SEND_DAILY_LIMIT", send_config, "daily_sent_limit")
     _set_env_if_present("BOSS_STOP_ON_CAPTCHA", send_config, "stop_on_captcha")
+    # F2/F3/F5 三个 opt-in 开关（默认关）：
+    # - send_resume_after_greeting：BOSS 点完立即沟通后自动点“发简历”
+    # - auto_send_resume_on_reply：检测到招聘者回复后自动进会话发简历
+    # - ai_greeting：review 模式用 LLM 按 JD 生成招呼语（过校验+预览确认）
+    _set_env_if_present(
+        "BOSS_SEND_RESUME_AFTER_GREETING", send_config, "send_resume_after_greeting"
+    )
+    _set_env_if_present("BOSS_AUTO_RESUME_ON_REPLY", send_config, "auto_send_resume_on_reply")
+    _set_env_if_present("BOSS_AI_GREETING", send_config, "ai_greeting")
     if isinstance(profile_data.get("filters"), dict):
         os.environ["BOSS_PROFILE_FILTERS_JSON"] = json.dumps(
             profile_data["filters"],
@@ -149,6 +158,10 @@ def _clear_profile_mode_env() -> None:
         "BOSS_SKIPPED_LOG_FILE",
         "BOSS_AUTO_SEND_DAILY_LIMIT",
         "BOSS_STOP_ON_CAPTCHA",
+        # F2/F3/F5 开关（防跨 run 残留，同 DRY_RUN 的坑）
+        "BOSS_SEND_RESUME_AFTER_GREETING",
+        "BOSS_AUTO_RESUME_ON_REPLY",
+        "BOSS_AI_GREETING",
     ):
         os.environ.pop(name, None)
 

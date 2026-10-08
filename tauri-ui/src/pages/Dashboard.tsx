@@ -1,7 +1,36 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Channel } from "@tauri-apps/api/core";
-import { ipc, type LoadedProfile, type ProfileSummary, type ProgressEvent, type RunConfig } from "../lib/ipc";
-import { LANGS, optionLabel, type Lang } from "../lib/i18n";
+import {
+  SlidersHorizontal,
+  Briefcase,
+  RotateCw,
+  Search,
+  Eye,
+  Zap,
+  ListOrdered,
+  Terminal,
+  Copy,
+  Check,
+  SkipForward,
+  Square,
+  FlaskConical,
+  ShieldCheck,
+  Sparkles,
+  ArrowUp,
+  ArrowUpRight,
+  X,
+  Bot,
+  User,
+} from "lucide-react";
+import { ipc, type AgentChatMessage, type LoadedProfile, type ProfileSummary, type ProgressEvent, type RunConfig } from "../lib/ipc";
+import { summarizeAgentProfile } from "../lib/agentPreview";
+import { optionLabel, type Lang } from "../lib/i18n";
+import ResumePanel from "../components/ResumePanel";
+import PlatformHub from "../components/PlatformHub";
+import AgentPanel from "../components/AgentPanel";
+import SettingsDrawer, { type DrawerTab } from "../components/SettingsDrawer";
+import PipelineVisualizer from "../components/PipelineVisualizer";
+import Sidebar, { type NavItem } from "../components/Sidebar";
 import {
   buildProfileData,
   toggleCsvValue,
@@ -16,8 +45,7 @@ import { latestPayloadForJob } from "../lib/runView";
 import { useRunStore, useT } from "../store";
 
 const DEFAULT_PROFILE_NAME = "gui-default";
-const DEFAULT_GREETING =
-  "";
+const DEFAULT_GREETING = "";
 
 const DEFAULT_RULE: RuleForm = {
   requiredKeywords: "",
@@ -28,9 +56,176 @@ const DEFAULT_RULE: RuleForm = {
   caseSensitive: false,
 };
 
-const CITY_OPTIONS = ["北京", "上海", "广州", "深圳", "杭州", "成都", "武汉", "南京"];
-const EDUCATION_OPTIONS = ["不限", "大专", "本科", "硕士"];
-const BOSS_ACTIVE_OPTIONS = ["刚刚活跃", "今日活跃", "3日内活跃", "本周活跃"];
+// 个人情况引导占位词（人与 Agent 真实交流背景与诉求）
+const PLACEHOLDERS = [
+  "例：我是电气工程应届生，熟练模电数电，想在深圳找硬件研发岗位，期望月薪 12k，双休...",
+  "例：计算机 2026 届应届生，熟练 Python 与后端，想在深圳/杭州找 AI 研发，月薪 12-15k...",
+  "例：文科毕业转码，有 1 年前端项目经验，熟练 Vue/React，想找广州或远程开发，不加班...",
+  "例：3 年新媒体运营经验，擅长内容策划与用户增长，想去杭州电商公司，期望月薪 15k...",
+  "例：会计学专业专升本，有初级会计证，想在成都找双休的财务分析或管培生...",
+];
+
+// 输入框内个人背景快捷添加标签
+const BACKGROUND_TAGS = [
+  "2026/2027应届",
+  "计算机/软件",
+  "智能硬件/电气",
+  "1-3年经验",
+  "期望双休不加班",
+  "意向深圳/广州",
+  "期望月薪15k+",
+];
+
+// 顾问对话示例：求职者真实背景与诉求案例
+const JOBSEEKER_SITUATION_BATCHES = [
+  [
+    {
+      role: "电气工程应届生",
+      tag: "智能硬件·双休",
+      userText: "我是电气工程及自动化应届生，熟练模电数电与PLC，想在深圳或广州找硬件研发或电气工程师，期望月薪10-13k，双休不加班。",
+      city: "深圳,广州,东莞",
+      query: "硬件研发工程师",
+    },
+    {
+      role: "计算机26届本科",
+      tag: "AI应用·后端研发",
+      userText: "我是计算机专业2026届应届生，熟悉Python、FastAPI和常见大模型Agent，想在深圳找AI后端研发岗位，期望月薪12-16k。",
+      city: "深圳,杭州,北京",
+      query: "Python后端工程师",
+    },
+    {
+      role: "文科转码求职",
+      tag: "前端开发·不内卷",
+      userText: "文科专业转码，有1年前端自学和实战经验，熟练Vue3与React，想在广州找初级前端或全栈开发岗位，抗拒无效加班。",
+      city: "广州,深圳",
+      query: "前端开发工程师",
+    },
+    {
+      role: "3年经验产品经理",
+      tag: "B端SaaS·高薪",
+      userText: "我有3年互联网产品经理经验，主导过B端SaaS与用户增长业务，想在深圳或上海寻找产品经理机会，期望月薪20k+。",
+      city: "深圳,上海,北京",
+      query: "产品经理",
+    },
+  ],
+  [
+    {
+      role: "双休文职/新媒体",
+      tag: "内容策划·社媒",
+      userText: "新闻传播专业毕业1年，擅长文案策划与小红书运营，想在广州或成都找双休不加班的新媒体运营，期望薪资7-9k。",
+      city: "广州,成都,深圳",
+      query: "新媒体运营",
+    },
+    {
+      role: "大模型算法实习",
+      tag: "985硕·日常实习",
+      userText: "985研二在读，人工智能多模态大模型方向，想在北京或上海找算法日常实习或校招实习，支持转正优先。",
+      city: "北京,上海,深圳",
+      query: "大模型算法工程师",
+    },
+    {
+      role: "财务分析/会计",
+      tag: "初级证书·正规双休",
+      userText: "财务管理专业毕业2年，有初级会计证，想在深圳找正规双休企业做总账会计或财务分析，期望月薪9-11k。",
+      city: "深圳,广州,上海",
+      query: "财务会计",
+    },
+    {
+      role: "制造业管培生",
+      tag: "工业工程·名企",
+      userText: "工业工程应届毕业生，英语六级，想在珠三角寻找智能制造或精益生产管培生岗位，要求规范管理大厂。",
+      city: "深圳,东莞,广州",
+      query: "生产管理管培生",
+    },
+  ],
+  [
+    {
+      role: "全栈开发远程",
+      tag: "Node/React·弹性",
+      userText: "全栈工程师，熟悉Node.js与React/Next.js，想找支持远程办公或弹性工作制的科技团队，期望月薪18k。",
+      city: "深圳,杭州",
+      query: "全栈开发工程师",
+    },
+    {
+      role: "科技出海商务BD",
+      tag: "英语流利·大客户",
+      userText: "2年海外商务BD经验，英语流利，想看深圳科技出海或跨境科技公司的大客户销售拓展岗位，底薪12k+提成。",
+      city: "深圳,广州,上海",
+      query: "海外商务BD",
+    },
+    {
+      role: "UI/UX体验设计",
+      tag: "Figma·设计系统",
+      userText: "UI/UX设计师2年经验，熟练Figma与设计系统构建，想在杭州找注重设计体验的互联网团队，期望月薪14-17k。",
+      city: "杭州,上海,深圳",
+      query: "UI设计师",
+    },
+    {
+      role: "机械结构工程",
+      tag: "SolidWorks·助理",
+      userText: "机械设计制造专业应届本科，熟练SolidWorks与CAD，想在东莞或深圳找结构工程师或硬件助理岗位，双休。",
+      city: "东莞,深圳,广州",
+      query: "结构工程师",
+    },
+  ],
+];
+
+function extractFallbackProfile(text: string) {
+  const cities: string[] = [];
+  const cityKeywords = ["深圳", "广州", "北京", "上海", "杭州", "成都", "武汉", "南京", "西安", "东莞", "苏州", "长沙", "重庆", "全国"];
+  for (const c of cityKeywords) {
+    if (text.includes(c)) cities.push(c);
+  }
+
+  let query = "目标岗位";
+  const jobRoles = [
+    { key: "硬件研发", label: "硬件研发工程师" },
+    { key: "电气", label: "电气工程师" },
+    { key: "Python", label: "Python后端工程师" },
+    { key: "后端", label: "后端开发工程师" },
+    { key: "前端", label: "前端开发工程师" },
+    { key: "大模型", label: "大模型算法工程师" },
+    { key: "算法", label: "算法工程师" },
+    { key: "产品经理", label: "产品经理" },
+    { key: "运营", label: "新媒体运营" },
+    { key: "会计", label: "财务会计" },
+    { key: "财务", label: "财务分析" },
+    { key: "管培生", label: "管培生" },
+    { key: "全栈", label: "全栈工程师" },
+    { key: "测试", label: "测试开发工程师" },
+    { key: "结构", label: "结构工程师" },
+  ];
+  for (const r of jobRoles) {
+    if (text.includes(r.key)) {
+      query = r.label;
+      break;
+    }
+  }
+  if (query === "目标岗位") {
+    const cleaned = text.replace(/我是|想在|想找|期望|寻找/g, " ").trim();
+    const parts = cleaned.split(/[\s,，。]+/);
+    if (parts.length > 0 && parts[0].length >= 2) {
+      query = parts[0].slice(0, 10);
+    }
+  }
+
+  const exclusions = ["销售", "客服", "劳务派遣", "外包", "培训"];
+
+  return {
+    query,
+    cities: cities.join(","),
+    anyKeywords: query,
+    excludeKeywords: exclusions.join(","),
+  };
+}
+
+// 快捷平台列表定义
+const PLATFORM_SHORTCUTS = [
+  { id: "boss", name: "BOSS直聘", color: "#00bebd", desc: "主力平台 · 150/日", ready: true },
+  { id: "liepin", name: "猎聘网", color: "#ff7033", desc: "中高端猎头 · 100/日", ready: true },
+  { id: "job51", name: "前程无忧", color: "#ff5000", desc: "传统名企 · 40/日", ready: true },
+  { id: "zhaopin", name: "智联招聘", color: "#1976d2", desc: "国企央企 · 筹备中", ready: false },
+];
 
 export default function Dashboard() {
   const t = useT();
@@ -53,7 +248,9 @@ export default function Dashboard() {
   const reviewPending = useRunStore((s) => s.reviewPending);
   const setReviewPending = useRunStore((s) => s.setReviewPending);
   const restoreRunState = useRunStore((s) => s.restoreRunState);
+  const pushAgentMessage = useRunStore((s) => s.pushAgentMessage);
 
+  const [selectedPlatform, setSelectedPlatform] = useState<string>("boss");
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [profileName, setProfileName] = useState(DEFAULT_PROFILE_NAME);
   const [mode, setMode] = useState<Mode>("auto");
@@ -73,8 +270,111 @@ export default function Dashboard() {
   const [dailyLimit, setDailyLimit] = useState("80");
   const [dryRun, setDryRun] = useState(true);
   const [stopOnCaptcha, setStopOnCaptcha] = useState(true);
+  const [sendResumeAfterGreeting, setSendResumeAfterGreeting] = useState(false);
+  const [autoResumeOnReply, setAutoResumeOnReply] = useState(false);
+  const [aiGreeting, setAiGreeting] = useState(false);
+  const [replyNotice, setReplyNotice] = useState<{ unread: number; chatUrl: string } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [activeNav, setActiveNav] = useState<NavItem>("workbench");
+  const [consoleTab, setConsoleTab] = useState<"pipeline" | "events" | "logs">("pipeline");
+  const [drawerTab, setDrawerTab] = useState<DrawerTab>("rules");
+
+  // Hunt Now 风格 AI 顾问对话终端状态
+  const [heroInputText, setHeroInputText] = useState("");
+  const [heroChatting, setHeroChatting] = useState(false);
+  const [heroChatMessages, setHeroChatMessages] = useState<AgentChatMessage[]>([]);
+  const [heroProfileResult, setHeroProfileResult] = useState<Record<string, unknown> | null>(null);
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const [recBatchIndex, setRecBatchIndex] = useState(0);
+  const [isRotatingRec, setIsRotatingRec] = useState(false);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setPlaceholderIndex((prev) => (prev + 1) % PLACEHOLDERS.length);
+    }, 4500);
+    return () => clearInterval(timer);
+  }, []);
+
+  function handleNextRecBatch() {
+    setIsRotatingRec(true);
+    setTimeout(() => {
+      setRecBatchIndex((prev) => (prev + 1) % JOBSEEKER_SITUATION_BATCHES.length);
+      setIsRotatingRec(false);
+    }, 200);
+  }
+
+  async function handleHeroChatSubmit(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed || heroChatting) return;
+
+    setHeroChatting(true);
+    setHeroInputText("");
+    setMessage(null);
+
+    const userMsg: AgentChatMessage = { role: "user", content: trimmed };
+    const newHistory: AgentChatMessage[] = [...heroChatMessages, userMsg];
+    setHeroChatMessages(newHistory);
+    pushAgentMessage(userMsg);
+
+    try {
+      const currentForm = currentProfileData();
+      const res = await ipc.agentChat(trimmed, heroChatMessages.slice(-8), currentForm);
+      if (res.status === "ok") {
+        const reply = res.reply || "收到！已根据你的背景情况完成求职意向诊断与画像提炼。";
+        const assistantMsg: AgentChatMessage = { role: "assistant", content: reply };
+        setHeroChatMessages([...newHistory, assistantMsg]);
+        pushAgentMessage(assistantMsg);
+
+        if (res.profile) {
+          setHeroProfileResult(res.profile);
+          const preview = summarizeAgentProfile(res.profile);
+          if (preview?.query && preview.query !== "-") setLabel(preview.query);
+          if (preview?.cities) setCityValues(preview.cities);
+          if (preview?.anyKeywords) setRule((prev) => ({ ...prev, anyKeywords: preview.anyKeywords }));
+          if (preview?.excludeKeywords) setRule((prev) => ({ ...prev, excludeKeywords: preview.excludeKeywords }));
+        }
+      } else {
+        const extracted = extractFallbackProfile(trimmed);
+        let reply = res.message || "已收到你的求职背景情况。";
+        if (res.code === "not_configured") {
+          reply = `已收到你的求职情况！由于尚未在【设置 → AI 模型】中绑定 API Key，已先根据你提到的专业背景（${extracted.query} · ${extracted.cities || "全国"}）为你完成基础求职画像定制。建议在设置中填入 API Key 体验深度职业诊断。`;
+        }
+        const assistantMsg: AgentChatMessage = { role: "assistant", content: reply };
+        setHeroChatMessages([...newHistory, assistantMsg]);
+        pushAgentMessage(assistantMsg);
+
+        setLabel(extracted.query);
+        if (extracted.cities) setCityValues(extracted.cities);
+        if (extracted.anyKeywords) setRule((prev) => ({ ...prev, anyKeywords: extracted.anyKeywords }));
+        if (extracted.excludeKeywords) setRule((prev) => ({ ...prev, excludeKeywords: extracted.excludeKeywords }));
+
+        setHeroProfileResult({
+          search: { query: extracted.query },
+          page_filters: { city: { values: extracted.cities ? extracted.cities.split(",") : [] } },
+          filters: {
+            title: {
+              any: { keywords: extracted.anyKeywords ? extracted.anyKeywords.split(",") : [extracted.query] },
+              exclude: { keywords: extracted.excludeKeywords ? extracted.excludeKeywords.split(",") : [] },
+            },
+          },
+        });
+      }
+    } catch (err) {
+      const errMsg = `顾问连线异常：${String(err)}`;
+      const assistantMsg: AgentChatMessage = { role: "assistant", content: errMsg };
+      setHeroChatMessages([...newHistory, assistantMsg]);
+      pushAgentMessage(assistantMsg);
+    } finally {
+      setHeroChatting(false);
+    }
+  }
+
+  function handleOpenSettings(tab?: DrawerTab) {
+    if (tab) setDrawerTab(tab);
+    setDrawerOpen(true);
+  }
 
   const logRef = useRef<HTMLPreElement>(null);
 
@@ -108,6 +408,25 @@ export default function Dashboard() {
     }
   }, [logs.length]);
 
+  // F3：BOSS 新回复轮询（60s，仅空闲时）
+  useEffect(() => {
+    if (running) return;
+    const timer = setInterval(async () => {
+      try {
+        const result = await ipc.checkBossReplies();
+        if (result.status === "ok" && result.new_replies) {
+          setReplyNotice({
+            unread: result.unread ?? 0,
+            chatUrl: result.chat_url ?? "https://www.zhipin.com/web/geek/chat",
+          });
+        }
+      } catch {
+        /* 轮询失败静默 */
+      }
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, [running]);
+
   const eventStats = useMemo(() => summarizeEvents(events), [events]);
   const stats = events.length > 0 || !restoredStats ? eventStats : restoredStats;
   const currentJob = useMemo(() => latestJob(events) ?? restoredCurrentJob ?? undefined, [events, restoredCurrentJob]);
@@ -119,11 +438,6 @@ export default function Dashboard() {
     () => latestPayloadForJob(events, "letter_sent", currentJob) ?? (events.length === 0 ? restoredLatestSent : undefined) ?? undefined,
     [events, currentJob, restoredLatestSent],
   );
-  const pageState = useMemo(() => latestPayload(events, "page_opened") ?? restoredPage ?? undefined, [events, restoredPage]);
-  const pageFilterStates = useMemo(() => {
-    const current = events.filter((event) => event.kind === "page_filter").map((event) => event.payload);
-    return current.length > 0 ? current : restoredPageFilters;
-  }, [events, restoredPageFilters]);
 
   const statusText = running
     ? currentIndex
@@ -178,6 +492,9 @@ export default function Dashboard() {
     setMaxSent(asString(send.max_sent, maxSent));
     setDailyLimit(asString(send.daily_sent_limit, dailyLimit));
     setStopOnCaptcha(asBool(send.stop_on_captcha, stopOnCaptcha));
+    setSendResumeAfterGreeting(asBool(send.send_resume_after_greeting, false));
+    setAutoResumeOnReply(asBool(send.auto_send_resume_on_reply, false));
+    setAiGreeting(asBool(send.ai_greeting, false));
     setRule({
       requiredKeywords: joinKeywords(required.keywords, rule.requiredKeywords),
       anyKeywords: joinKeywords(any.keywords, rule.anyKeywords),
@@ -208,6 +525,9 @@ export default function Dashboard() {
       maxSent,
       dailyLimit,
       stopOnCaptcha,
+      sendResumeAfterGreeting,
+      autoResumeOnReply,
+      aiGreeting,
     });
   }
 
@@ -319,6 +639,18 @@ export default function Dashboard() {
     }
   }
 
+  async function openChatPage(url: string) {
+    setBusy(true);
+    try {
+      await ipc.openManualBrowser(url);
+      setReplyNotice(null);
+    } catch (err) {
+      setMessage(t("message.manualBrowserOpenFailed", { error: String(err) }));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submitReviewDecision(decision: "send" | "skip" | "quit") {
     setBusy(true);
     setMessage(null);
@@ -334,275 +666,672 @@ export default function Dashboard() {
     }
   }
 
+  const heroProfilePreview = useMemo(() => summarizeAgentProfile(heroProfileResult), [heroProfileResult]);
+
   return (
-    <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)]">
-      <header className="border-b border-[var(--grid)] bg-[var(--panel)]">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-4">
-          <div>
-            <h1 className="text-xl font-semibold tracking-wide">Bosszhipin Job Bot</h1>
-            <p className="mt-1 text-xs text-[var(--muted-fg)]">{t("appSubtitle")}</p>
+    <div className="flex h-screen w-screen overflow-hidden bg-[var(--paper)] text-[var(--ink)]">
+      {/* 左侧独立导航栏 */}
+      <Sidebar
+        activeNav={activeNav}
+        onSelectNav={setActiveNav}
+        running={running}
+        onStartRun={startRun}
+        onStopRun={stopRun}
+        busy={busy}
+        onOpenSettings={handleOpenSettings}
+        onOpenBrowser={openManualBrowser}
+        onResetBrowser={resetChrome}
+        lang={lang}
+        onSetLang={setLang}
+        dailySentCount={stats.sent}
+        dailyLimit={dailyLimit}
+      />
+
+      {/* 右侧主工作流区域 */}
+      <div className="flex flex-1 flex-col h-screen overflow-hidden bg-[var(--paper)]">
+        {/* 顶部极简导航面包屑与状态 */}
+        <header className="h-12 shrink-0 border-b border-[var(--grid)] bg-[#141210]/90 backdrop-blur-md px-6 flex items-center justify-between z-20">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-[var(--muted-fg)]">JobHunter</span>
+            <span className="text-stone-600">/</span>
+            <span className="font-semibold text-[var(--ink)]">
+              {activeNav === "workbench" && "巡航工作台"}
+              {activeNav === "platforms" && "招聘平台中心"}
+              {activeNav === "resumes" && "简历资料库"}
+              {activeNav === "copilot" && "AI 意向助理"}
+              {activeNav === "analytics" && "投递数据与日志"}
+            </span>
           </div>
+
           <div className="flex items-center gap-3">
-            <select
-              value={lang}
-              onChange={(event) => {
-                const next = event.target.value as Lang;
-                setLang(next);
-              }}
-              className="field-select w-28"
-              aria-label={t("a11y.language")}
-            >
-              {LANGS.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-            <span className={running ? "status-on" : "status-idle"}>{statusText}</span>
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto grid max-w-7xl gap-5 px-6 py-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
-        <section className="space-y-5">
-          <Panel title={t("panel.profile")}>
-            <div className="grid gap-4 md:grid-cols-[1fr_1fr]">
-              <Field label={t("field.currentProfile")}>
-                <select
-                  className="field-select"
-                  value={profileName}
-                  onChange={(event) => {
-                    const next = event.target.value;
-                    setProfileName(next);
-                    loadProfile(next);
-                  }}
-                >
-                  {profiles.map((item) => (
-                    <option key={item.name} value={item.name}>
-                      {item.name}
-                    </option>
-                  ))}
-                  {!profiles.some((item) => item.name === profileName) && (
-                    <option value={profileName}>{profileName}</option>
-                  )}
-                </select>
-              </Field>
-              <Field label={t("field.profileName")}>
-                <input
-                  className="field-input"
-                  value={profileName}
-                  onChange={(e) => setProfileName(e.target.value)}
-                  placeholder="gui-default"
-                />
-              </Field>
-            </div>
-          </Panel>
-
-          <Panel title={t("panel.mode")}>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <ModeButton active={mode === "scan"} title={t("mode.scan.title")} desc={t("mode.scan.desc")} onClick={() => setMode("scan")} />
-              <ModeButton active={mode === "review"} title={t("mode.review.title")} desc={t("mode.review.desc")} onClick={() => setMode("review")} />
-              <ModeButton active={mode === "auto"} title={t("mode.auto.title")} desc={t("mode.auto.desc")} onClick={() => setMode("auto")} />
-            </div>
-            {mode === "auto" && (
-              <div className="risk-box">
-                {t("warning.auto")}
-              </div>
+            {dryRun && (
+              <span className="flex items-center gap-1 rounded-full bg-cyan-950/60 border border-cyan-500/30 px-2 py-0.5 text-[10px] font-semibold text-cyan-300">
+                <FlaskConical className="h-3 w-3" />
+                <span>演练模式</span>
+              </span>
             )}
-          </Panel>
-
-          <Panel title={t("panel.basic")}>
-            <div className="grid gap-4 md:grid-cols-3">
-              <Field label={t("field.userName")}>
-                <input className="field-input" value={usrName} onChange={(e) => setUsrName(e.target.value)} placeholder={t("placeholder.userName")} />
-              </Field>
-              <Field label={t("field.searchKeyword")}>
-                <input className="field-input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t("placeholder.searchKeyword")} />
-              </Field>
-              <Field label={t("field.startUrl")}>
-                <input className="field-input" value={startUrl} onChange={(e) => setStartUrl(e.target.value)} placeholder={t("placeholder.startUrl")} />
-              </Field>
-            </div>
-          </Panel>
-
-          <Panel title={t("panel.rules")}>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label={t("field.requiredKeywords")}>
-                <input className="field-input" value={rule.requiredKeywords} onChange={(e) => setRule({ ...rule, requiredKeywords: e.target.value })} placeholder={t("placeholder.requiredKeywords")} />
-              </Field>
-              <Field label={t("field.anyKeywords")}>
-                <input className="field-input" value={rule.anyKeywords} onChange={(e) => setRule({ ...rule, anyKeywords: e.target.value })} placeholder={t("placeholder.anyKeywords")} />
-              </Field>
-              <Field label={t("field.excludeKeywords")}>
-                <input className="field-input" value={rule.excludeKeywords} onChange={(e) => setRule({ ...rule, excludeKeywords: e.target.value })} placeholder={t("placeholder.excludeKeywords")} />
-              </Field>
-              <Field label={t("field.scope")}>
-                <select className="field-select" value={rule.scope} onChange={(e) => setRule({ ...rule, scope: e.target.value as Scope })}>
-                  <option value="title">{optionLabel(lang, "scope.title")}</option>
-                  <option value="description">{optionLabel(lang, "scope.description")}</option>
-                  <option value="title_description">{optionLabel(lang, "scope.title_description")}</option>
-                  <option value="location">{optionLabel(lang, "scope.location")}</option>
-                  <option value="all">{optionLabel(lang, "scope.all")}</option>
-                </select>
-              </Field>
-              <Field label={t("field.match")}>
-                <select className="field-select" value={rule.match} onChange={(e) => setRule({ ...rule, match: e.target.value as MatchMode })}>
-                  <option value="contains">{optionLabel(lang, "match.contains")}</option>
-                  <option value="regex">{optionLabel(lang, "match.regex")}</option>
-                  <option value="exact">{optionLabel(lang, "match.exact")}</option>
-                </select>
-              </Field>
-              <label className="checkbox-line self-end pb-2">
-                <input type="checkbox" checked={rule.caseSensitive} onChange={(e) => setRule({ ...rule, caseSensitive: e.target.checked })} />
-                <span>{t("field.caseSensitive")}</span>
-              </label>
-            </div>
-          </Panel>
-
-          <Panel title={t("panel.pageFilters")}>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label={t("field.city")}>
-                <OptionPicker
-                  value={cityValues}
-                  options={CITY_OPTIONS}
-                  onChange={setCityValues}
-                />
-                <input className="field-input" value={cityValues} onChange={(e) => setCityValues(e.target.value)} placeholder={t("placeholder.city")} />
-              </Field>
-              <Field label={t("field.education")}>
-                <OptionPicker
-                  value={educationValues}
-                  options={EDUCATION_OPTIONS}
-                  onChange={setEducationValues}
-                />
-                <input className="field-input" value={educationValues} onChange={(e) => setEducationValues(e.target.value)} placeholder={t("placeholder.education")} />
-              </Field>
-              <Field label={t("field.bossActive")}>
-                <OptionPicker
-                  value={bossActiveValues}
-                  options={BOSS_ACTIVE_OPTIONS}
-                  onChange={setBossActiveValues}
-                />
-                <input className="field-input" value={bossActiveValues} onChange={(e) => setBossActiveValues(e.target.value)} placeholder={t("placeholder.bossActive")} />
-              </Field>
-              <Field label={t("field.filterPolicy")}>
-                <select className="field-select" value={filterPolicy} onChange={(e) => setFilterPolicy(e.target.value as FilterPolicy)}>
-                  <option value="warning">{t("filter.warning")}</option>
-                  <option value="strict">{t("filter.strict")}</option>
-                </select>
-              </Field>
-            </div>
-          </Panel>
-
-          <Panel title={t("panel.greeting")}>
-            <Field label={t("field.greetingFile")}>
-              <input className="field-input" value={greetingPath} onChange={(e) => setGreetingPath(e.target.value)} placeholder="./greetings/default.txt" />
-            </Field>
-            <textarea
-              className="field-textarea mt-4 min-h-40"
-              value={greeting}
-              onChange={(e) => setGreeting(e.target.value)}
-              placeholder={t("placeholder.greeting")}
-            />
-          </Panel>
-
-          <Panel title={t("panel.sendPolicy")}>
-            <div className="grid gap-4 md:grid-cols-4">
-              <Field label={t("field.delayMin")}>
-                <input className="field-input" value={delayMin} onChange={(e) => setDelayMin(e.target.value)} inputMode="decimal" />
-              </Field>
-              <Field label={t("field.delayMax")}>
-                <input className="field-input" value={delayMax} onChange={(e) => setDelayMax(e.target.value)} inputMode="decimal" />
-              </Field>
-              <Field label={t("field.maxSent")}>
-                <input className="field-input" value={maxSent} onChange={(e) => setMaxSent(e.target.value)} inputMode="numeric" />
-              </Field>
-              <Field label={t("field.dailyLimit")}>
-                <input className="field-input" value={dailyLimit} onChange={(e) => setDailyLimit(e.target.value)} inputMode="numeric" />
-              </Field>
-            </div>
-            <div className="mt-4 flex flex-wrap items-center gap-4">
-              <label className="checkbox-line">
-                <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} />
-                <span>{t("toggle.dryRun")}</span>
-              </label>
-              <label className="checkbox-line">
-                <input type="checkbox" checked={stopOnCaptcha} onChange={(e) => setStopOnCaptcha(e.target.checked)} />
-                <span>{t("toggle.stopCaptcha")}</span>
-              </label>
-            </div>
-          </Panel>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <button className="btn-primary" onClick={startRun} disabled={running || busy}>{t("button.start")}</button>
-            <button className="btn-secondary" onClick={stopRun} disabled={!running || busy}>{t("button.stop")}</button>
-            <button className="btn-secondary" onClick={saveConfig} disabled={busy}>{t("button.saveProfile")}</button>
-            <button className="btn-secondary" onClick={openManualBrowser} disabled={running || busy}>{t("button.openManualBrowser")}</button>
-            <button className="btn-ghost" onClick={resetChrome} disabled={running || busy}>{t("button.resetBrowser")}</button>
-            {message && <span className="message-line">{message}</span>}
+            <button
+              type="button"
+              onClick={() => handleOpenSettings("rules")}
+              className="btn-ghost !py-1 !px-2.5 text-xs flex items-center gap-1.5 rounded-lg border border-[var(--grid)] hover:border-amber-500/40 text-amber-400"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              <span>过滤规则与风控</span>
+            </button>
+            <span className={running ? "status-on" : "status-idle"}>
+              <span className={`inline-block h-2 w-2 rounded-full ${running ? "bg-emerald-400 animate-pulse" : "bg-stone-500"}`} />
+              {statusText}
+            </span>
           </div>
-        </section>
+        </header>
 
-        <aside className="space-y-5">
-          {reviewPending && (
-            <Panel title={t("panel.review")}>
-              <ReviewCard
-                pending={reviewPending}
-                busy={busy}
-                onDecision={submitReviewDecision}
-                t={t}
-              />
-            </Panel>
+        {/* 主内容区域 */}
+        <main className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+          {replyNotice && (
+            <div className="flex items-center gap-3 border border-[var(--signal)] bg-[var(--panel-2)] px-4 py-3 rounded-xl shadow-md">
+              <span className="min-w-0 flex-1 break-words text-sm text-[var(--signal)]">
+                {t("reply.notice", { count: replyNotice.unread })}
+              </span>
+              <button
+                className="btn-primary"
+                onClick={() => openChatPage(replyNotice.chatUrl)}
+                disabled={busy}
+              >
+                {t("reply.openChat")}
+              </button>
+              <button className="btn-ghost" onClick={() => setReplyNotice(null)}>
+                {t("reply.dismiss")}
+              </button>
+            </div>
           )}
 
-          <Panel title={t("panel.run")}>
-            <div className="stat-grid">
-              <Stat label={t("stat.browser")} value={running ? t("status.running") : t("status.idle")} />
-              <Stat label={t("stat.scanned")} value={stats.scanned} />
-              <Stat label={t("stat.sent")} value={stats.sent} />
-              <Stat label={t("stat.skipped")} value={stats.skipped} />
-            </div>
-            <div className="mt-4 space-y-3 text-sm">
-              <InfoLine label={t("info.currentJob")} value={formatJobLine(currentJob)} />
-              <InfoLine label={t("info.requestUrl")} value={asString(pageState?.requested_url, "-")} />
-              <InfoLine label={t("info.actualUrl")} value={asString(pageState?.actual_url, "-")} />
-              <InfoLine label={t("info.urlStatus")} value={pageState?.redirected ? t("url.redirected") : t("url.notRedirected")} />
-              <InfoLine label={t("info.matchReason")} value={asString(currentJob?.match_reason || currentJob?.reason || latestSent?.match_explanation || latestSkip?.detail, "-")} />
-              <InfoLine label={t("info.skipReason")} value={asString(latestSkip?.detail || latestSkip?.reason, "-")} />
-              <InfoLine label={t("info.sendStatus")} value={asString(latestSent?.status, "-")} />
-            </div>
-            <div className="mt-4 space-y-2 text-sm">
-              <span className="field-label">{t("info.pageFilterResult")}</span>
-              {pageFilterStates.length === 0 ? (
-                <p className="empty-text">{t("empty.pageFilters")}</p>
-              ) : (
-                pageFilterStates.map((item, index) => (
-                  <div key={index} className={item.status === "failed" ? "event-row error" : "event-row"}>
-                    <span className="event-kind">{asString(item.status, "-")}</span>
-                    <span className="event-payload">{asString(item.message, "-")}</span>
-                  </div>
-                ))
-              )}
-            </div>
-          </Panel>
+          {/* ========================================================================= */}
+          {/* TAB 1: 巡航工作台 (Hunt Now https://www.hunt.now/ 风格高保真复刻)           */}
+          {/* ========================================================================= */}
+          {activeNav === "workbench" && (
+            <div className="space-y-6 max-w-6xl mx-auto">
+              {/* Hunt Now 氛围外壳：网格底纹 + 环形暖光辉 + 居中 Hero */}
+              <section className="relative isolate overflow-hidden rounded-3xl px-5 pb-8 pt-[3vh] sm:px-6">
+                <div className="dot-pattern absolute inset-0 -z-10" aria-hidden="true" />
+                <div className="fx-glow" aria-hidden="true" />
 
-          <Panel title={t("panel.events")}>
-            <div className="event-list">
-              {events.length === 0 ? (
-                <p className="empty-text">{t("empty.events")}</p>
-              ) : (
-                events.slice(-80).map((event, index) => <EventRow key={`${event.kind}-${index}`} event={event} />)
+                <div className="mx-auto flex max-w-[46rem] flex-col items-center text-center">
+                  {/* 顶部 AI 顾问就绪徽章 */}
+                  <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-950/40 px-3.5 py-1 text-xs text-emerald-300 backdrop-blur">
+                    <span className="relative flex size-2">
+                      <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex size-2 rounded-full bg-emerald-400"></span>
+                    </span>
+                    <span className="font-medium">AI 专属求职顾问在线</span>
+                    <span className="text-emerald-500/70">·</span>
+                    <span className="text-stone-300">倾听你的背景与诉求</span>
+                  </div>
+
+                  {/* 主标题 */}
+                  <h1 className="text-balance text-[1.85rem] font-bold leading-tight tracking-tight text-stone-100 sm:text-[2.5rem] sm:leading-[1.18]">
+                    <span className="inline-block whitespace-pre">向 AI 顾问说出你的情况，</span>
+                    <span className="text-gradient inline-block">定制专属求职画像</span>
+                  </h1>
+
+                  {/* 副标题 */}
+                  <p className="mt-3 max-w-xl mx-auto whitespace-pre-line text-balance text-[14px] leading-relaxed text-stone-400 sm:text-[15px]">
+                    告诉我你的毕业年份、专业技能、意向城市或期望薪资。{"\n"}
+                    AI 顾问将与你深度交流，自动提炼精准投递规则并配置防封风控。
+                  </p>
+
+                  {/* Hunt Now 标志性 Beam Composer (动态光轨 AI 顾问对话舱) */}
+                  <div className="relative mt-7 w-full max-w-[46rem]">
+                    <div
+                      className="absolute -inset-x-6 -inset-y-4 -z-10 rounded-[2.5rem] bg-gradient-to-b from-[#ff5722]/15 via-transparent to-transparent blur-2xl"
+                      aria-hidden="true"
+                    />
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleHeroChatSubmit(heroInputText);
+                      }}
+                      className="beam w-full rounded-[1.75rem] border border-white/10 bg-[#181614]/95 text-left shadow-2xl backdrop-blur-xl transition-all focus-within:border-[#ff5722]/60 focus-within:ring-2 focus-within:ring-[#ff5722]/20"
+                    >
+                      <div className="relative px-5 pt-4 sm:px-6 sm:pt-5">
+                        <textarea
+                          rows={2}
+                          value={heroInputText}
+                          onChange={(e) => setHeroInputText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                              e.preventDefault();
+                              handleHeroChatSubmit(heroInputText);
+                            }
+                          }}
+                          placeholder={PLACEHOLDERS[placeholderIndex]}
+                          className="block min-h-[3.6rem] w-full resize-none bg-transparent text-base sm:text-[17px] leading-7 text-stone-100 outline-none placeholder:text-stone-500"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-2 px-3 pb-3 pt-1 sm:px-4">
+                        <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
+                          <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-[#ff5722]/20 to-[#ff2a55]/20 border border-[#ff5722]/40 px-2.5 py-1 text-xs font-semibold text-[#ff5722]">
+                            <Bot className="size-3.5" />
+                            告诉顾问
+                          </span>
+                          {BACKGROUND_TAGS.map((tag) => (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={() => {
+                                setHeroInputText((prev) => (prev ? `${prev}，${tag}` : tag));
+                              }}
+                              className="shrink-0 rounded-full border border-white/10 bg-stone-900/60 px-2.5 py-1 text-xs text-stone-300 hover:border-white/30 hover:text-white transition-all cursor-pointer"
+                            >
+                              + {tag}
+                            </button>
+                          ))}
+                        </div>
+
+                        <span className="hidden shrink-0 text-[11px] text-stone-500 lg:block">
+                          <kbd className="font-sans">Enter</kbd> 发送对话 · <kbd className="font-sans">Shift+Enter</kbd> 换行
+                        </span>
+
+                        <button
+                          type="submit"
+                          disabled={heroChatting || !heroInputText.trim()}
+                          title="发送给 AI 顾问"
+                          aria-label="发送给 AI 顾问"
+                          className="grid size-10 shrink-0 place-items-center rounded-full bg-white text-stone-950 transition-all hover:scale-105 active:scale-95 shadow-md disabled:opacity-40 disabled:cursor-not-allowed font-bold cursor-pointer"
+                        >
+                          {heroChatting ? (
+                            <RotateCw className="size-4 animate-spin text-stone-900" />
+                          ) : (
+                            <ArrowUp className="size-5" />
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+
+                  {/* 输入框下方：求职者个人背景情况案例（带 ↗ 与 “换一批”动画） */}
+                  <div className="mt-5 flex flex-wrap justify-center gap-2 text-[13px] opacity-100">
+                    {JOBSEEKER_SITUATION_BATCHES[recBatchIndex].map((item) => (
+                      <button
+                        key={item.role}
+                        type="button"
+                        onClick={() => {
+                          setHeroInputText(item.userText);
+                          handleHeroChatSubmit(item.userText);
+                        }}
+                        className="group inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-[#1c1917]/70 px-3.5 py-1.5 text-stone-300 backdrop-blur transition-all hover:border-[#ff5722]/50 hover:text-white hover:bg-[#25201d] cursor-pointer"
+                      >
+                        <span className="size-1.5 rounded-full bg-[#ff5722] group-hover:scale-125 transition-transform" />
+                        <span className="font-medium">{item.role}</span>
+                        <span className="text-[11px] text-stone-400 group-hover:text-stone-300">· {item.tag}</span>
+                        <ArrowUpRight className="size-3 text-stone-500 transition-colors group-hover:text-[#ff5722]" />
+                      </button>
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={handleNextRecBatch}
+                      className="group inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-stone-400 hover:text-white border border-transparent hover:border-stone-800 transition-all cursor-pointer"
+                      title="换一批求职者情况案例"
+                    >
+                      <RotateCw className={`size-3.5 transition-transform duration-300 ${isRotatingRec ? "rotate-180" : ""}`} />
+                      <span className="text-xs">换一批情况</span>
+                    </button>
+                  </div>
+
+                  {/* 人与 Agent 对话交互展示区（发送对话或点击情况案例后优雅展开） */}
+                  {(heroChatMessages.length > 0 || heroChatting) && (
+                    <div className="rise-in mt-6 w-full max-w-[46rem] rounded-2xl border border-[#ff5722]/40 bg-gradient-to-b from-[#1c1917]/95 to-[#12100e]/95 p-5 shadow-2xl backdrop-blur-xl text-left">
+                      <div className="flex items-center justify-between pb-3 border-b border-stone-800/80 mb-3.5">
+                        <span className="text-xs font-bold text-stone-200 flex items-center gap-1.5">
+                          <Bot className="size-4 text-[#ff5722]" />
+                          <span>AI 求职顾问交流实录</span>
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHeroChatMessages([]);
+                              setHeroProfileResult(null);
+                              setHeroInputText("");
+                            }}
+                            className="text-stone-400 hover:text-stone-200 text-xs flex items-center gap-1 cursor-pointer"
+                            title="重新开始对话"
+                          >
+                            <RotateCw className="size-3" />
+                            <span>清空重置</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 对话消息气泡流 */}
+                      <div className="space-y-3 mb-4 max-h-64 overflow-y-auto pr-1">
+                        {heroChatMessages.map((msg, idx) => (
+                          <div
+                            key={idx}
+                            className={`flex items-start gap-2.5 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}
+                          >
+                            <div
+                              className={`grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold ${
+                                msg.role === "user"
+                                  ? "bg-[#ff5722] text-stone-950"
+                                  : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                              }`}
+                            >
+                              {msg.role === "user" ? <User className="size-3.5" /> : <Bot className="size-3.5" />}
+                            </div>
+                            <div
+                              className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-xs leading-relaxed ${
+                                msg.role === "user"
+                                  ? "bg-[#ff5722]/15 border border-[#ff5722]/30 text-stone-100"
+                                  : "bg-stone-900/90 border border-stone-800 text-stone-200"
+                              }`}
+                            >
+                              <div className="text-[10px] text-stone-400 mb-0.5 font-semibold">
+                                {msg.role === "user" ? "你的情况与诉求" : "AI 顾问建议"}
+                              </div>
+                              <div className="whitespace-pre-wrap">{msg.content}</div>
+                            </div>
+                          </div>
+                        ))}
+
+                        {heroChatting && (
+                          <div className="flex items-start gap-2.5">
+                            <div className="grid size-7 shrink-0 place-items-center rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              <Bot className="size-3.5 animate-pulse" />
+                            </div>
+                            <div className="rounded-2xl bg-stone-900/90 border border-stone-800 px-3.5 py-2 text-xs text-stone-400 flex items-center gap-2">
+                              <span className="size-2 rounded-full bg-amber-400 animate-ping" />
+                              <span>AI 顾问正在为您分析背景与规划画像...</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 提炼出的投递画像卡片 */}
+                      {heroProfileResult && (
+                        <div className="rounded-xl border border-white/10 bg-black/40 p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                              <Sparkles className="size-3.5 text-[#ff5722]" />
+                              <span>AI 提炼专属投递画像已生成</span>
+                            </span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950/70 border border-emerald-500/30 text-emerald-300 font-medium">
+                              ● 策略就绪
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-xs mb-3.5">
+                            <div className="bg-stone-950/80 p-2.5 rounded-xl border border-stone-800/80">
+                              <span className="text-stone-500 text-[10px] block font-medium">目标巡航岗位:</span>
+                              <span className="font-semibold text-stone-100">{heroProfilePreview?.query || label}</span>
+                            </div>
+                            <div className="bg-stone-950/80 p-2.5 rounded-xl border border-stone-800/80">
+                              <span className="text-stone-500 text-[10px] block font-medium">意向城市范围:</span>
+                              <span className="font-semibold text-stone-100">{heroProfilePreview?.cities || cityValues || "全国/不限"}</span>
+                            </div>
+                            <div className="bg-stone-950/80 p-2.5 rounded-xl border border-stone-800/80">
+                              <span className="text-stone-500 text-[10px] block font-medium">必含专业词:</span>
+                              <span className="text-emerald-400 font-medium truncate block">{heroProfilePreview?.anyKeywords || rule.anyKeywords || "-"}</span>
+                            </div>
+                            <div className="bg-stone-950/80 p-2.5 rounded-xl border border-stone-800/80">
+                              <span className="text-stone-500 text-[10px] block font-medium">风控排除黑名单:</span>
+                              <span className="text-red-400 font-medium truncate block">{heroProfilePreview?.excludeKeywords || rule.excludeKeywords || "-"}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                hydrateFromProfile({ name: profileName, path: "", data: heroProfileResult });
+                                startRun();
+                              }}
+                              disabled={running}
+                              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-[#ff5722] to-amber-500 text-stone-950 font-bold text-xs shadow-md hover:opacity-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                              <Zap className="size-3.5 fill-current" />
+                              <span>一键采纳此画像并立即启动巡航</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                hydrateFromProfile({ name: profileName, path: "", data: heroProfileResult });
+                                handleOpenSettings("rules");
+                              }}
+                              className="px-3 py-2.5 rounded-xl border border-stone-800 bg-stone-900/90 text-stone-300 text-xs hover:text-white hover:border-stone-700 transition-all flex items-center gap-1 cursor-pointer"
+                            >
+                              <SlidersHorizontal className="size-3.5 text-amber-400" />
+                              <span>微调规则</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveNav("copilot")}
+                              className="px-3 py-2.5 rounded-xl border border-stone-800 bg-stone-900/90 text-stone-300 text-xs hover:text-white hover:border-stone-700 transition-all flex items-center gap-1 cursor-pointer"
+                            >
+                              <Bot className="size-3.5" />
+                              <span>深度对话</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* 平台直连支持（Hunt Now 品牌风格矩阵） */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {PLATFORM_SHORTCUTS.map((p) => {
+                  const isSelected = selectedPlatform === p.id;
+                  return (
+                    <div
+                      key={p.id}
+                      onClick={() => p.ready && setSelectedPlatform(p.id)}
+                      className={`group flex items-center justify-between rounded-xl border px-3.5 py-3 transition-all ${
+                        isSelected
+                          ? "border-amber-500/60 bg-amber-500/10 shadow-sm ring-1 ring-amber-500/20 cursor-pointer"
+                          : p.ready
+                          ? "border-[var(--grid)] bg-[var(--panel-2)] hover:border-stone-700 hover:bg-[var(--panel-hover)] cursor-pointer"
+                          : "border-stone-850/50 bg-stone-950/20 opacity-45 cursor-not-allowed"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span
+                          className="size-2 rounded-full shrink-0"
+                          style={{ backgroundColor: p.color }}
+                        />
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold text-[var(--ink)] truncate">
+                            {p.name}
+                          </div>
+                          <div className="text-[10px] text-[var(--muted-fg)] truncate">
+                            {p.desc}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 text-[10px]">
+                        {isSelected ? (
+                          <span className="text-amber-400 font-bold">主选</span>
+                        ) : p.ready ? (
+                          <span className="text-emerald-400">就绪</span>
+                        ) : (
+                          <span className="text-stone-500">筹备</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 人工审核卡片（如果处于 review 暂停中） */}
+              {reviewPending && (
+                <Panel title={t("panel.review")}>
+                  <ReviewCard
+                    pending={reviewPending}
+                    busy={busy}
+                    onDecision={submitReviewDecision}
+                    t={t}
+                  />
+                </Panel>
               )}
+
+              {/* 下半部分双栏便当盒 */}
+              <div className="grid gap-5 lg:grid-cols-2">
+                <div className="space-y-5">
+                  {/* 当前求职意向与策略摘要卡片 */}
+                  <section className="panel">
+                    <div className="panel-title">
+                      <span className="flex items-center gap-2">
+                        <Briefcase className="h-4 w-4 text-[var(--accent)]" />
+                        <span>求职意向与规则摘要</span>
+                      </span>
+                      <button
+                        type="button"
+                        className="btn-ghost text-xs flex items-center gap-1.5 py-1 px-2.5 rounded-lg border border-[var(--grid)] hover:border-amber-500/40 text-amber-400"
+                        onClick={() => handleOpenSettings("rules")}
+                      >
+                        <SlidersHorizontal className="h-3.5 w-3.5" />
+                        <span>详细规则 (Drawer)</span>
+                      </button>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2 text-xs">
+                      <div className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5">
+                        <div className="text-[10px] text-[var(--muted-fg)]">目标岗位与地区</div>
+                        <div className="text-sm font-bold text-[var(--ink)] mt-0.5">{label || "未指定岗位"}</div>
+                        <div className="text-[11px] text-stone-400 mt-1">
+                          城市: <span className="text-[var(--ink)]">{cityValues || "全国/不限"}</span> · 学历: <span className="text-[var(--ink)]">{educationValues || "不限"}</span>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5">
+                        <div className="text-[10px] text-[var(--muted-fg)]">关键词过滤约束</div>
+                        <div className="text-[11px] text-emerald-400 truncate mt-0.5 font-medium">
+                          必含: {rule.requiredKeywords || "无特定必含词"}
+                        </div>
+                        <div className="text-[11px] text-red-400 truncate mt-1">
+                          黑名单排除: {rule.excludeKeywords || "无"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--muted-fg)] pt-2.5 border-t border-[var(--grid)]">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="h-3.5 w-3.5 text-amber-400" />
+                        <span>拟人延时: <strong className="text-[var(--ink)]">{delayMin}~{delayMax}s</strong></span>
+                        <span>· 每日保护限额: <strong className="text-[var(--ink)]">{dailyLimit} 次</strong></span>
+                      </div>
+                      <button
+                        type="button"
+                        className="text-amber-400 hover:text-amber-300 underline underline-offset-2"
+                        onClick={() => handleOpenSettings("rules")}
+                      >
+                        展开全部规则
+                      </button>
+                    </div>
+                  </section>
+
+                  <ResumePanel />
+                </div>
+
+                <div className="space-y-5">
+                  {/* 可视化自动化执行管线 */}
+                  <PipelineVisualizer
+                    running={running}
+                    currentIndex={currentIndex}
+                    mode={mode}
+                    dryRun={dryRun}
+                    delayMin={delayMin}
+                    delayMax={delayMax}
+                    stats={stats}
+                    currentJob={currentJob}
+                    latestSent={latestSent}
+                    latestSkip={latestSkip}
+                    onOpenDrawer={() => handleOpenSettings("policy")}
+                  />
+
+                  {/* 模式选择与巡航控制卡片 */}
+                  <div className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm">
+                    <div className="flex items-center justify-between pb-3 border-b border-[var(--grid)]">
+                      <span className="text-xs font-bold uppercase tracking-wider text-[var(--ink)]">巡航模式选择</span>
+                      <span className={running ? "status-on" : "status-idle"}>{statusText}</span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 mt-4">
+                      <ModeButton
+                        active={mode === "scan"}
+                        icon={<Search className="h-4 w-4" />}
+                        title={t("mode.scan.title")}
+                        desc={t("mode.scan.desc")}
+                        onClick={() => setMode("scan")}
+                      />
+                      <ModeButton
+                        active={mode === "review"}
+                        icon={<Eye className="h-4 w-4" />}
+                        title={t("mode.review.title")}
+                        desc={t("mode.review.desc")}
+                        onClick={() => setMode("review")}
+                      />
+                      <ModeButton
+                        active={mode === "auto"}
+                        icon={<Zap className="h-4 w-4" />}
+                        title={t("mode.auto.title")}
+                        desc={t("mode.auto.desc")}
+                        onClick={() => setMode("auto")}
+                      />
+                    </div>
+
+                    {mode === "auto" && (
+                      <div className="risk-box mt-3">
+                        {t("warning.auto")}
+                      </div>
+                    )}
+
+                    {message && <div className="mt-3 message-line">{message}</div>}
+                  </div>
+                </div>
+              </div>
             </div>
-          </Panel>
-          <Panel title={t("panel.logs")}>
-            <pre ref={logRef} className="log-box">{logs.length ? logs.join("\n") : t("empty.logs")}</pre>
-            <div className="mt-3 flex flex-wrap gap-3">
-              <button className="btn-secondary" onClick={copyLogs}>{t("button.copyLogs")}</button>
+          )}
+
+          {/* TAB 2: 招聘平台中心 */}
+          {activeNav === "platforms" && (
+            <div className="max-w-5xl mx-auto space-y-5">
+              <PlatformHub
+                selectedPlatform={selectedPlatform}
+                onSelectPlatform={setSelectedPlatform}
+              />
             </div>
-          </Panel>
-        </aside>
-      </main>
+          )}
+
+          {/* TAB 3: 简历资料库 */}
+          {activeNav === "resumes" && (
+            <div className="max-w-4xl mx-auto space-y-5">
+              <ResumePanel />
+            </div>
+          )}
+
+          {/* TAB 4: AI 意向助理 (完整对话面板) */}
+          {activeNav === "copilot" && (
+            <div className="max-w-4xl mx-auto space-y-5">
+              <AgentPanel
+                getCurrentForm={currentProfileData}
+                onApply={(data) => hydrateFromProfile({ name: profileName, path: "", data })}
+                onRun={() => startRun()}
+                onOpenSettings={handleOpenSettings}
+              />
+            </div>
+          )}
+
+          {/* TAB 5: 投递数据与日志 */}
+          {activeNav === "analytics" && (
+            <div className="max-w-5xl mx-auto space-y-5">
+              <div className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm">
+                <div className="flex items-center justify-between pb-3 border-b border-[var(--grid)]">
+                  <div className="flex gap-4 text-xs font-bold">
+                    <button
+                      type="button"
+                      className={`flex items-center gap-1.5 pb-1 transition-all ${
+                        consoleTab === "pipeline"
+                          ? "border-b-2 border-amber-500 text-amber-400"
+                          : "text-stone-400 hover:text-stone-200"
+                      }`}
+                      onClick={() => setConsoleTab("pipeline")}
+                    >
+                      <ListOrdered className="h-3.5 w-3.5" />
+                      <span>实时事件流水 ({events.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`flex items-center gap-1.5 pb-1 transition-all ${
+                        consoleTab === "logs"
+                          ? "border-b-2 border-amber-500 text-amber-400"
+                          : "text-stone-400 hover:text-stone-200"
+                      }`}
+                      onClick={() => setConsoleTab("logs")}
+                    >
+                      <Terminal className="h-3.5 w-3.5" />
+                      <span>终端运行日志 ({logs.length})</span>
+                    </button>
+                  </div>
+                  <button className="btn-ghost text-xs py-0.5 px-2 flex items-center gap-1" onClick={copyLogs}>
+                    <Copy className="h-3 w-3" />
+                    <span>{t("button.copyLogs")}</span>
+                  </button>
+                </div>
+
+                <div className="mt-3">
+                  {consoleTab === "pipeline" ? (
+                    <div className="event-list h-96">
+                      {events.length === 0 ? (
+                        <p className="empty-text">{t("empty.events")}</p>
+                      ) : (
+                        events.slice(-150).map((event, index) => <EventRow key={`${event.kind}-${index}`} event={event} />)
+                      )}
+                    </div>
+                  ) : (
+                    <pre ref={logRef} className="log-box h-96">{logs.length ? logs.join("\n") : t("empty.logs")}</pre>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+
+      {/* 侧边滑出高级设置抽屉 (Settings Drawer) */}
+      <SettingsDrawer
+        isOpen={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        initialTab={drawerTab}
+        lang={lang}
+        profiles={profiles}
+        profileName={profileName}
+        setProfileName={setProfileName}
+        onLoadProfile={loadProfile}
+        onSaveConfig={saveConfig}
+        busy={busy}
+        usrName={usrName}
+        setUsrName={setUsrName}
+        label={label}
+        setLabel={setLabel}
+        startUrl={startUrl}
+        setStartUrl={setStartUrl}
+        rule={rule}
+        setRule={setRule}
+        cityValues={cityValues}
+        setCityValues={setCityValues}
+        educationValues={educationValues}
+        setEducationValues={setEducationValues}
+        bossActiveValues={bossActiveValues}
+        setBossActiveValues={setBossActiveValues}
+        filterPolicy={filterPolicy}
+        setFilterPolicy={setFilterPolicy}
+        greetingPath={greetingPath}
+        setGreetingPath={setGreetingPath}
+        greeting={greeting}
+        setGreeting={setGreeting}
+        delayMin={delayMin}
+        setDelayMin={setDelayMin}
+        delayMax={delayMax}
+        setDelayMax={setDelayMax}
+        maxSent={maxSent}
+        setMaxSent={setMaxSent}
+        dailyLimit={dailyLimit}
+        setDailyLimit={setDailyLimit}
+        dryRun={dryRun}
+        setDryRun={setDryRun}
+        stopOnCaptcha={stopOnCaptcha}
+        setStopOnCaptcha={setStopOnCaptcha}
+        sendResumeAfterGreeting={sendResumeAfterGreeting}
+        setSendResumeAfterGreeting={setSendResumeAfterGreeting}
+        autoResumeOnReply={autoResumeOnReply}
+        setAutoResumeOnReply={setAutoResumeOnReply}
+        aiGreeting={aiGreeting}
+        setAiGreeting={setAiGreeting}
+      />
     </div>
   );
 }
@@ -616,68 +1345,27 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="field-label">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function ModeButton({ active, title, desc, onClick }: { active: boolean; title: string; desc: string; onClick: () => void }) {
+function ModeButton({
+  active,
+  icon,
+  title,
+  desc,
+  onClick,
+}: {
+  active: boolean;
+  icon?: ReactNode;
+  title: string;
+  desc: string;
+  onClick: () => void;
+}) {
   return (
     <button type="button" onClick={onClick} className={active ? "mode-button active" : "mode-button"}>
-      <span className="block text-sm font-semibold">{title}</span>
-      <span className="mt-1 block text-xs text-[var(--muted-fg)]">{desc}</span>
+      <div className="flex items-center gap-1.5 mb-1">
+        {icon && <span className={active ? "text-amber-400" : "text-stone-400"}>{icon}</span>}
+        <span className="block text-sm font-semibold">{title}</span>
+      </div>
+      <span className="block text-xs text-[var(--muted-fg)]">{desc}</span>
     </button>
-  );
-}
-
-function OptionPicker({
-  value,
-  options,
-  onChange,
-}: {
-  value: string;
-  options: string[];
-  onChange: (value: string) => void;
-}) {
-  const selected = value
-    .split(/[,，\n]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-  return (
-    <div className="option-picker">
-      {options.map((option) => (
-        <button
-          type="button"
-          key={option}
-          className={selected.includes(option) ? "option-chip active" : "option-chip"}
-          onClick={() => onChange(toggleCsvValue(value, option))}
-        >
-          {option}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="stat-cell">
-      <span className="field-label">{label}</span>
-      <span className="text-lg font-semibold text-[var(--signal)]">{value}</span>
-    </div>
-  );
-}
-
-function InfoLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid grid-cols-[84px_minmax(0,1fr)] gap-2 border-b border-[var(--grid)] pb-2">
-      <span className="text-xs text-[var(--muted-fg)]">{label}</span>
-      <span className="break-words text-[var(--ink)]">{value}</span>
-    </div>
   );
 }
 
@@ -720,10 +1408,28 @@ function ReviewCard({
         <pre className="review-greeting">{asString(pending.greeting, "")}</pre>
       </div>
       <div className="grid grid-cols-3 gap-2">
-        <button className="btn-primary" onClick={() => onDecision("send")} disabled={busy}>{t("button.send")}</button>
-        <button className="btn-secondary" onClick={() => onDecision("skip")} disabled={busy}>{t("button.skip")}</button>
-        <button className="btn-ghost" onClick={() => onDecision("quit")} disabled={busy}>{t("button.stop")}</button>
+        <button className="btn-primary flex items-center justify-center gap-1.5" onClick={() => onDecision("send")} disabled={busy}>
+          <Check className="h-3.5 w-3.5" />
+          <span>{t("button.send")}</span>
+        </button>
+        <button className="btn-secondary flex items-center justify-center gap-1.5" onClick={() => onDecision("skip")} disabled={busy}>
+          <SkipForward className="h-3.5 w-3.5" />
+          <span>{t("button.skip")}</span>
+        </button>
+        <button className="btn-ghost flex items-center justify-center gap-1.5" onClick={() => onDecision("quit")} disabled={busy}>
+          <Square className="h-3.5 w-3.5" />
+          <span>{t("button.stop")}</span>
+        </button>
       </div>
+    </div>
+  );
+}
+
+function InfoLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[84px_minmax(0,1fr)] gap-2 border-b border-[var(--grid)] pb-2">
+      <span className="text-xs text-[var(--muted-fg)]">{label}</span>
+      <span className="break-words text-[var(--ink)]">{value}</span>
     </div>
   );
 }
