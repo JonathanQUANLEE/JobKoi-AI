@@ -806,8 +806,7 @@ export default function Dashboard() {
                         preset="fade-in-blur"
                         speedReveal={1.1}
                         speedSegment={0.3}
-                        trigger={heroAnimStep >= 1}
-                        onAnimationComplete={() => setHeroAnimStep((s) => Math.max(s, 2))}
+                        delay={0}
                         as="span"
                         className="inline-block"
                       >
@@ -815,15 +814,14 @@ export default function Dashboard() {
                       </TextEffect>
                     </h1>
 
-                    {/* 第 2 行 & 第 3 行: 副标题 (顺序衔接) */}
+                    {/* 第 2 行 & 第 3 行: 副标题 (一行运行完之后下一行再用这个特效) */}
                     <div className="mt-3.5 max-w-2xl mx-auto text-balance text-[14px] leading-relaxed text-stone-400 sm:text-[15.5px] space-y-1">
                       <TextEffect
                         key={`hero-l2-${heroAnimCycle}`}
                         preset="fade-in-blur"
                         speedReveal={1.1}
                         speedSegment={0.3}
-                        trigger={heroAnimStep >= 2}
-                        onAnimationComplete={() => setHeroAnimStep((s) => Math.max(s, 3))}
+                        delay={1.7}
                         as="p"
                         className="m-0"
                       >
@@ -834,7 +832,7 @@ export default function Dashboard() {
                         preset="fade-in-blur"
                         speedReveal={1.1}
                         speedSegment={0.3}
-                        trigger={heroAnimStep >= 3}
+                        delay={3.5}
                         as="p"
                         className="m-0"
                       >

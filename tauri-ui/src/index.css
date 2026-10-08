@@ -375,6 +375,62 @@
   .rise-in {
     animation: 0.35s ease-out both rise-in;
   }
+
+  /* TextEffect motion-primitives 动画关键帧 */
+  @keyframes text-fade-in-blur {
+    0% {
+      opacity: 0;
+      filter: blur(12px);
+      transform: translateY(18px);
+    }
+    100% {
+      opacity: 1;
+      filter: blur(0px);
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes text-blur {
+    0% {
+      opacity: 0;
+      filter: blur(12px);
+    }
+    100% {
+      opacity: 1;
+      filter: blur(0px);
+    }
+  }
+
+  @keyframes text-scale {
+    0% {
+      opacity: 0;
+      transform: scale(0.85);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes text-slide {
+    0% {
+      opacity: 0;
+      transform: translateY(18px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes text-fade {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
 }
 
 @property --beam-angle {

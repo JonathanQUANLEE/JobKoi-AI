@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 export type PresetType = "blur" | "fade-in-blur" | "scale" | "fade" | "slide";
@@ -27,8 +27,8 @@ interface SegmentUnit {
 }
 
 const defaultStaggerTimes: Record<PerType, number> = {
-  char: 0.03,
-  word: 0.05,
+  char: 0.035,
+  word: 0.045,
   line: 0.1,
 };
 
@@ -59,7 +59,7 @@ function extractSegments(
       }));
     }
 
-    // per === "word" (默认)：英文按词与空格切分，中文/日韩字符单字即词，呈现最细腻的流光入场
+    // 默认分词：汉字/日韩字符单字即词，英文按词与空格切分
     const units: SegmentUnit[] = [];
     const regex = /([\u4e00-\u9fa5\u3040-\u30ff\uac00-\ud7af]|[a-zA-Z0-9_\-]+|\s+|[^\w\s])/g;
     let match: RegExpExecArray | null;
@@ -111,8 +111,7 @@ function getReadableText(node: React.ReactNode): string {
 
 /**
  * motion-primitives 高保真文本动效组件: TextEffect
- * 支持 'fade-in-blur' / 'blur' / 'scale' / 'fade' / 'slide' 预设
- * 支持 speedReveal（逐字显现速率）与 speedSegment（单段动效时长系数）
+ * 采用浏览器硬件加速 CSS Keyframes 动效，保证无论何时挂载/切换均 100% 稳定运行
  */
 export function TextEffect({
   children,
@@ -121,23 +120,21 @@ export function TextEffect({
   className,
   preset = "fade",
   delay = 0,
-  speedReveal = 1,
-  speedSegment = 1,
+  speedReveal = 1.1,
+  speedSegment = 0.3,
   trigger = true,
   onAnimationComplete,
   onAnimationStart,
   segmentWrapperClassName,
   style,
 }: TextEffectProps) {
-  const [mounted, setMounted] = useState(false);
-  const [isDone, setIsDone] = useState(false);
   const fullText = useMemo(() => getReadableText(children), [children]);
   const segments = useMemo(
     () => extractSegments(children, per),
     [children, per]
   );
 
-  const stagger = (defaultStaggerTimes[per] || 0.04) / Math.max(speedReveal, 0.1);
+  const stagger = (defaultStaggerTimes[per] || 0.035) / Math.max(speedReveal, 0.1);
   const segmentDuration = 0.35 / Math.max(speedSegment, 0.1);
   const totalDuration = delay + segments.length * stagger + segmentDuration;
 
@@ -145,16 +142,7 @@ export function TextEffect({
   const startTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!trigger) {
-      setMounted(false);
-      setIsDone(false);
-      return;
-    }
-
-    // 下一帧触发过渡动画
-    const rAF = requestAnimationFrame(() => {
-      setMounted(true);
-    });
+    if (!trigger) return;
 
     if (onAnimationStart) {
       startTimerRef.current = setTimeout(() => {
@@ -162,63 +150,19 @@ export function TextEffect({
       }, delay * 1000);
     }
 
-    timerRef.current = setTimeout(() => {
-      setIsDone(true);
-      if (onAnimationComplete) {
+    if (onAnimationComplete) {
+      timerRef.current = setTimeout(() => {
         onAnimationComplete();
-      }
-    }, totalDuration * 1000);
+      }, totalDuration * 1000);
+    }
 
     return () => {
-      cancelAnimationFrame(rAF);
       if (timerRef.current) clearTimeout(timerRef.current);
       if (startTimerRef.current) clearTimeout(startTimerRef.current);
     };
   }, [trigger, delay, totalDuration, onAnimationComplete, onAnimationStart]);
 
-  // 根据预设生成关键帧样式
-  const getInitialStyle = (): React.CSSProperties => {
-    switch (preset) {
-      case "fade-in-blur":
-        return {
-          opacity: 0,
-          filter: "blur(12px)",
-          transform: "translate3d(0, 18px, 0)",
-        };
-      case "blur":
-        return {
-          opacity: 0,
-          filter: "blur(12px)",
-          transform: "none",
-        };
-      case "scale":
-        return {
-          opacity: 0,
-          transform: "scale(0.85)",
-        };
-      case "slide":
-        return {
-          opacity: 0,
-          transform: "translate3d(0, 20px, 0)",
-        };
-      case "fade":
-      default:
-        return {
-          opacity: 0,
-        };
-    }
-  };
-
-  const getVisibleStyle = (): React.CSSProperties => {
-    return {
-      opacity: 1,
-      filter: "blur(0px)",
-      transform: "translate3d(0, 0, 0)",
-    };
-  };
-
-  const initialStyle = getInitialStyle();
-  const visibleStyle = getVisibleStyle();
+  const animationName = `text-${preset}`;
   const Tag = Component as any;
 
   return (
@@ -233,20 +177,20 @@ export function TextEffect({
         const itemDelay = delay + index * stagger;
         const isSpace = seg.text === " " || /^\s+$/.test(seg.text);
 
-        const currentStyle: React.CSSProperties = isDone
+        const currentStyle: React.CSSProperties = trigger
           ? {
-              opacity: 1,
-              filter: "none",
-              transform: "none",
+              animationName,
+              animationDuration: `${segmentDuration}s`,
+              animationTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
+              animationDelay: `${itemDelay}s`,
+              animationFillMode: "both",
+              willChange: "opacity, filter, transform",
               ...seg.style,
             }
           : {
-              ...(mounted && trigger ? visibleStyle : initialStyle),
-              transitionProperty: "opacity, filter, transform",
-              transitionDuration: `${segmentDuration}s`,
-              transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
-              transitionDelay: `${itemDelay}s`,
-              willChange: "opacity, filter, transform",
+              opacity: 0,
+              filter: preset === "fade-in-blur" || preset === "blur" ? "blur(12px)" : undefined,
+              transform: preset === "fade-in-blur" || preset === "slide" ? "translateY(18px)" : undefined,
               ...seg.style,
             };
 
@@ -274,9 +218,6 @@ export function TextEffect({
   );
 }
 
-/**
- * 示例组件（方便直接导入与验证）
- */
 export function TextEffectSpeed() {
   return (
     <TextEffect preset="fade-in-blur" speedReveal={1.1} speedSegment={0.3}>
@@ -284,4 +225,5 @@ export function TextEffectSpeed() {
     </TextEffect>
   );
 }
+
 export default TextEffect;
