@@ -958,30 +958,7 @@ const PaperCrumple = forwardRef<PaperCrumpleHandle, PaperCrumpleProps>(({
       alphaTest: 0.04,
 
       side: THREE.DoubleSide
-
     });
-
-    depthMaterial.onBeforeCompile = shader => {
-
-      shader.fragmentShader = shader.fragmentShader.replace(
-
-        '#include <map_fragment>',
-
-        `
-
-        #include <map_fragment>
-
-        #ifdef USE_MAP
-
-          if (vMapUv.x < 0.0 || vMapUv.x > 1.0 || vMapUv.y < 0.0 || vMapUv.y > 1.0) discard;
-
-        #endif
-
-      `
-
-      );
-
-    };
 
     const sheet = new THREE.Group();
 

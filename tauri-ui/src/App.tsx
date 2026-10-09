@@ -1,5 +1,10 @@
 import Dashboard from "./pages/Dashboard";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 export default function App() {
-  return <Dashboard />;
+  return (
+    <ErrorBoundary fallbackTitle="应用核心运行异常">
+      <Dashboard />
+    </ErrorBoundary>
+  );
 }
