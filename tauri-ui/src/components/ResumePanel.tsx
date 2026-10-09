@@ -30,11 +30,11 @@ import {
   FileCheck,
 } from "lucide-react";
 import { ipc, type ResumeItem, type ResumeContentResult } from "../lib/ipc";
-import { useT } from "../store";
+import { useT, useRunStore } from "../store";
 import { MagicCard } from "./core/MagicBento";
 import EnergyCapsule from "./core/EnergyCapsule";
 import CardSwap, { Card, type CardSwapHandle } from "./core/CardSwap";
-import ResumeShredderModal from "./ResumeShredderModal";
+import HoldButton from "./core/HoldButton";
 import ErrorBoundary from "./ErrorBoundary";
 
 interface ResumePanelProps {
@@ -47,18 +47,12 @@ export default function ResumePanel({
   onGoToProfile,
 }: ResumePanelProps) {
   const t = useT();
+  const notify = useRunStore((s) => s.notify);
   const [resumes, setResumes] = useState<ResumeItem[]>([]);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{
-    type: "info" | "success" | "error";
-    text: string;
-  } | null>(null);
 
   // 选中的/处于最前方的文件名
   const [selectedName, setSelectedName] = useState<string | null>(null);
-
-  // 3D 纸张揉皱与物理粉碎销毁目标
-  const [shredTarget, setShredTarget] = useState<ResumeItem | null>(null);
 
   // 缓存所有文件的内容与 Blob URL，供 3D 书架抽屉堆叠卡片即时展示
   const [contentsCache, setContentsCache] = useState<Record<string, ResumeContentResult>>({});
@@ -95,11 +89,11 @@ export default function ResumePanel({
         return defaultItem ? defaultItem.name : result.resumes[0]?.name || null;
       });
     } catch (err) {
-      setMessage({ type: "error", text: t("resume.loadFailed", { error: String(err) }) });
+      notify({ type: "error", text: t("resume.loadFailed", { error: String(err) }), source: "资料档案" });
     } finally {
       setBusy(false);
     }
-  }, [t]);
+  }, [t, notify]);
 
   useEffect(() => {
     refresh();
@@ -147,13 +141,12 @@ export default function ResumePanel({
   // 设为默认简历
   async function handleSetDefault(name: string) {
     setBusy(true);
-    setMessage(null);
     try {
       await ipc.setDefaultResume(name);
       await refresh();
-      setMessage({ type: "success", text: t("resume.defaultSet", { name }) });
+      notify({ type: "success", text: t("resume.defaultSet", { name }), source: "资料档案" });
     } catch (err) {
-      setMessage({ type: "error", text: t("resume.setFailed", { error: String(err) }) });
+      notify({ type: "error", text: t("resume.setFailed", { error: String(err) }), source: "资料档案" });
     } finally {
       setBusy(false);
     }
@@ -163,19 +156,18 @@ export default function ResumePanel({
   async function handleOpenNative(name: string) {
     try {
       await ipc.openResumeNative(name);
-      setMessage({ type: "success", text: `已调起系统原生软件打开「${name}」` });
+      notify({ type: "info", text: `已调起系统原生软件打开「${name}」`, source: "资料档案" });
     } catch (err) {
-      setMessage({ type: "error", text: `无法调起原版程序: ${String(err)}` });
+      notify({ type: "error", text: `无法调起原版程序: ${String(err)}`, source: "资料档案" });
     }
   }
 
   // 物理销毁入库文件
   async function handleDeleteConfirmed(name: string) {
     setBusy(true);
-    setMessage(null);
     try {
       await ipc.deleteResumeFile(name);
-      setMessage({ type: "success", text: `已成功粉碎并销毁「${name}」` });
+      notify({ type: "success", text: `已安全销毁并移出资料库: 「${name}」`, source: "资料档案" });
       setContentsCache((prev) => {
         const copy = { ...prev };
         delete copy[name];
@@ -191,7 +183,7 @@ export default function ResumePanel({
       }
       await refresh();
     } catch (err) {
-      setMessage({ type: "error", text: `删除失败: ${String(err)}` });
+      notify({ type: "error", text: `删除失败: ${String(err)}`, source: "资料档案" });
     } finally {
       setBusy(false);
     }
@@ -236,7 +228,6 @@ export default function ResumePanel({
     if (!files || files.length === 0) return;
 
     setBusy(true);
-    setMessage(null);
 
     try {
       await triggerEnergyCharge(async () => {
@@ -252,10 +243,18 @@ export default function ResumePanel({
           setSelectedName(lastUploadedName);
         }
       });
-      setMessage({ type: "success", text: `成功将 ${files.length} 份资料入库至本地资料库` });
+      notify({
+        type: "success",
+        text: `成功将 ${files.length} 份资料入库至本地资料库`,
+        source: "资料档案",
+      });
     } catch (err) {
       console.error("上传文件入库失败:", err);
-      setMessage({ type: "error", text: `上传入库失败: ${String(err)}` });
+      notify({
+        type: "error",
+        text: `上传入库失败: ${String(err)}`,
+        source: "资料档案",
+      });
     } finally {
       setBusy(false);
     }
@@ -307,34 +306,7 @@ export default function ResumePanel({
         </div>
       )}
 
-      {/* 消息通知横条 */}
-      {message && (
-        <div
-          className={`flex items-center justify-between rounded-xl px-4 py-2 text-xs border transition-all ${
-            message.type === "success"
-              ? "border-emerald-500/30 bg-emerald-950/60 text-emerald-300"
-              : message.type === "error"
-              ? "border-red-500/30 bg-red-950/60 text-red-300"
-              : "border-amber-500/30 bg-amber-500/10 text-amber-300"
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            {message.type === "success" ? (
-              <CheckCircle2 className="size-4 shrink-0 text-emerald-400" />
-            ) : (
-              <AlertCircle className="size-4 shrink-0 text-amber-400" />
-            )}
-            <span>{message.text}</span>
-          </div>
-          <button
-            type="button"
-            className="text-[11px] underline opacity-70 hover:opacity-100 ml-4 cursor-pointer"
-            onClick={() => setMessage(null)}
-          >
-            关闭
-          </button>
-        </div>
-      )}
+
 
       {/* 当正在入库或上传时：展示荧光绿能量胶囊拉满特效！ */}
       {chargingProgress !== null && (
@@ -463,10 +435,10 @@ export default function ResumePanel({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setShredTarget(item);
+                            handleDeleteConfirmed(item.name);
                           }}
                           className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 hover:bg-red-500/10 text-stone-500 rounded-lg transition-all cursor-pointer"
-                          title="3D 物理撕碎销毁"
+                          title="移出资料库"
                         >
                           <Trash2 className="size-3" />
                         </button>
@@ -647,16 +619,27 @@ export default function ResumePanel({
                             </span>
                           )}
 
-                          {/* 4. 删除按钮 */}
-                          <button
-                            type="button"
-                            onClick={() => setShredTarget(item)}
+                          {/* 4. 按住删除按钮 (React Bits 液态波纹进度长按确认，防误触物理安全销毁) */}
+                          <HoldButton
+                            icon={<Trash2 className="size-3.5" />}
+                            doneIcon={<Trash2 className="size-3.5 text-white" />}
+                            children="按住删除"
+                            doneLabel="已安全删除"
+                            backgroundColor="rgba(28, 25, 23, 0.9)"
+                            fillColor="#ef4444"
+                            textColor="#78716c"
+                            fillTextColor="#ffffff"
+                            size="sm"
+                            radius={12}
+                            holdTime={1400}
+                            releaseTime={200}
+                            wave={true}
+                            waveAmplitude={6}
+                            glow={true}
                             disabled={busy}
-                            className="p-1.5 rounded-xl border border-stone-800 hover:border-red-500/40 hover:text-red-400 text-stone-500 transition-all cursor-pointer"
-                            title="3D 物理撕碎销毁"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </button>
+                            onHold={() => handleDeleteConfirmed(item.name)}
+                            className="border border-stone-800 hover:border-red-500/40 hover:text-red-400 !h-8 !px-2.5 !text-xs !font-medium"
+                          />
                         </div>
                       </div>
 
@@ -780,22 +763,6 @@ export default function ResumePanel({
           )}
         </div>
       </div>
-
-      {/* 3D 纸张揉皱与碎纸机物理销毁弹窗 */}
-      {shredTarget && (
-        <ErrorBoundary
-          fallbackTitle="3D 碎纸机弹窗渲染异常"
-          onReset={() => setShredTarget(null)}
-        >
-          <ResumeShredderModal
-            item={shredTarget}
-            content={contentsCache[shredTarget.name]}
-            blobUrl={blobCache[shredTarget.name]}
-            onClose={() => setShredTarget(null)}
-            onDeleted={handleDeleteConfirmed}
-          />
-        </ErrorBoundary>
-      )}
     </div>
   );
 }

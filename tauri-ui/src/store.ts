@@ -9,6 +9,14 @@ const MAX_EVENTS = 500;
 const MAX_LOGS = 1000;
 const MAX_AGENT_MESSAGES = 200;
 
+export type NotificationItem = {
+  id: number;
+  type: "success" | "error" | "info" | "warning";
+  text: string;
+  source?: string;
+  duration?: number;
+};
+
 type RunState = {
   running: boolean;
   events: ProgressEvent[];
@@ -21,6 +29,11 @@ type RunState = {
   restoredLatestSent: Record<string, unknown> | null;
   restoredPage: Record<string, unknown> | null;
   restoredPageFilters: Record<string, unknown>[];
+
+  // 全局联动消息通知（替代页面顶部横条，统一定位在左侧边栏）
+  notification: NotificationItem | null;
+  notify: (item: Omit<NotificationItem, "id">) => void;
+  clearNotification: () => void;
 
   // UI 语言：启动时按系统 locale 探测，仅保存在当前前端会话。
   lang: Lang;
@@ -74,6 +87,19 @@ export const useRunStore = create<RunState>((set) => ({
   agentProfilePreview: null,
   llmConfig: null,
   llmSettingsOpen: false,
+
+  notification: null,
+  notify: (item) => {
+    const id = Date.now();
+    const duration = item.duration ?? 4500;
+    set({ notification: { ...item, id } });
+    if (duration > 0) {
+      setTimeout(() => {
+        set((s) => (s.notification?.id === id ? { notification: null } : {}));
+      }, duration);
+    }
+  },
+  clearNotification: () => set({ notification: null }),
 
   pushAgentMessage: (message) =>
     set((s) => ({

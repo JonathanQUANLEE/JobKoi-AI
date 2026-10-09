@@ -17,8 +17,14 @@ import {
   PanelLeftClose,
   UserCheck,
   Settings,
+  X,
+  CheckCircle2,
+  AlertCircle,
+  Sparkles,
+  Info,
 } from "lucide-react";
 import { LANGS, type Lang } from "../lib/i18n";
+import { useRunStore } from "../store";
 import PillNavButton from "./core/PillNavButton";
 
 export type NavItem = "workbench" | "profile" | "resumes" | "copilot" | "analytics";
@@ -63,6 +69,9 @@ export default function Sidebar({
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapseRipple, setCollapseRipple] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const notification = useRunStore((s) => s.notification);
+  const clearNotification = useRunStore((s) => s.clearNotification);
 
   const handleCollapseClick = () => {
     setCollapseRipple(true);
@@ -210,6 +219,86 @@ export default function Sidebar({
           label={lang === "en" ? "Analytics & Logs" : "投递数据与日志"}
         />
       </nav>
+
+      {/* ================= 侧边栏专属联动通知坞 (Notification Dock - 对应红框区域) ================= */}
+      {notification && (
+        <div className="px-2.5 pb-2 shrink-0 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div
+            className={`relative overflow-hidden rounded-2xl border p-3 shadow-xl backdrop-blur-md transition-all ${
+              notification.type === "success"
+                ? "border-emerald-500/40 bg-[#0d1e17]/95 text-emerald-200 shadow-emerald-950/40"
+                : notification.type === "error"
+                ? "border-red-500/40 bg-[#221010]/95 text-red-200 shadow-red-950/40"
+                : "border-amber-500/40 bg-[#221c10]/95 text-amber-200 shadow-amber-950/40"
+            }`}
+          >
+            {/* 背景动态光晕 */}
+            <div
+              className={`absolute -top-6 -right-6 size-16 rounded-full blur-xl pointer-events-none opacity-40 ${
+                notification.type === "success"
+                  ? "bg-emerald-500"
+                  : notification.type === "error"
+                  ? "bg-red-500"
+                  : "bg-amber-500"
+              }`}
+            />
+
+            <div className="flex items-start justify-between gap-1.5 relative z-10">
+              <div className="flex items-center gap-1.5 min-w-0">
+                {notification.type === "success" ? (
+                  <span className="relative flex size-2 shrink-0">
+                    <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex size-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#10b981]" />
+                  </span>
+                ) : notification.type === "error" ? (
+                  <AlertCircle className="size-3.5 text-red-400 shrink-0" />
+                ) : (
+                  <Sparkles className="size-3.5 text-amber-400 shrink-0" />
+                )}
+                {notification.source && (
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.2 rounded uppercase tracking-wider ${
+                      notification.type === "success"
+                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                        : notification.type === "error"
+                        ? "bg-red-500/20 text-red-300 border border-red-500/30"
+                        : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                    }`}
+                  >
+                    {notification.source}
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={clearNotification}
+                className="text-stone-400 hover:text-stone-200 p-0.5 rounded-md hover:bg-white/10 transition-colors cursor-pointer"
+                title="关闭通知"
+              >
+                <X className="size-3" />
+              </button>
+            </div>
+
+            <p className="mt-1.5 text-xs font-medium leading-relaxed break-words relative z-10 text-stone-200">
+              {notification.text}
+            </p>
+
+            {/* 底部自动倒计时微线 */}
+            <div className="mt-2.5 h-0.5 w-full bg-white/10 rounded-full overflow-hidden relative z-10">
+              <div
+                className={`h-full rounded-full transition-all duration-300 ${
+                  notification.type === "success"
+                    ? "bg-emerald-400"
+                    : notification.type === "error"
+                    ? "bg-red-400"
+                    : "bg-amber-400"
+                }`}
+                style={{ width: "100%" }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 左下角用户与设置菜单触发器（WorkBuddy 架构） */}
       <div className="relative border-t border-[var(--grid)]/80 p-2.5 bg-[#100e0d]" ref={menuRef}>
