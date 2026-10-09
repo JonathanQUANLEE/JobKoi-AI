@@ -12,7 +12,7 @@ export interface UseWorkbenchWheelReturn {
   hubRef: RefObject<HTMLDivElement>;
   profileRef: RefObject<HTMLDivElement>;
   ringActiveIndex: 0 | 1 | 2;
-  scrollToRingStage: (index: 0 | 1 | 2) => void;
+  scrollToRingStage: (index: 0 | 1 | 2, immediate?: boolean) => void;
   handleStagePointerDown: (e: PointerEvent<HTMLDivElement>) => void;
   handleStagePointerMove: (e: PointerEvent<HTMLDivElement>) => void;
   handleStagePointerEnd: (e?: PointerEvent<HTMLDivElement>) => void;
@@ -74,8 +74,8 @@ export function useWorkbenchWheel({
     if (!heroStage || !hub || !profile) return;
 
     const vh = (typeof window !== "undefined" && window.innerHeight) || 800;
-    // 关键修复：增大垂直位移至至少 600px (或 vh * 0.8)，确保卡片完全移出黄金视界，杜绝上下卡片重叠！
-    const stepY = Math.max(600, vh * 0.8);
+    // 基础环形步长位移：约 68% 视口高度，构建 3D 环形柱面透视空间
+    const stepY = Math.max(520, vh * 0.68);
 
     const stages = [
       { el: heroStage, index: 0 },
@@ -83,6 +83,27 @@ export function useWorkbenchWheel({
       { el: profile, index: 2 },
     ];
 
+    // 规则 (a): 用户处于“向 AI 顾问说出你的情况”（带搜索框）页面 (pos <= 0.08) 时，
+    // 不能显示招聘平台中心，也不能显示求职画像，杜绝内容重叠与残留。
+    if (pos <= 0.08) {
+      heroStage.style.transform = "none";
+      heroStage.style.opacity = "1";
+      heroStage.style.filter = "none";
+      heroStage.style.pointerEvents = "auto";
+      heroStage.style.zIndex = "30";
+
+      [hub, profile].forEach((el, idx) => {
+        el.style.opacity = "0";
+        el.style.pointerEvents = "none";
+        el.style.zIndex = "10";
+        el.style.filter = "none";
+        const factor = idx === 0 ? 0.75 : 1.35;
+        el.style.transform = `perspective(1400px) translateY(${(stepY * factor).toFixed(1)}px) rotateX(24deg) scale(0.85)`;
+      });
+      return;
+    }
+
+    // 规则 (b) & 3D 圆环万花筒效果：处于其他页面时能清晰看到关联板块（上一个与下一个带有透明度渐显）
     stages.forEach(({ el, index }) => {
       const d = index - pos; // d = 0 时处于正中心黄金视界
       const dist = Math.abs(d);
@@ -98,9 +119,9 @@ export function useWorkbenchWheel({
       }
 
       if (d > 0) {
-        // 位于中心下方（尚未滚入的未来站台）
-        // 如果用户在首屏 (pos <= 0.05) 或该卡片离中心较远 (d >= 0.85)，彻底隐藏 (opacity: 0)，绝不露脸重叠！
-        if (pos <= 0.05 || d >= 0.85) {
+        // 位于中心下方（尚未滚入的未来站台，圆环下部弧面）
+        // 如果是 profile (index 2)，且 pos < 0.35 时保持不可见
+        if (index === 2 && pos < 0.35) {
           el.style.opacity = "0";
           el.style.transform = `perspective(1400px) translateY(${(stepY * 1.3).toFixed(1)}px) rotateX(24deg) scale(0.8)`;
           el.style.pointerEvents = "none";
@@ -108,44 +129,51 @@ export function useWorkbenchWheel({
           return;
         }
 
-        // 当 0 < d < 0.85 时，平滑从下方向中心飞入上升：entryProg 从 0 ➔ 1
-        const entryProg = Math.min(1, Math.max(0, (0.85 - d) / 0.85));
-        const transY = stepY * (1.2 - 1.2 * Math.pow(entryProg, 0.88));
-        const rotX = 22 * (1 - entryProg);
-        const scale = 0.82 + 0.18 * entryProg;
-        const opacity = entryProg;
-        const blur = Math.min(2.5, 2 * (1 - entryProg));
-
-        el.style.transform = `perspective(1400px) translateY(${transY.toFixed(1)}px) rotateX(${rotX.toFixed(1)}deg) scale(${scale.toFixed(4)})`;
-        el.style.opacity = opacity.toFixed(3);
-        el.style.filter = blur > 0.4 ? `blur(${blur.toFixed(1)}px)` : "none";
-        el.style.pointerEvents = "none";
-        el.style.zIndex = "15";
-      } else {
-        // 位于中心上方（已被滑过的过去站台，向上翻折折入天穹弧面）
-        const pastProg = Math.min(1.8, Math.max(0, -d));
+        // 计算下部圆环弧度与渐入动画
+        const curveDist = Math.min(1.5, d);
+        const transY = stepY * (0.68 * Math.min(curveDist, 1) + 0.45 * Math.max(0, curveDist - 1));
+        const rotX = 20 * Math.min(curveDist, 1) + 8 * Math.max(0, curveDist - 1);
+        const scale = Math.max(0.78, 1 - 0.14 * Math.min(curveDist, 1) - 0.08 * Math.max(0, curveDist - 1));
         
-        // 关键修复：当 pastProg >= 0.8 时彻底透明淡出（opacity = 0），绝不挂在后方成为鬼影重叠！
-        if (pastProg >= 0.8) {
-          el.style.opacity = "0";
-          el.style.transform = `perspective(1400px) translateY(${(-stepY * 1.3).toFixed(1)}px) rotateX(-22deg) scale(0.7)`;
-          el.style.pointerEvents = "none";
-          el.style.zIndex = "10";
-          return;
+        // 在招聘平台中心 (pos=1) 时，能清晰看到下方的求职画像 (d=1, opacity=0.38)
+        let opacity = 0;
+        if (d <= 1.0) {
+          opacity = 1 - 0.62 * d;
+        } else {
+          opacity = Math.max(0, 0.38 - 0.36 * (d - 1.0));
         }
 
-        const pastFade = 1 - pastProg / 0.8;
-        const transY = -stepY * Math.pow(pastProg, 0.92);
-        const rotX = -21 * Math.pow(pastProg, 0.85);
-        const scale = Math.max(0.74, 1 - 0.22 * pastProg);
-        const opacity = Math.max(0, pastFade * 0.55);
-        const blur = Math.min(2.5, 2 * pastProg);
+        const blur = d > 0.4 ? Math.min(1.2, 0.6 * d) : 0;
 
         el.style.transform = `perspective(1400px) translateY(${transY.toFixed(1)}px) rotateX(${rotX.toFixed(1)}deg) scale(${scale.toFixed(4)})`;
         el.style.opacity = opacity.toFixed(3);
         el.style.filter = blur > 0.3 ? `blur(${blur.toFixed(1)}px)` : "none";
         el.style.pointerEvents = "none";
-        el.style.zIndex = "10";
+        el.style.zIndex = "15";
+      } else {
+        // 位于中心上方（已被滑过的过去站台，向上翻折折入天穹圆环弧面）
+        const distAbove = -d;
+        
+        // 在招聘平台中心 (pos=1) 时，上方“向 AI 顾问说出你的情况” (index=0, d=-1) 呈现 opacity=0.40
+        // 在求职画像 (pos=2) 时，上方“招聘平台中心”呈现 opacity=0.40，最高处 Hero 呈现 opacity=0.22
+        const transY = -stepY * (0.68 * Math.min(distAbove, 1) + 0.45 * Math.max(0, distAbove - 1));
+        const rotX = -20 * Math.min(distAbove, 1) - 10 * Math.max(0, distAbove - 1);
+        const scale = Math.max(0.74, 1 - 0.14 * Math.min(distAbove, 1) - 0.10 * Math.max(0, distAbove - 1));
+        
+        let opacity = 0;
+        if (distAbove <= 1.0) {
+          opacity = 1 - 0.60 * distAbove;
+        } else {
+          opacity = Math.max(0.18, 0.40 - 0.18 * (distAbove - 1.0));
+        }
+
+        const blur = Math.min(1.5, 0.6 * distAbove);
+
+        el.style.transform = `perspective(1400px) translateY(${transY.toFixed(1)}px) rotateX(${rotX.toFixed(1)}deg) scale(${scale.toFixed(4)})`;
+        el.style.opacity = opacity.toFixed(3);
+        el.style.filter = blur > 0.3 ? `blur(${blur.toFixed(1)}px)` : "none";
+        el.style.pointerEvents = "none";
+        el.style.zIndex = distAbove <= 1.0 ? "20" : "10";
       }
     });
   }, [isChattingOrHasHistory]);
@@ -197,9 +225,17 @@ export function useWorkbenchWheel({
     startStageLoop();
   }, [startStageLoop]);
 
-  const scrollToRingStage = useCallback((index: 0 | 1 | 2) => {
-    applyStageTarget(index, true);
-  }, [applyStageTarget]);
+  const scrollToRingStage = useCallback((index: 0 | 1 | 2, immediate: boolean = false) => {
+    if (immediate) {
+      stagePosRef.current = index;
+      stageTargetRef.current = index;
+      ringActiveIndexRef.current = index;
+      setRingActiveIndex(index);
+      renderStageTransforms(index);
+    } else {
+      applyStageTarget(index, true);
+    }
+  }, [applyStageTarget, renderStageTransforms]);
 
   // 滚轮与触控板事件监听（学习 OptionWheel 处理方式：非被动捕获、步长限制与自动吸附）
   useEffect(() => {
@@ -244,14 +280,10 @@ export function useWorkbenchWheel({
     };
   }, [isChattingOrHasHistory, applyStageTarget, renderStageTransforms]);
 
-  // 监听导航切换：无论何时切回工作台，强制彻底重置到首屏 Hero 站台 0，绝不残留或重叠
+  // 监听导航切换：保持当前目标站台，渲染对应姿态，不再生硬重置为 0
   useEffect(() => {
     if (activeNav === "workbench" && !isChattingOrHasHistory) {
-      stagePosRef.current = 0;
-      stageTargetRef.current = 0;
-      ringActiveIndexRef.current = 0;
-      setRingActiveIndex(0);
-      renderStageTransforms(0);
+      renderStageTransforms(stagePosRef.current);
     }
   }, [activeNav, isChattingOrHasHistory, renderStageTransforms]);
 

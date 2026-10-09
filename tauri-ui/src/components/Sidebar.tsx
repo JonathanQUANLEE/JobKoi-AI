@@ -19,6 +19,7 @@ import {
   Settings,
 } from "lucide-react";
 import { LANGS, type Lang } from "../lib/i18n";
+import PillNavButton from "./core/PillNavButton";
 
 export type NavItem = "workbench" | "profile" | "resumes" | "copilot" | "analytics";
 
@@ -141,32 +142,30 @@ export default function Sidebar({
           )}
         </div>
 
-      {/* 快捷主按钮：启动 / 停止巡航 */}
+      {/* 快捷主按钮：启动 / 停止巡航 (装备 React Bits PillNav 液体气泡动效) */}
       <div className="p-3">
         {!running ? (
-          <button
-            type="button"
+          <PillNavButton
             onClick={onStartRun}
             disabled={busy}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-3 py-2.5 text-xs font-bold text-stone-950 shadow-md shadow-amber-500/20 hover:from-amber-400 hover:to-amber-500 active:scale-[0.98] transition-all disabled:opacity-50"
-          >
-            <Play className="h-4 w-4 fill-current" />
-            {lang === "en" ? "Start Cruise" : "启动自动巡航"}
-          </button>
+            variant="primary"
+            icon={<Play className="h-4 w-4 fill-current shrink-0" />}
+            label={lang === "en" ? "Start Cruise" : "启动自动巡航"}
+          />
         ) : (
           <button
             type="button"
             onClick={onStopRun}
             disabled={busy}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-600 to-red-700 px-3 py-2.5 text-xs font-bold text-white shadow-md shadow-red-600/30 hover:from-red-500 hover:to-red-600 active:scale-[0.98] transition-all disabled:opacity-50 animate-pulse"
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-600 to-red-700 px-3 py-2.5 text-xs font-bold text-white shadow-md shadow-red-600/30 hover:from-red-500 hover:to-red-600 active:scale-[0.98] transition-all disabled:opacity-50 animate-pulse cursor-pointer"
           >
-            <Square className="h-4 w-4 fill-current" />
-            {lang === "en" ? "Stop Cruise" : "停止当前巡航"}
+            <Square className="h-4 w-4 fill-current shrink-0" />
+            <span>{lang === "en" ? "Stop Cruise" : "停止当前巡航"}</span>
           </button>
         )}
       </div>
 
-      {/* 导航菜单列表（统一 Lucide 图标规范） */}
+      {/* 导航菜单列表（装备 React Bits PillNav 液体气泡展开与翻转效果） */}
       <nav className="flex-1 space-y-1 px-2.5 py-1 text-xs overflow-y-auto">
         <div className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-stone-500">
           {lang === "en" ? "NAVIGATION" : "功能模块"}
@@ -214,7 +213,7 @@ export default function Sidebar({
 
       {/* 左下角用户与设置菜单触发器（WorkBuddy 架构） */}
       <div className="relative border-t border-[var(--grid)]/80 p-2.5 bg-[#100e0d]" ref={menuRef}>
-        {/* 向上滑出的弹出菜单 (Popover Menu) */}
+        {/* 向上滑出的弹出菜单 (Popover Menu - 装备 React Bits PillNav 气泡交互) */}
         {menuOpen && (
           <div className="absolute bottom-16 left-2 right-2 rounded-2xl border border-[var(--grid)] bg-[#1a1816] p-3 shadow-2xl backdrop-blur-md z-50 text-xs space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-150">
             {/* 用户状态徽章 */}
@@ -237,106 +236,78 @@ export default function Sidebar({
               </div>
             </div>
 
-            {/* 功能选项列表（统一 Lucide 图标与 WorkBuddy 架构） */}
+            {/* 功能选项列表（统一 Lucide 图标与 React Bits 气泡交互） */}
             <div className="space-y-1">
-              <button
-                type="button"
-                className="w-full flex items-center justify-between rounded-lg px-2.5 py-1.5 text-stone-200 hover:bg-[var(--panel-2)] hover:text-amber-400 transition-colors font-medium cursor-pointer"
+              <PillNavButton
+                variant="menu"
                 onClick={() => {
                   setMenuOpen(false);
                   onOpenSettingsModal?.();
                 }}
-              >
-                <span className="flex items-center gap-2">
-                  <Settings className="h-3.5 w-3.5 text-amber-400" />
-                  <span>{lang === "en" ? "System Settings" : "系统设置"}</span>
-                </span>
-                <span className="text-[10px] text-stone-500 font-mono">Ctrl+,</span>
-              </button>
+                icon={<Settings className="h-3.5 w-3.5 text-amber-400 shrink-0" />}
+                label={lang === "en" ? "System Settings" : "系统设置"}
+                shortcut="Ctrl+,"
+              />
 
-              <button
-                type="button"
-                className="w-full flex items-center justify-between rounded-lg px-2.5 py-1.5 text-stone-300 hover:bg-[var(--panel-2)] hover:text-amber-400 transition-colors cursor-pointer"
+              <PillNavButton
+                variant="menu"
                 onClick={() => {
                   setMenuOpen(false);
                   onOpenSettings("rules");
                 }}
-              >
-                <span className="flex items-center gap-2">
-                  <SlidersHorizontal className="h-3.5 w-3.5 text-stone-400" />
-                  <span>{lang === "en" ? "Job Filter Rules" : "过滤规则设置"}</span>
-                </span>
-              </button>
+                icon={<SlidersHorizontal className="h-3.5 w-3.5 text-stone-400 shrink-0" />}
+                label={lang === "en" ? "Job Filter Rules" : "过滤规则设置"}
+              />
 
-              <button
-                type="button"
-                className="w-full flex items-center justify-between rounded-lg px-2.5 py-1.5 text-stone-300 hover:bg-[var(--panel-2)] hover:text-amber-400 transition-colors cursor-pointer"
+              <PillNavButton
+                variant="menu"
                 onClick={() => {
                   setMenuOpen(false);
                   onOpenSettings("policy");
                 }}
-              >
-                <span className="flex items-center gap-2">
-                  <ShieldCheck className="h-3.5 w-3.5 text-stone-400" />
-                  <span>{lang === "en" ? "Delivery Settings" : "投递设置与安全"}</span>
-                </span>
-              </button>
+                icon={<ShieldCheck className="h-3.5 w-3.5 text-stone-400 shrink-0" />}
+                label={lang === "en" ? "Delivery Settings" : "投递设置与安全"}
+              />
 
-              <button
-                type="button"
-                className="w-full flex items-center justify-between rounded-lg px-2.5 py-1.5 text-stone-300 hover:bg-[var(--panel-2)] hover:text-amber-400 transition-colors cursor-pointer"
+              <PillNavButton
+                variant="menu"
                 onClick={() => {
                   setMenuOpen(false);
                   onOpenSettings("greeting");
                 }}
-              >
-                <span className="flex items-center gap-2">
-                  <MessageSquareQuote className="h-3.5 w-3.5 text-stone-400" />
-                  <span>{lang === "en" ? "Greeting Templates" : "打招呼模板"}</span>
-                </span>
-              </button>
+                icon={<MessageSquareQuote className="h-3.5 w-3.5 text-stone-400 shrink-0" />}
+                label={lang === "en" ? "Greeting Templates" : "打招呼模板"}
+              />
 
-              <button
-                type="button"
-                className="w-full flex items-center justify-between rounded-lg px-2.5 py-1.5 text-stone-300 hover:bg-[var(--panel-2)] hover:text-amber-400 transition-colors cursor-pointer"
+              <PillNavButton
+                variant="menu"
                 onClick={() => {
                   setMenuOpen(false);
                   onOpenSettings("model");
                 }}
-              >
-                <span className="flex items-center gap-2">
-                  <Bot className="h-3.5 w-3.5 text-stone-400" />
-                  <span>{lang === "en" ? "AI Model Config" : "AI 模型配置"}</span>
-                </span>
-              </button>
+                icon={<Bot className="h-3.5 w-3.5 text-stone-400 shrink-0" />}
+                label={lang === "en" ? "AI Model Config" : "AI 模型配置"}
+              />
 
-              <button
-                type="button"
-                className="w-full flex items-center justify-between rounded-lg px-2.5 py-1.5 text-stone-300 hover:bg-[var(--panel-2)] hover:text-amber-400 transition-colors cursor-pointer"
+              <PillNavButton
+                variant="menu"
                 onClick={() => {
                   setMenuOpen(false);
                   onOpenBrowser();
                 }}
-              >
-                <span className="flex items-center gap-2">
-                  <ExternalLink className="h-3.5 w-3.5 text-stone-400" />
-                  <span>{lang === "en" ? "Debug Browser" : "手动打开调试浏览器"}</span>
-                </span>
-              </button>
+                icon={<ExternalLink className="h-3.5 w-3.5 text-stone-400 shrink-0" />}
+                label={lang === "en" ? "Debug Browser" : "手动打开调试浏览器"}
+              />
 
-              <button
-                type="button"
-                className="w-full flex items-center justify-between rounded-lg px-2.5 py-1.5 text-stone-300 hover:bg-[var(--panel-2)] hover:text-red-400 transition-colors cursor-pointer"
+              <PillNavButton
+                variant="danger-menu"
                 onClick={() => {
                   setMenuOpen(false);
                   onResetBrowser();
                 }}
-              >
-                <span className="flex items-center gap-2">
-                  <RefreshCw className="h-3.5 w-3.5 text-red-400" />
-                  <span>{lang === "en" ? "Reset Browser Data" : "重置浏览器数据"}</span>
-                </span>
-              </button>
+                icon={<RefreshCw className="h-3.5 w-3.5 text-red-400 shrink-0" />}
+                label={lang === "en" ? "Reset Browser Data" : "重置浏览器数据"}
+              />
             </div>
 
             {/* 语言切换 */}
@@ -351,7 +322,7 @@ export default function Sidebar({
                     key={item.value}
                     type="button"
                     onClick={() => onSetLang(item.value)}
-                    className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all ${
+                    className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all cursor-pointer ${
                       lang === item.value
                         ? "bg-amber-500 text-stone-950 font-bold"
                         : "text-stone-400 hover:text-stone-200"
@@ -413,24 +384,23 @@ function NavItemButton({
   badgeColor?: string;
 }) {
   return (
-    <button
-      type="button"
+    <PillNavButton
+      active={active}
       onClick={onClick}
-      className={`w-full flex items-center justify-between rounded-xl px-3 py-2.5 font-medium transition-all text-left ${
-        active
-          ? "bg-[#25211c] text-amber-400 font-semibold shadow-sm border border-amber-500/20"
-          : "text-stone-400 hover:bg-[#1a1714] hover:text-stone-200"
-      }`}
-    >
-      <span className="flex items-center gap-2.5 min-w-0">
-        <span className="text-stone-400 group-hover:text-stone-200">{icon}</span>
-        <span className="truncate">{label}</span>
-      </span>
-      {badge && (
-        <span className={`rounded px-1.5 py-0.2 text-[9px] font-semibold ${badgeColor || "bg-stone-800 text-stone-300"}`}>
-          {badge}
-        </span>
-      )}
-    </button>
+      variant="nav"
+      icon={icon}
+      label={label}
+      badge={
+        badge ? (
+          <span
+            className={`rounded px-1.5 py-0.2 text-[9px] font-semibold ${
+              badgeColor || "bg-stone-800 text-stone-300"
+            }`}
+          >
+            {badge}
+          </span>
+        ) : undefined
+      }
+    />
   );
 }
