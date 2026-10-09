@@ -36,6 +36,7 @@ import PlatformHub from "../components/PlatformHub";
 import ProfilePanel from "../components/ProfilePanel";
 import AgentPanel from "../components/AgentPanel";
 import SettingsDrawer, { type DrawerTab } from "../components/SettingsDrawer";
+import SettingsModal, { type SettingsTab } from "../components/SettingsModal";
 import PipelineVisualizer from "../components/PipelineVisualizer";
 import Sidebar, { type NavItem } from "../components/Sidebar";
 import {
@@ -297,6 +298,10 @@ export default function Dashboard() {
     }).catch(() => {});
   }, [activeNav]);
 
+  // WorkBuddy 风格系统设置弹窗状态与快捷键 (Ctrl+,)
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [settingsModalTab, setSettingsModalTab] = useState<SettingsTab>("general");
+
   // 侧边栏展开/收起状态（支持本地持久化与 Ctrl+B 快捷键，高保真复刻 WorkBuddy 侧边栏伸缩）
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
@@ -329,6 +334,10 @@ export default function Dashboard() {
       if ((e.ctrlKey || e.metaKey) && (e.key === "b" || e.key === "B")) {
         e.preventDefault();
         toggleSidebar();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === ",") {
+        e.preventDefault();
+        setSettingsModalOpen((prev) => !prev);
       }
     }
     window.addEventListener("keydown", handleKeyDown);
@@ -761,6 +770,7 @@ export default function Dashboard() {
         onStopRun={stopRun}
         busy={busy}
         onOpenSettings={handleOpenSettings}
+        onOpenSettingsModal={() => setSettingsModalOpen(true)}
         onOpenBrowser={openManualBrowser}
         onResetBrowser={resetChrome}
         lang={lang}
@@ -782,7 +792,7 @@ export default function Dashboard() {
                 type="button"
                 onClick={handleExpandSidebar}
                 className="relative group flex items-center gap-1.5 rounded-lg border border-[var(--grid)] bg-[#1c1917] hover:bg-[#25201d] hover:border-amber-500/50 px-2.5 py-1 text-xs font-medium text-stone-200 hover:text-amber-400 shadow-sm transition-all cursor-pointer water-drop-btn mr-1.5 overflow-visible"
-                title="展开侧边栏 (Ctrl+B)"
+                title={lang === "en" ? "Expand Sidebar (Ctrl+B)" : "展开侧边栏 (Ctrl+B)"}
               >
                 {expandRipple && (
                   <span className="pointer-events-none absolute inset-0 -m-3 flex items-center justify-center">
@@ -791,7 +801,7 @@ export default function Dashboard() {
                   </span>
                 )}
                 <PanelLeftOpen className="h-3.5 w-3.5 text-amber-400 group-hover:scale-110 transition-transform relative z-10" />
-                <span className="font-medium relative z-10">展开侧边栏</span>
+                <span className="font-medium relative z-10">{lang === "en" ? "Expand" : "展开侧边栏"}</span>
                 <span className="hidden md:inline-block text-[10px] text-stone-500 font-mono ml-0.5 relative z-10">Ctrl+B</span>
               </button>
             )}
@@ -799,11 +809,11 @@ export default function Dashboard() {
             <span className="text-[var(--muted-fg)]">JobHunter</span>
             <span className="text-stone-600">/</span>
             <span className="font-semibold text-[var(--ink)]">
-              {activeNav === "workbench" && "巡航工作台"}
-              {activeNav === "profile" && "求职画像"}
-              {activeNav === "resumes" && "简历资料库"}
-              {activeNav === "copilot" && "AI 意向助理"}
-              {activeNav === "analytics" && "投递数据与日志"}
+              {activeNav === "workbench" && (lang === "en" ? "Workbench" : "巡航工作台")}
+              {activeNav === "profile" && (lang === "en" ? "Job Profile" : "求职画像")}
+              {activeNav === "resumes" && (lang === "en" ? "Resume Vault" : "简历资料库")}
+              {activeNav === "copilot" && (lang === "en" ? "AI Copilot" : "AI 意向助理")}
+              {activeNav === "analytics" && (lang === "en" ? "Analytics & Logs" : "投递数据与日志")}
             </span>
           </div>
 
@@ -811,16 +821,16 @@ export default function Dashboard() {
             {dryRun && (
               <span className="flex items-center gap-1 rounded-full bg-cyan-950/60 border border-cyan-500/30 px-2 py-0.5 text-[10px] font-semibold text-cyan-300">
                 <FlaskConical className="h-3 w-3" />
-                <span>演练模式</span>
+                <span>{lang === "en" ? "Dry Run" : "演练模式"}</span>
               </span>
             )}
             <button
               type="button"
-              onClick={() => handleOpenSettings("rules")}
-              className="btn-ghost !py-1 !px-2.5 text-xs flex items-center gap-1.5 rounded-lg border border-[var(--grid)] hover:border-amber-500/40 text-amber-400"
+              onClick={() => setSettingsModalOpen(true)}
+              className="btn-ghost !py-1 !px-2.5 text-xs flex items-center gap-1.5 rounded-lg border border-[var(--grid)] hover:border-amber-500/40 text-amber-400 cursor-pointer"
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
-              <span>过滤规则与风控</span>
+              <span>{lang === "en" ? "Settings" : "系统设置"}</span>
             </button>
             <span className={running ? "status-on" : "status-idle"}>
               <span className={`inline-block h-2 w-2 rounded-full ${running ? "bg-emerald-400 animate-pulse" : "bg-stone-500"}`} />
@@ -853,36 +863,28 @@ export default function Dashboard() {
           {/* TAB 1: 巡航工作台 (Hunt Now https://www.hunt.now/ 风格高保真复刻)           */}
           {/* ========================================================================= */}
           {activeNav === "workbench" && (
-            <div
-              className={`space-y-8 mx-auto w-full transition-all duration-300 ease-in-out ${
-                sidebarCollapsed ? "max-w-5xl xl:max-w-6xl px-2 sm:px-4" : "max-w-5xl px-1 sm:px-2"
-              }`}
-            >
-              {/* Hunt Now 氛围外壳：网格底纹 + 环形暖光辉 + 居中 Hero */}
-              <section className="relative isolate overflow-hidden rounded-3xl px-5 sm:px-8 py-8 sm:py-12 my-2 sm:my-3 border border-stone-850/60 shadow-xl shadow-black/20">
-                <div className="dot-pattern absolute inset-0 -z-10" aria-hidden="true" />
+            <div className="space-y-12 mx-auto w-full max-w-7xl px-2 sm:px-6 transition-all duration-300 ease-in-out">
+              {/* 自然分布全屏居中 Hero：网格底纹 + 居中暖光辉 + 无方框自然铺展 */}
+              <section className="relative isolate overflow-visible py-6 sm:py-12 w-full flex flex-col items-center justify-center">
+                <div className="dot-pattern absolute inset-0 -z-10 opacity-70" aria-hidden="true" />
                 <div
-                  className={`fx-glow transition-all duration-300 ${
-                    sidebarCollapsed ? "w-[68rem]" : "w-[58rem]"
-                  }`}
+                  className="fx-glow w-full max-w-5xl pointer-events-none transition-all duration-500"
                   aria-hidden="true"
                 />
 
                 {/* 右上角 AI 顾问在线状态徽章（简化文案） */}
-                <div className="absolute top-3.5 right-4 sm:top-4 sm:right-6 z-10 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-950/50 px-2.5 py-1 text-xs text-emerald-300 backdrop-blur shadow-sm select-none">
+                <div className="self-end sm:absolute sm:top-2 sm:right-2 z-10 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-950/60 px-3 py-1 text-xs text-emerald-300 backdrop-blur shadow-sm select-none mb-4 sm:mb-0">
                   <span className="relative flex size-2">
                     <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex size-2 rounded-full bg-emerald-400"></span>
                   </span>
-                  <span className="font-medium text-[11px] sm:text-xs">AI 顾问在线</span>
+                  <span className="font-medium text-[11px] sm:text-xs">
+                    {lang === "en" ? "AI Advisor Online" : "AI 顾问在线"}
+                  </span>
                 </div>
 
-                <div
-                  className={`mx-auto flex flex-col items-center text-center transition-all duration-300 ease-in-out ${
-                    sidebarCollapsed ? "max-w-6xl" : "max-w-5xl"
-                  }`}
-                >
-                  {/* 主标题与副标题 (30秒逐行渐显动效流: 第1行 -> 第2行 -> 第3行) */}
+                <div className="mx-auto w-full flex flex-col items-center text-center">
+                  {/* 主标题与副标题 (逐行渐显动效流) */}
                   <div
                     className={`w-full transition-opacity duration-500 ease-out ${
                       heroAnimFading ? "opacity-0" : "opacity-100"
@@ -899,11 +901,13 @@ export default function Dashboard() {
                         as="span"
                         className="inline-block"
                       >
-                        向 AI 顾问说出你的情况，<span className="text-gradient">定制专属求职画像</span>
+                        {lang === "en"
+                          ? "Tell AI your situation, craft your custom profile"
+                          : "向 AI 顾问说出你的情况，定制专属求职画像"}
                       </TextEffect>
                     </h1>
 
-                    {/* 第 2 行 & 第 3 行: 副标题 (一行运行完之后下一行再用这个特效) */}
+                    {/* 第 2 行 & 第 3 行: 副标题 */}
                     <div className="mt-3.5 max-w-2xl mx-auto text-balance text-[14px] leading-relaxed text-stone-400 sm:text-[15.5px] space-y-1">
                       <TextEffect
                         key={`hero-l2-${heroAnimCycle}`}
@@ -914,7 +918,9 @@ export default function Dashboard() {
                         as="p"
                         className="m-0"
                       >
-                        告诉我你的毕业年份、专业技能、意向城市或期望薪资。
+                        {lang === "en"
+                          ? "Tell me your graduation year, skills, target cities or expected salary."
+                          : "告诉我你的毕业年份、专业技能、意向城市或期望薪资。"}
                       </TextEffect>
                       <TextEffect
                         key={`hero-l3-${heroAnimCycle}`}
@@ -925,17 +931,15 @@ export default function Dashboard() {
                         as="p"
                         className="m-0"
                       >
-                        AI 顾问将与你深度交流，自动提炼精准投递规则并配置防封风控。
+                        {lang === "en"
+                          ? "AI advisor will chat with you to tailor precision job preferences and settings."
+                          : "AI 顾问将与你深度交流，自动生成量身定制的求职偏好与就绪策略。"}
                       </TextEffect>
                     </div>
                   </div>
 
                   {/* Hunt Now 标志性 Beam Composer (宽屏大气光轨 AI 顾问对话舱) */}
-                  <div
-                    className={`relative mt-8 w-full transition-all duration-300 ease-in-out ${
-                      sidebarCollapsed ? "max-w-5xl" : "max-w-4xl xl:max-w-5xl"
-                    }`}
-                  >
+                  <div className="relative mt-8 w-full max-w-3xl lg:max-w-4xl xl:max-w-5xl transition-all duration-300 ease-in-out">
                     <div
                       className="absolute -inset-x-8 -inset-y-4 -z-10 rounded-[2.5rem] bg-gradient-to-b from-[#ff5722]/15 via-transparent to-transparent blur-2xl"
                       aria-hidden="true"
@@ -967,7 +971,7 @@ export default function Dashboard() {
                         <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:none] py-0.5">
                           <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-[#ff5722]/20 to-[#ff2a55]/20 border border-[#ff5722]/40 px-3 py-1.5 text-xs font-semibold text-[#ff5722] shadow-sm">
                             <Bot className="size-3.5" />
-                            告诉顾问
+                            {lang === "en" ? "Tell AI" : "告诉顾问"}
                           </span>
                           {BACKGROUND_TAGS.map((tag) => (
                             <button
@@ -984,14 +988,14 @@ export default function Dashboard() {
                         </div>
 
                         <span className="hidden shrink-0 items-center gap-1 text-[11px] text-stone-500 xl:inline-flex">
-                          <kbd className="font-sans px-1.5 py-0.5 rounded-md bg-stone-900 border border-stone-800 text-stone-400">Enter</kbd> 发送
+                          <kbd className="font-sans px-1.5 py-0.5 rounded-md bg-stone-900 border border-stone-800 text-stone-400">Enter</kbd> {lang === "en" ? "Send" : "发送"}
                         </span>
 
                         <button
                           type="submit"
                           disabled={heroChatting || !heroInputText.trim()}
-                          title="发送给 AI 顾问"
-                          aria-label="发送给 AI 顾问"
+                          title={lang === "en" ? "Send to AI Advisor" : "发送给 AI 顾问"}
+                          aria-label={lang === "en" ? "Send to AI Advisor" : "发送给 AI 顾问"}
                           className="grid size-10 shrink-0 place-items-center rounded-full bg-white text-stone-950 transition-all hover:scale-105 active:scale-95 shadow-md disabled:opacity-40 disabled:cursor-not-allowed font-bold cursor-pointer"
                         >
                           {heroChatting ? (
@@ -1027,10 +1031,10 @@ export default function Dashboard() {
                       type="button"
                       onClick={handleNextRecBatch}
                       className="group shrink-0 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-[#1c1917]/60 hover:bg-[#25201d] hover:border-white/20 px-3 py-1.5 text-stone-400 hover:text-white transition-all shadow-sm cursor-pointer whitespace-nowrap"
-                      title="换一批求职者情况案例"
+                      title={lang === "en" ? "Shuffle Cases" : "换一批求职者情况案例"}
                     >
                       <RotateCw className={`size-3.5 transition-transform duration-300 ${isRotatingRec ? "rotate-180" : ""}`} />
-                      <span className="text-xs">换一批情况</span>
+                      <span className="text-xs">{lang === "en" ? "Shuffle Cases" : "换一批情况"}</span>
                     </button>
                   </div>
 
@@ -1109,37 +1113,49 @@ export default function Dashboard() {
                           <div className="flex items-center justify-between mb-3">
                             <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
                               <Sparkles className="size-3.5 text-[#ff5722]" />
-                              <span>AI 提炼专属投递画像已生成</span>
+                              <span>{lang === "en" ? "AI Job Profile Generated" : "AI 专属求职画像已就绪"}</span>
                             </span>
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950/70 border border-emerald-500/30 text-emerald-300 font-medium">
-                              ● 策略就绪
+                              ● {lang === "en" ? "Ready" : "策略就绪"}
                             </span>
                           </div>
 
                           <div className="grid grid-cols-2 gap-2 text-xs mb-3.5">
                             <div className="bg-stone-950/80 p-2.5 rounded-xl border border-stone-800/80">
-                              <span className="text-stone-500 text-[10px] block font-medium">目标巡航岗位:</span>
+                              <span className="text-stone-500 text-[10px] block font-medium">
+                                {lang === "en" ? "Target Role:" : "目标岗位:"}
+                              </span>
                               <span className="font-semibold text-stone-100">{heroProfilePreview?.query || label}</span>
                             </div>
                             <div className="bg-stone-950/80 p-2.5 rounded-xl border border-stone-800/80">
-                              <span className="text-stone-500 text-[10px] block font-medium">意向城市范围:</span>
-                              <span className="font-semibold text-stone-100">{heroProfilePreview?.cities || cityValues || "全国/不限"}</span>
+                              <span className="text-stone-500 text-[10px] block font-medium">
+                                {lang === "en" ? "Target Cities:" : "意向城市:"}
+                              </span>
+                              <span className="font-semibold text-stone-100">{heroProfilePreview?.cities || cityValues || (lang === "en" ? "Nationwide / Any" : "全国/不限")}</span>
                             </div>
                             <div className="bg-stone-950/80 p-2.5 rounded-xl border border-stone-800/80">
-                              <span className="text-stone-500 text-[10px] block font-medium">必含专业词:</span>
+                              <span className="text-stone-500 text-[10px] block font-medium">
+                                {lang === "en" ? "Preferred Skills:" : "希望包含的技能:"}
+                              </span>
                               <span className="text-emerald-400 font-medium truncate block">{heroProfilePreview?.anyKeywords || rule.anyKeywords || "-"}</span>
                             </div>
                             <div className="bg-stone-950/80 p-2.5 rounded-xl border border-stone-800/80">
-                              <span className="text-stone-500 text-[10px] block font-medium">风控排除黑名单:</span>
+                              <span className="text-stone-500 text-[10px] block font-medium">
+                                {lang === "en" ? "Excluded Directions:" : "不考虑的方向/排除词:"}
+                              </span>
                               <span className="text-red-400 font-medium truncate block">{heroProfilePreview?.excludeKeywords || rule.excludeKeywords || "-"}</span>
                             </div>
                           </div>
 
-                          {/* 确认提示行与跳转按钮（根据大模型交互逻辑定制） */}
+                          {/* 确认提示行与跳转按钮 */}
                           <div className="mt-3.5 pt-3 border-t border-stone-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div className="flex items-center gap-2 text-xs text-stone-300">
                               <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
-                              <span>请核对上方 AI 提炼的求职信息是否准确。确认后可前往「求职画像」进行详细配置或手动微调。</span>
+                              <span>
+                                {lang === "en"
+                                  ? "Please verify the AI-extracted information above. Confirm to proceed to Job Profile for fine-tuning."
+                                  : "请核对上方 AI 提炼的求职信息是否准确。确认后可前往「求职画像」进行详细配置或手动微调。"}
+                              </span>
                             </div>
 
                             <div className="flex items-center gap-2 shrink-0">
@@ -1152,7 +1168,7 @@ export default function Dashboard() {
                                 className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold text-xs shadow-md shadow-amber-500/15 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
                               >
                                 <UserCheck className="size-3.5" />
-                                <span>确认信息正确，前往求职画像 →</span>
+                                <span>{lang === "en" ? "Confirm & View Job Profile →" : "确认信息正确，前往求职画像 →"}</span>
                               </button>
                             </div>
                           </div>
@@ -1187,10 +1203,10 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2">
                     <UserCheck className="h-4 w-4 text-amber-400" />
                     <span className="text-xs font-bold uppercase tracking-wider text-[var(--ink)]">
-                      求职画像
+                      {lang === "en" ? "Job Profile" : "求职画像"}
                     </span>
                     <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
-                      已同步
+                      {lang === "en" ? "Synced" : "已同步"}
                     </span>
                   </div>
 
@@ -1201,7 +1217,7 @@ export default function Dashboard() {
                       className="text-xs flex items-center gap-1.5 py-1 px-3 rounded-lg border border-amber-500/40 hover:border-amber-500/70 text-amber-400 hover:text-amber-300 bg-amber-500/10 transition-all cursor-pointer font-medium"
                     >
                       <UserCheck className="h-3.5 w-3.5" />
-                      <span>查看 / 手动修改求职画像 →</span>
+                      <span>{lang === "en" ? "View / Edit Job Profile →" : "查看 / 手动修改求职画像 →"}</span>
                     </button>
                     <button
                       type="button"
@@ -1209,7 +1225,7 @@ export default function Dashboard() {
                       className="text-xs flex items-center gap-1.5 py-1 px-2.5 rounded-lg border border-[var(--grid)] hover:border-stone-700 text-stone-300 hover:text-white bg-[#1c1917] transition-all cursor-pointer"
                     >
                       <Activity className="h-3.5 w-3.5 text-stone-400" />
-                      <span>投递大屏 & 管线 →</span>
+                      <span>{lang === "en" ? "Analytics & Pipeline →" : "投递大屏 & 管线 →"}</span>
                     </button>
                   </div>
                 </div>
@@ -1219,15 +1235,17 @@ export default function Dashboard() {
                   {/* 1. 意向岗位与地域 */}
                   <div className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5 flex flex-col justify-between">
                     <div>
-                      <div className="text-[10px] text-stone-500 font-medium">目标岗位与城市</div>
+                      <div className="text-[10px] text-stone-500 font-medium">
+                        {lang === "en" ? "Target Role & Cities" : "目标岗位与城市"}
+                      </div>
                       <div className="text-sm font-bold text-[var(--ink)] mt-1 truncate">
-                        {label || "未指定岗位"}
+                        {label || (lang === "en" ? "Not specified" : "未指定岗位")}
                       </div>
                     </div>
                     <div className="mt-2 text-[11px] text-stone-400 flex items-center gap-2">
-                      <span>城市: <strong className="text-stone-200">{cityValues || "全国/不限"}</strong></span>
+                      <span>{lang === "en" ? "Cities: " : "城市: "}<strong className="text-stone-200">{cityValues || (lang === "en" ? "Nationwide / Any" : "全国/不限")}</strong></span>
                       <span className="text-stone-600">·</span>
-                      <span>学历: <strong className="text-stone-200">{educationValues || "不限"}</strong></span>
+                      <span>{lang === "en" ? "Edu: " : "学历: "}<strong className="text-stone-200">{educationValues || (lang === "en" ? "Any" : "不限")}</strong></span>
                     </div>
                   </div>
 
@@ -1235,13 +1253,13 @@ export default function Dashboard() {
                   <div className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5 flex flex-col justify-between">
                     <div>
                       <div className="flex items-center justify-between text-[10px] text-stone-500 font-medium">
-                        <span>当前绑定简历</span>
+                        <span>{lang === "en" ? "Bound Resume" : "当前绑定简历"}</span>
                         <button
                           type="button"
                           onClick={() => setActiveNav("resumes")}
                           className="text-amber-400 hover:underline hover:text-amber-300 cursor-pointer"
                         >
-                          管理简历库 →
+                          {lang === "en" ? "Manage Resumes →" : "管理简历库 →"}
                         </button>
                       </div>
                       <div className="flex items-center gap-2 mt-1 min-w-0">
@@ -1252,30 +1270,32 @@ export default function Dashboard() {
                       </div>
                     </div>
                     <div className="mt-2 text-[11px] text-stone-400">
-                      默认附件 · 已准备就绪
+                      {lang === "en" ? "Default attachment · Ready" : "默认附件 · 已准备就绪"}
                     </div>
                   </div>
 
                   {/* 3. 拟人风控与模式 */}
                   <div className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5 flex flex-col justify-between">
                     <div>
-                      <div className="text-[10px] text-stone-500 font-medium">巡航模式与安全保护</div>
+                      <div className="text-[10px] text-stone-500 font-medium">
+                        {lang === "en" ? "Cruise Mode & Safety" : "巡航模式与安全保护"}
+                      </div>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="rounded bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 text-[11px] font-bold text-amber-300">
-                          {mode === "auto" ? "全自动投递" : mode === "review" ? "逐条人工确认" : "仅扫描测试"}
+                          {mode === "auto" ? (lang === "en" ? "Auto Apply" : "全自动投递") : mode === "review" ? (lang === "en" ? "Manual Review" : "逐条人工确认") : (lang === "en" ? "Scan Only" : "仅扫描测试")}
                         </span>
                         {dryRun && (
                           <span className="rounded bg-cyan-500/15 border border-cyan-500/30 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-300">
-                            演练模式
+                            {lang === "en" ? "Dry Run" : "演练模式"}
                           </span>
                         )}
                       </div>
                     </div>
                     <div className="mt-2 text-[11px] text-stone-400 flex items-center gap-1.5">
                       <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-                      <span>拟人间歇: <strong>{delayMin}~{delayMax}s</strong></span>
+                      <span>{lang === "en" ? "Interval: " : "拟人间歇: "}<strong>{delayMin}~{delayMax}s</strong></span>
                       <span className="text-stone-600">·</span>
-                      <span>每日限额: <strong>{dailyLimit}次</strong></span>
+                      <span>{lang === "en" ? "Quota: " : "每日限额: "}<strong>{dailyLimit}{lang === "en" ? "" : "次"}</strong></span>
                     </div>
                   </div>
                 </div>
@@ -1285,15 +1305,21 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-2.5 text-xs text-emerald-300 animate-pulse">
                     <div className="flex items-center gap-2">
                       <span className="size-2 rounded-full bg-emerald-400 animate-ping" />
-                      <span className="font-semibold">自动巡航正在运行中...</span>
-                      <span className="text-stone-400">已扫描: {stats.scanned} · 成功投递: {stats.sent} · 跳过: {stats.skipped}</span>
+                      <span className="font-semibold">
+                        {lang === "en" ? "Auto cruise running..." : "自动巡航正在运行中..."}
+                      </span>
+                      <span className="text-stone-400">
+                        {lang === "en"
+                          ? `Scanned: ${stats.scanned} · Sent: ${stats.sent} · Skipped: ${stats.skipped}`
+                          : `已扫描: ${stats.scanned} · 成功投递: ${stats.sent} · 跳过: ${stats.skipped}`}
+                      </span>
                     </div>
                     <button
                       type="button"
                       onClick={() => setActiveNav("analytics")}
                       className="font-bold underline hover:text-emerald-200 cursor-pointer"
                     >
-                      进入大屏监控实时状态 →
+                      {lang === "en" ? "Go to live dashboard →" : "进入大屏监控实时状态 →"}
                     </button>
                   </div>
                 )}
@@ -1312,20 +1338,15 @@ export default function Dashboard() {
               setEducationValues={setEducationValues}
               rule={rule}
               setRule={setRule}
-              delayMin={delayMin}
-              setDelayMin={setDelayMin}
-              delayMax={delayMax}
-              setDelayMax={setDelayMax}
               dailyLimit={dailyLimit}
               setDailyLimit={setDailyLimit}
-              filterPolicy={filterPolicy}
-              setFilterPolicy={setFilterPolicy}
               dryRun={dryRun}
               setDryRun={setDryRun}
               defaultResumeName={defaultResumeName}
               onGoToResumes={() => setActiveNav("resumes")}
               onBackToWorkbench={() => setActiveNav("workbench")}
               onSaveConfig={saveConfig}
+              lang={lang}
               busy={busy}
             />
           )}
@@ -1511,6 +1532,25 @@ export default function Dashboard() {
         setAutoResumeOnReply={setAutoResumeOnReply}
         aiGreeting={aiGreeting}
         setAiGreeting={setAiGreeting}
+      />
+
+      {/* WorkBuddy 风格系统设置弹窗 (通用/个人主页/外观主题/快捷键/AI模型/关于帮助) */}
+      <SettingsModal
+        isOpen={settingsModalOpen}
+        onClose={() => setSettingsModalOpen(false)}
+        initialTab={settingsModalTab}
+        lang={lang}
+        onSetLang={setLang}
+        usrName={usrName}
+        setUsrName={setUsrName}
+        label={label}
+        defaultResumeName={defaultResumeName}
+        onGoToResumes={() => {
+          setSettingsModalOpen(false);
+          setActiveNav("resumes");
+        }}
+        onSaveConfig={saveConfig}
+        busy={busy}
       />
     </div>
   );
