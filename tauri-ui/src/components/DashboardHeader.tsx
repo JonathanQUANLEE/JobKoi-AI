@@ -1,0 +1,90 @@
+import { FlaskConical, PanelLeftOpen, SlidersHorizontal } from "lucide-react";
+import type { Lang } from "../lib/i18n";
+import type { NavItem } from "./Sidebar";
+
+interface DashboardHeaderProps {
+  sidebarCollapsed: boolean;
+  expandRipple: boolean;
+  onExpandSidebar: () => void;
+  activeNav: NavItem;
+  dryRun: boolean;
+  running: boolean;
+  statusText: string;
+  lang: Lang;
+  onOpenSettingsModal: () => void;
+}
+
+export default function DashboardHeader({
+  sidebarCollapsed,
+  expandRipple,
+  onExpandSidebar,
+  activeNav,
+  dryRun,
+  running,
+  statusText,
+  lang,
+  onOpenSettingsModal,
+}: DashboardHeaderProps) {
+  return (
+    <header className="h-12 shrink-0 border-b border-[var(--grid)] bg-[#141210]/90 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between z-20">
+      <div className="flex items-center gap-2 text-xs">
+        {/* WorkBuddy 风格：展开侧边栏入口按钮（侧边栏收起时呈现，如水露凝结浮现；点击触发雨滴涟漪） */}
+        {sidebarCollapsed && (
+          <button
+            type="button"
+            onClick={onExpandSidebar}
+            className="relative group flex items-center gap-1.5 rounded-lg border border-[var(--grid)] bg-[#1c1917] hover:bg-[#25201d] hover:border-amber-500/50 px-2.5 py-1 text-xs font-medium text-stone-200 hover:text-amber-400 shadow-sm transition-all cursor-pointer water-drop-btn mr-1.5 overflow-visible"
+            title={lang === "en" ? "Expand Sidebar (Ctrl+B)" : "展开侧边栏 (Ctrl+B)"}
+          >
+            {expandRipple && (
+              <span className="pointer-events-none absolute inset-0 -m-3 flex items-center justify-center">
+                <span className="absolute h-8 w-8 rounded-full border border-amber-400/80 bg-amber-400/20 animate-raindrop-1" />
+                <span className="absolute h-8 w-8 rounded-full border border-cyan-400/70 bg-cyan-400/15 animate-raindrop-2" />
+              </span>
+            )}
+            <PanelLeftOpen className="h-3.5 w-3.5 text-amber-400 group-hover:scale-110 transition-transform relative z-10" />
+            <span className="font-medium relative z-10">{lang === "en" ? "Expand" : "展开侧边栏"}</span>
+            <span className="hidden md:inline-block text-[10px] text-stone-500 font-mono ml-0.5 relative z-10">
+              Ctrl+B
+            </span>
+          </button>
+        )}
+
+        <span className="text-[var(--muted-fg)]">JobHunter</span>
+        <span className="text-stone-600">/</span>
+        <span className="font-semibold text-[var(--ink)]">
+          {activeNav === "workbench" && (lang === "en" ? "Workbench" : "巡航工作台")}
+          {activeNav === "profile" && (lang === "en" ? "Job Profile" : "求职画像")}
+          {activeNav === "resumes" && (lang === "en" ? "Resume Vault" : "简历资料库")}
+          {activeNav === "copilot" && (lang === "en" ? "AI Copilot" : "AI 意向助理")}
+          {activeNav === "analytics" && (lang === "en" ? "Analytics & Logs" : "投递数据与日志")}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-3">
+        {dryRun && (
+          <span className="flex items-center gap-1 rounded-full bg-cyan-950/60 border border-cyan-500/30 px-2 py-0.5 text-[10px] font-semibold text-cyan-300">
+            <FlaskConical className="h-3 w-3" />
+            <span>{lang === "en" ? "Dry Run" : "演练模式"}</span>
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={onOpenSettingsModal}
+          className="btn-ghost !py-1 !px-2.5 text-xs flex items-center gap-1.5 rounded-lg border border-[var(--grid)] hover:border-amber-500/40 text-amber-400 cursor-pointer"
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          <span>{lang === "en" ? "Settings" : "系统设置"}</span>
+        </button>
+        <span className={running ? "status-on" : "status-idle"}>
+          <span
+            className={`inline-block h-2 w-2 rounded-full ${
+              running ? "bg-emerald-400 animate-pulse" : "bg-stone-500"
+            }`}
+          />
+          {statusText}
+        </span>
+      </div>
+    </header>
+  );
+}
