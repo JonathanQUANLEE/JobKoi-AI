@@ -12,6 +12,10 @@
   user-select: none;
   touch-action: none;
   outline: none;
+  background: transparent;
+  /* Pure transparent vertical fade mask - no solid background blocking */
+  mask-image: linear-gradient(to bottom, transparent 0%, black 16%, black 84%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 16%, black 84%, transparent 100%);
 }
 
 .option-wheel--dragging {
@@ -59,14 +63,16 @@
 }
 
 .option-wheel__item:hover .option-wheel__content {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: rgba(255, 255, 255, 0.06);
 }
 
 .option-wheel__item--selected .option-wheel__content {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(217, 119, 6, 0.08) 100%);
-  border-color: rgba(245, 158, 11, 0.38);
-  box-shadow: 0 4px 16px -2px rgba(245, 158, 11, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.1) 100%);
+  border-color: rgba(245, 158, 11, 0.45);
+  box-shadow: 0 4px 20px -2px rgba(245, 158, 11, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15);
   font-weight: 600;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .option-wheel__icon {
@@ -96,26 +102,4 @@
   border-radius: 6px;
   font-weight: 500;
   line-height: 1.2;
-}
-
-/* Subtle top and bottom gradient fades to enhance the 3D cylindrical depth */
-.option-wheel::before,
-.option-wheel::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 28%;
-  pointer-events: none;
-  z-index: 2;
-}
-
-.option-wheel::before {
-  top: 0;
-  background: linear-gradient(to bottom, rgba(18, 16, 14, 0.95) 0%, rgba(18, 16, 14, 0) 100%);
-}
-
-.option-wheel::after {
-  bottom: 0;
-  background: linear-gradient(to top, rgba(18, 16, 14, 0.95) 0%, rgba(18, 16, 14, 0) 100%);
 }

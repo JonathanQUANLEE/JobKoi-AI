@@ -184,47 +184,29 @@ export default function SettingsModal({
         className="relative flex flex-col md:flex-row items-center md:items-stretch gap-4 sm:gap-6 w-full max-w-4xl max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 左侧：独立浮岛 3D 轮盘导航 Dock (OptionWheel) */}
-        <aside className="w-full md:w-60 shrink-0 bg-[#12100e]/95 backdrop-blur-xl border border-[var(--grid)] rounded-2xl shadow-2xl shadow-black/80 flex flex-col justify-between overflow-hidden h-64 md:h-[580px] text-stone-200">
-          <div className="px-4 py-3.5 border-b border-[var(--grid)]/80 flex items-center justify-between shrink-0 bg-[#171513]/60">
-            <div className="flex items-center gap-2 text-stone-100 font-bold text-sm">
-              <Settings className="size-4 text-amber-400" />
-              <span>{isEn ? "Settings" : "系统设置"}</span>
-            </div>
-            <span className="text-[10px] text-stone-500 font-mono px-1.5 py-0.5 rounded bg-stone-900 border border-stone-800">
-              v0.2.0
-            </span>
-          </div>
-
-          {/* 3D OptionWheel 弯曲轮盘导航 */}
-          <div className="flex-1 relative w-full overflow-hidden">
-            <OptionWheel<OptionWheelItemData>
-              items={tabItems}
-              selected={activeTabIndex}
-              onChange={(_idx, item) => {
-                if (item?.id) setActiveTab(item.id as SettingsTab);
-              }}
-              side="right"
-              fontSize={0.92}
-              spacing={2.3}
-              curve={1.1}
-              tilt={6.5}
-              blur={1.2}
-              fade={0.25}
-              minOpacity={0.16}
-              smoothing={190}
-              inset={18}
-              loop={false}
-              draggable={true}
-              soundUrl="synth"
-              soundVolume={0.35}
-            />
-          </div>
-
-          <div className="hidden md:flex px-4 py-3 border-t border-[var(--grid)]/80 bg-[#171513]/60 items-center justify-between text-[11px] text-stone-500 shrink-0">
-            <span className="truncate">JobHunter Edition</span>
-            <span className="text-[10px] text-stone-400">滚轮/拖拽切换</span>
-          </div>
+        {/* 左侧：纯粹悬浮 3D 轮盘导航（完全去除方框、去除冗余标题与边框，纯净选项自由悬浮） */}
+        <aside className="w-full md:w-56 shrink-0 relative overflow-hidden h-44 md:h-[540px] flex items-center justify-center select-none">
+          <OptionWheel<OptionWheelItemData>
+            items={tabItems}
+            selected={activeTabIndex}
+            onChange={(_idx, item) => {
+              if (item?.id) setActiveTab(item.id as SettingsTab);
+            }}
+            side="right"
+            fontSize={0.95}
+            spacing={2.4}
+            curve={1.1}
+            tilt={7}
+            blur={1.2}
+            fade={0.28}
+            minOpacity={0.18}
+            smoothing={190}
+            inset={14}
+            loop={false}
+            draggable={true}
+            soundUrl="synth"
+            soundVolume={0.35}
+          />
         </aside>
 
         {/* 右侧：独立浮岛 主设置内容区 */}
