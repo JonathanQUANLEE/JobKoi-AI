@@ -34,6 +34,7 @@ import { useT } from "../store";
 import { MagicCard } from "./core/MagicBento";
 import EnergyCapsule from "./core/EnergyCapsule";
 import CardSwap, { Card, type CardSwapHandle } from "./core/CardSwap";
+import ResumeShredderModal from "./ResumeShredderModal";
 
 interface ResumePanelProps {
   onExtractProfile?: (resumeName: string, text?: string) => void;
@@ -54,6 +55,9 @@ export default function ResumePanel({
 
   // 选中的/处于最前方的文件名
   const [selectedName, setSelectedName] = useState<string | null>(null);
+
+  // 3D 纸张揉皱与物理粉碎销毁目标
+  const [shredTarget, setShredTarget] = useState<ResumeItem | null>(null);
 
   // 缓存所有文件的内容与 Blob URL，供 3D 书架抽屉堆叠卡片即时展示
   const [contentsCache, setContentsCache] = useState<Record<string, ResumeContentResult>>({});
@@ -164,17 +168,13 @@ export default function ResumePanel({
     }
   }
 
-  // 删除文件
-  async function handleDeleteFile(name: string) {
-    if (!window.confirm(`确定要从简历资料库中移除「${name}」吗？`)) {
-      return;
-    }
-
+  // 物理销毁入库文件
+  async function handleDeleteConfirmed(name: string) {
     setBusy(true);
     setMessage(null);
     try {
       await ipc.deleteResumeFile(name);
-      setMessage({ type: "success", text: `已成功删除「${name}」` });
+      setMessage({ type: "success", text: `已成功粉碎并销毁「${name}」` });
       setContentsCache((prev) => {
         const copy = { ...prev };
         delete copy[name];
@@ -430,7 +430,7 @@ export default function ResumePanel({
                     <div
                       key={item.name}
                       onClick={() => handleItemSelect(item.name, idx)}
-                      className={`flex items-center justify-between p-2 rounded-xl text-xs transition-all cursor-pointer select-none border ${
+                      className={`group flex items-center justify-between p-2 rounded-xl text-xs transition-all cursor-pointer select-none border ${
                         isFront
                           ? "bg-amber-500/15 border-amber-500/60 text-amber-200 shadow-sm shadow-amber-500/10 font-semibold"
                           : "bg-stone-900/60 border-stone-800/80 text-stone-400 hover:text-stone-200 hover:border-stone-700"
@@ -446,7 +446,7 @@ export default function ResumePanel({
                           <FileSpreadsheet className="size-3.5 text-blue-400 shrink-0" />
                         )}
                         <div className="min-w-0">
-                          <div className="truncate text-xs max-w-[155px]">{item.name}</div>
+                          <div className="truncate text-xs max-w-[130px]">{item.name}</div>
                           <div className="text-[10px] text-stone-500 font-normal">
                             {formatSize(item.size)}
                           </div>
@@ -458,6 +458,17 @@ export default function ResumePanel({
                             默认
                           </span>
                         )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShredTarget(item);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 hover:bg-red-500/10 text-stone-500 rounded-lg transition-all cursor-pointer"
+                          title="3D 物理撕碎销毁"
+                        >
+                          <Trash2 className="size-3" />
+                        </button>
                       </div>
                     </div>
                   );
@@ -638,10 +649,10 @@ export default function ResumePanel({
                           {/* 4. 删除按钮 */}
                           <button
                             type="button"
-                            onClick={() => handleDeleteFile(item.name)}
+                            onClick={() => setShredTarget(item)}
                             disabled={busy}
                             className="p-1.5 rounded-xl border border-stone-800 hover:border-red-500/40 hover:text-red-400 text-stone-500 transition-all cursor-pointer"
-                            title="从资料库移除"
+                            title="3D 物理撕碎销毁"
                           >
                             <Trash2 className="size-3.5" />
                           </button>
@@ -768,6 +779,17 @@ export default function ResumePanel({
           )}
         </div>
       </div>
+
+      {/* 3D 纸张揉皱与碎纸机物理销毁弹窗 */}
+      {shredTarget && (
+        <ResumeShredderModal
+          item={shredTarget}
+          content={contentsCache[shredTarget.name]}
+          blobUrl={blobCache[shredTarget.name]}
+          onClose={() => setShredTarget(null)}
+          onDeleted={handleDeleteConfirmed}
+        />
+      )}
     </div>
   );
 }
