@@ -693,23 +693,16 @@ const PaperCrumple = forwardRef<PaperCrumpleHandle, PaperCrumpleProps>(({
     hit.setAttribute('aria-pressed', 'false');
 
     const initialRect = root.getBoundingClientRect();
-
-    const initialWidth = Math.max(1, finite(width, 320));
-
-    const initialHeight = Math.max(1, finite(height, 400));
-
+    const initialWidth = Math.max(280, finite(width, 320));
+    const initialHeight = Math.max(360, finite(height, 400));
+    const availWidth = Math.max(initialWidth, initialRect.width || initialWidth);
+    const availHeight = Math.max(initialHeight, initialRect.height || initialHeight);
     const initialScale = Math.min(
-
       1,
-
-      Math.max(1, initialRect.width - 48) / initialWidth,
-
-      Math.max(1, initialRect.height - 48) / initialHeight
-
+      Math.max(1, availWidth - 24) / initialWidth,
+      Math.max(1, availHeight - 24) / initialHeight
     );
-
     root.style.setProperty('--pc-image-width', `${initialWidth * initialScale}px`);
-
     root.style.setProperty('--pc-image-height', `${initialHeight * initialScale}px`);
 
     let renderer;
@@ -1416,19 +1409,12 @@ const PaperCrumple = forwardRef<PaperCrumpleHandle, PaperCrumpleProps>(({
     }
 
     function resize() {
-
       const rect = root.getBoundingClientRect();
-
-      viewportWidth = Math.max(1, rect.width);
-
-      viewportHeight = Math.max(1, rect.height);
-
+      viewportWidth = Math.max(finite(width, 320), rect.width || 0);
+      viewportHeight = Math.max(finite(sceneHeight, 480), rect.height || 0);
       scale =
-
         paperWidth *
-
-        Math.min(1, Math.max(1, viewportWidth - 48) / paperWidth, Math.max(1, viewportHeight - 48) / paperHeight);
-
+        Math.min(1, Math.max(1, viewportWidth - 24) / paperWidth, Math.max(1, viewportHeight - 24) / paperHeight);
       sheet.scale.setScalar(scale);
 
       camera.aspect = viewportWidth / viewportHeight;
@@ -2187,7 +2173,7 @@ const PaperCrumple = forwardRef<PaperCrumpleHandle, PaperCrumpleProps>(({
 
       className={`paper-crumple ${className}`}
 
-      style={{ height: sceneHeight, ...style }}
+      style={{ width: width || 340, height: sceneHeight || 520, ...style }}
 
       data-status={status}
 

@@ -391,7 +391,7 @@ export default function ResumeShredderModal({
         {/* 3D WebGL 纸张渲染 或 优雅 2D/3D 卡片兜底 */}
         {paperTextureUrl && !paperError ? (
           <div
-            className={`transition-all duration-500 ${
+            className={`w-[360px] h-[520px] flex items-center justify-center relative transition-all duration-500 ${
               isShredding
                 ? "scale-0 rotate-[180deg] opacity-0 translate-y-64 pointer-events-none"
                 : "scale-100 opacity-100"
