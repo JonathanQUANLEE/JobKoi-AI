@@ -153,17 +153,6 @@ export default function Dashboard() {
 
       {/* 右侧主工作流区域 */}
       <div className="flex flex-1 flex-col h-screen overflow-hidden bg-[var(--paper)] water-fluid-sidebar relative">
-        {/* 左下角常驻状态徽章：AI 顾问在线 */}
-        <div className="absolute bottom-4 left-6 z-30 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-950/80 px-3 py-1 text-xs text-emerald-300 backdrop-blur-md shadow-lg select-none pointer-events-none">
-          <span className="relative flex size-2">
-            <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex size-2 rounded-full bg-emerald-400" />
-          </span>
-          <span className="font-medium text-[11px] sm:text-xs">
-            {lang === "en" ? "AI Advisor Online" : "AI 顾问在线"}
-          </span>
-        </div>
-
         {/* 顶部极简导航面包屑与状态 */}
         <DashboardHeader
           sidebarCollapsed={sidebarCollapsed}
