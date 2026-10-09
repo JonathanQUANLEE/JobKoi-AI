@@ -388,14 +388,24 @@ export default function Dashboard() {
     };
   }, [heroAnimCycle]);
 
-  // 滚动驱动 3D 叙事舞台 (Scroll-driven 3D Storytelling) DOM Refs 与状态
+  // 滚动驱动 3D 环形万花筒空间系统 (3D Cylindrical Ring Carousel) DOM Refs 与状态
   const mainScrollRef = useRef<HTMLElement>(null);
   const heroStageRef = useRef<HTMLDivElement>(null);
   const heroInnerRef = useRef<HTMLDivElement>(null);
   const hubRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
 
+  const [ringActiveIndex, setRingActiveIndex] = useState<0 | 1 | 2>(0);
   const isChattingOrHasHistory = heroChatMessages.length > 0 || heroChatting;
+
+  const scrollToRingStage = (index: 0 | 1 | 2) => {
+    const scrollEl = mainScrollRef.current;
+    if (!scrollEl) return;
+    const maxScroll = scrollEl.scrollHeight - scrollEl.clientHeight;
+    if (maxScroll <= 0) return;
+    const targetT = index === 0 ? 0 : index === 1 ? 0.5 : 1.0;
+    scrollEl.scrollTo({ top: targetT * maxScroll, behavior: "smooth" });
+  };
 
   useEffect(() => {
     const scrollEl = mainScrollRef.current;
@@ -406,7 +416,7 @@ export default function Dashboard() {
 
     const updateTransforms = () => {
       rafId = null;
-      const heroInner = heroInnerRef.current;
+      const heroStage = heroStageRef.current;
       const hub = hubRef.current;
       const profile = profileRef.current;
 
@@ -414,145 +424,110 @@ export default function Dashboard() {
       const isMobile = window.innerWidth < 768;
 
       if (isChattingOrHasHistory || isReduced || isMobile) {
+        [heroStage, hub, profile].forEach((el) => {
+          if (el) {
+            el.style.transform = "none";
+            el.style.opacity = "1";
+            el.style.filter = "none";
+            el.style.pointerEvents = "auto";
+            el.style.zIndex = "auto";
+          }
+        });
+        const heroInner = heroInnerRef.current;
         if (heroInner) {
           heroInner.style.transform = "none";
           heroInner.style.opacity = "1";
           heroInner.style.filter = "none";
-          heroInner.style.pointerEvents = "auto";
-        }
-        if (hub) {
-          hub.style.transform = "none";
-          hub.style.opacity = "1";
-          const cards = hub.querySelectorAll<HTMLElement>("[data-platform-card]");
-          cards.forEach((c) => {
-            c.style.transform = "none";
-          });
-        }
-        if (profile) {
-          profile.style.transform = "none";
-          profile.style.opacity = "1";
-          const cols = profile.querySelectorAll<HTMLElement>("[data-bento-col]");
-          cols.forEach((c) => {
-            c.style.transform = "none";
-          });
         }
         return;
       }
 
+      const maxScroll = scrollEl.scrollHeight - scrollEl.clientHeight;
+      if (maxScroll <= 0) return;
+
       const scrollTop = scrollEl.scrollTop;
+      const t = clamp(scrollTop / maxScroll, 0, 1);
       const vh = scrollEl.clientHeight || window.innerHeight || 800;
+      // 动态计算圆弧上下偏移距离，确保在所有屏幕高度下卡片均处于黄金视界
+      const stepY = Math.min(320, Math.max(220, vh * 0.35));
 
-      // 1. 首屏 Hero 随着滚动缩小并向空间纵深后退淡出
-      const heroThreshold = Math.max(260, vh * 0.45);
-      const heroProgress = clamp(scrollTop / heroThreshold, 0, 1);
-      if (heroInner) {
-        if (heroProgress === 0) {
-          heroInner.style.transform = "none";
-          heroInner.style.opacity = "1";
-          heroInner.style.filter = "none";
-          heroInner.style.pointerEvents = "auto";
-        } else if (heroProgress >= 1) {
-          heroInner.style.transform = "perspective(1200px) scale(0.85) translateY(-55px) rotateX(-5deg)";
-          heroInner.style.opacity = "0";
-          heroInner.style.filter = "blur(3px)";
-          heroInner.style.pointerEvents = "none";
+      // 计算当前处于哪个站台（0: Hero, 1: PlatformHub, 2: ProfileBento）
+      const currentIndex: 0 | 1 | 2 = t < 0.28 ? 0 : t < 0.72 ? 1 : 2;
+      setRingActiveIndex((prev) => (prev !== currentIndex ? currentIndex : prev));
+
+      // 三个阶段在 3D 环形万花筒圆柱面中的相对偏移位置
+      // p1: Hero (0 ➔ 2)
+      // p2: PlatformHub (-1 ➔ +1)
+      // p3: Profile Bento (-2 ➔ 0)
+      const p1 = t / 0.5;
+      const p2 = (t - 0.5) / 0.5;
+      const p3 = (t - 1.0) / 0.5;
+
+      const applyRingTransform = (
+        el: HTMLElement | null,
+        p: number,
+        staggerItems?: NodeListOf<HTMLElement>
+      ) => {
+        if (!el) return;
+        const absP = Math.abs(p);
+        const isCenter = absP < 0.12;
+
+        if (isCenter) {
+          el.style.transform = "none";
+          el.style.opacity = "1";
+          el.style.filter = "none";
+          el.style.pointerEvents = "auto";
+          el.style.zIndex = "30";
+          if (staggerItems) {
+            staggerItems.forEach((item) => {
+              item.style.transform = "none";
+            });
+          }
         } else {
-          const scale = 1 - 0.14 * heroProgress;
-          const translateY = -45 * heroProgress;
-          const rotateX = -4.5 * heroProgress;
-          const opacity = Math.max(0, 1 - 1.25 * heroProgress);
-          const blur = 2.5 * heroProgress;
-          heroInner.style.transform = `perspective(1200px) scale(${scale.toFixed(4)}) translateY(${translateY.toFixed(2)}px) rotateX(${rotateX.toFixed(2)}deg)`;
-          heroInner.style.opacity = opacity.toFixed(4);
-          heroInner.style.filter = `blur(${blur.toFixed(2)}px)`;
-          heroInner.style.pointerEvents = heroProgress > 0.75 ? "none" : "auto";
+          // 有死区缓冲的平滑相对偏移
+          const effectiveP = Math.sign(p) * ((absP - 0.12) / 0.88);
+          const sign = Math.sign(effectiveP);
+          const progress = Math.min(Math.abs(effectiveP), 1.6);
+
+          // 核心 3D 环形弯曲方程：
+          // sign > 0: 向上沿柱面圆弧弯折（rotateX 为负值仰角，translateY 向上）
+          // sign < 0: 向下沿柱面圆弧弯折（rotateX 为正值俯角，translateY 向下）
+          const transY = -sign * stepY * Math.pow(progress, 0.92);
+          const rotX = -sign * 21 * Math.pow(progress, 0.85);
+          const scale = Math.max(0.76, 1 - 0.15 * progress);
+          // 变透明但绝不直接消失！保持半透明 3D 空间环形质感（最小透明度 0.26）
+          const opacity = Math.max(0.26, 1 - 0.58 * progress);
+          const blur = Math.min(2.5, 1.8 * progress);
+
+          el.style.transform = `perspective(1400px) translateY(${transY.toFixed(2)}px) rotateX(${rotX.toFixed(2)}deg) scale(${scale.toFixed(4)})`;
+          el.style.opacity = opacity.toFixed(4);
+          el.style.filter = blur > 0.3 ? `blur(${blur.toFixed(1)}px)` : "none";
+          el.style.pointerEvents = "none";
+          el.style.zIndex = progress < 0.8 ? "20" : "10";
+
+          if (staggerItems && staggerItems.length > 0) {
+            const n = staggerItems.length;
+            staggerItems.forEach((item, idx) => {
+              const centerIdx = (n - 1) / 2;
+              const normIdx = idx - centerIdx;
+              const staggerRotY = normIdx * 2.2 * progress;
+              const staggerY = Math.abs(normIdx) * 6 * progress;
+              item.style.transform = `translateY(${staggerY.toFixed(1)}px) rotateY(${staggerRotY.toFixed(1)}deg)`;
+            });
+          }
         }
-      }
+      };
 
-      // 2. 招聘平台中心以 3D 独立视觉层与错峰视差进入
-      const hubStart = Math.max(80, (hub?.offsetTop ?? vh) - vh * 0.92);
-      const hubEnd = Math.max(340, hubStart + vh * 0.45);
-      const hubProgress = clamp((scrollTop - hubStart) / (hubEnd - hubStart), 0, 1);
-      if (hub) {
-        if (hubProgress >= 1) {
-          hub.style.transform = "none";
-          hub.style.opacity = "1";
-          const cards = hub.querySelectorAll<HTMLElement>("[data-platform-card]");
-          cards.forEach((c) => {
-            c.style.transform = "none";
-          });
-        } else if (hubProgress <= 0) {
-          hub.style.transform = "perspective(1200px) rotateX(13deg) translateY(80px) scale(0.93)";
-          hub.style.opacity = "0.08";
-          const cards = hub.querySelectorAll<HTMLElement>("[data-platform-card]");
-          cards.forEach((c, idx) => {
-            const staggerY = 22 + idx * 14;
-            const staggerRotY = (idx - 1.5) * 2;
-            c.style.transform = `translateY(${staggerY}px) rotateY(${staggerRotY}deg) rotateX(5deg)`;
-          });
-        } else {
-          const remaining = 1 - hubProgress;
-          const rotX = 12 * remaining;
-          const transY = 75 * remaining;
-          const scale = 0.93 + 0.07 * hubProgress;
-          const opacity = 0.1 + 0.9 * hubProgress;
-          hub.style.transform = `perspective(1200px) rotateX(${rotX.toFixed(2)}deg) translateY(${transY.toFixed(2)}px) scale(${scale.toFixed(4)})`;
-          hub.style.opacity = opacity.toFixed(4);
+      // 阶段 1：Hero
+      applyRingTransform(heroStage, p1);
 
-          // 4大平台卡片错峰 3D 微环绕视差
-          const cards = hub.querySelectorAll<HTMLElement>("[data-platform-card]");
-          cards.forEach((c, idx) => {
-            const cardProg = clamp((hubProgress - idx * 0.08) / 0.75, 0, 1);
-            const cardRemaining = 1 - cardProg;
-            const cY = (20 + idx * 13) * cardRemaining;
-            const cRotY = (idx - 1.5) * 1.8 * cardRemaining;
-            const cRotX = 4 * cardRemaining;
-            c.style.transform = `translateY(${cY.toFixed(2)}px) rotateY(${cRotY.toFixed(2)}deg) rotateX(${cRotX.toFixed(2)}deg)`;
-          });
-        }
-      }
+      // 阶段 2：招聘平台中心（包含 4 大卡片 3D 微环绕视差）
+      const platformCards = hub?.querySelectorAll<HTMLElement>("[data-platform-card]");
+      applyRingTransform(hub, p2, platformCards);
 
-      // 3. 求职画像总览以另一层 3D 卡片层叠弧形轨迹展开
-      const profStart = Math.max(260, (profile?.offsetTop ?? (vh * 1.5)) - vh * 0.92);
-      const profEnd = Math.max(540, profStart + vh * 0.45);
-      const profileProgress = clamp((scrollTop - profStart) / (profEnd - profStart), 0, 1);
-      if (profile) {
-        if (profileProgress >= 1) {
-          profile.style.transform = "none";
-          profile.style.opacity = "1";
-          const cols = profile.querySelectorAll<HTMLElement>("[data-bento-col]");
-          cols.forEach((c) => {
-            c.style.transform = "none";
-          });
-        } else if (profileProgress <= 0) {
-          profile.style.transform = "perspective(1200px) rotateX(10deg) translateY(65px) scale(0.94)";
-          profile.style.opacity = "0.08";
-          const cols = profile.querySelectorAll<HTMLElement>("[data-bento-col]");
-          cols.forEach((c, idx) => {
-            const staggerY = 20 + idx * 15;
-            const staggerRotY = (idx - 1) * 1.5;
-            c.style.transform = `translateY(${staggerY}px) rotateY(${staggerRotY}deg)`;
-          });
-        } else {
-          const remaining = 1 - profileProgress;
-          const rotX = 10 * remaining;
-          const transY = 65 * remaining;
-          const scale = 0.94 + 0.06 * profileProgress;
-          const opacity = 0.12 + 0.88 * profileProgress;
-          profile.style.transform = `perspective(1200px) rotateX(${rotX.toFixed(2)}deg) translateY(${transY.toFixed(2)}px) scale(${scale.toFixed(4)})`;
-          profile.style.opacity = opacity.toFixed(4);
-
-          // 3列便当盒错峰展开
-          const cols = profile.querySelectorAll<HTMLElement>("[data-bento-col]");
-          cols.forEach((c, idx) => {
-            const colProg = clamp((profileProgress - idx * 0.1) / 0.75, 0, 1);
-            const colRemaining = 1 - colProg;
-            const cY = (18 + idx * 14) * colRemaining;
-            const cRotY = (idx - 1) * 1.5 * colRemaining;
-            c.style.transform = `translateY(${cY.toFixed(2)}px) rotateY(${cRotY.toFixed(2)}deg)`;
-          });
-        }
-      }
+      // 阶段 3：求职画像总览（包含 3 列便当盒错峰微环绕视差）
+      const bentoCols = profile?.querySelectorAll<HTMLElement>("[data-bento-col]");
+      applyRingTransform(profile, p3, bentoCols);
     };
 
     const handleScroll = () => {
@@ -1051,21 +1026,34 @@ export default function Dashboard() {
           )}
 
           {/* ========================================================================= */}
-          {/* TAB 1: 巡航工作台 (基于滚轮驱动的 3D 层叠叙事与沉浸式首页体验)            */}
+          {/* TAB 1: 巡航工作台 (3D 万花筒环形滚轮空间系统)                             */}
           {/* ========================================================================= */}
           {activeNav === "workbench" && (
-            <div className="perspective-stage mx-auto w-full max-w-7xl px-2 sm:px-6 pb-16 transition-all duration-300 ease-in-out">
-              {/* ===================================================================== */}
-              {/* 阶段 1：首屏绝对主角 Hero Section (接近 100vh，聚焦 AI 求职对话，无竞争元素) */}
-              {/* ===================================================================== */}
-              <section
-                ref={heroStageRef}
-                className={`relative isolate overflow-visible w-full flex flex-col items-center justify-center transition-all ${
-                  isChattingOrHasHistory
-                    ? "py-8 min-h-0"
-                    : "min-h-[calc(100vh-3.5rem)] py-8 sm:py-12"
-                }`}
+            <div
+              className={
+                !isChattingOrHasHistory
+                  ? "relative w-full"
+                  : "space-y-8 mx-auto w-full max-w-5xl px-2 sm:px-6 py-6 transition-all"
+              }
+              style={!isChattingOrHasHistory ? { minHeight: "260vh" } : undefined}
+            >
+              <div
+                className={
+                  !isChattingOrHasHistory
+                    ? "sticky top-0 h-[calc(100vh-3.5rem)] w-full overflow-hidden perspective-stage flex items-center justify-center select-none"
+                    : "space-y-8 w-full"
+                }
               >
+                {/* 阶段 1：首屏绝对主角 Hero Section (AI 对话中心) */}
+                <section
+                  ref={heroStageRef}
+                  className={
+                    !isChattingOrHasHistory
+                      ? "absolute inset-x-0 mx-auto w-full max-w-5xl px-2 sm:px-6 will-change-transform perspective-layer"
+                      : "relative isolate overflow-visible w-full flex flex-col items-center justify-center py-6"
+                  }
+                  style={!isChattingOrHasHistory ? { transformOrigin: "center center" } : undefined}
+                >
                 <div
                   ref={heroInnerRef}
                   className="mx-auto w-full flex flex-col items-center text-center perspective-layer relative z-10"
@@ -1381,39 +1369,54 @@ export default function Dashboard() {
                 </div>
               </section>
 
-              {/* ===================================================================== */}
-              {/* 阶段 2：招聘平台中心 (3D 独立视觉层，基于滚轮倾斜、景深浮现与错峰展开)    */}
-              {/* ===================================================================== */}
-              <div
-                ref={hubRef}
-                className="perspective-layer spatial-card-glow w-full rounded-3xl mt-8 sm:mt-12 transition-transform duration-75"
-              >
-                <PlatformHub
-                  lang={lang}
-                  selectedPlatform={selectedPlatform}
-                  onSelectPlatform={setSelectedPlatform}
-                />
-              </div>
+                {/* ===================================================================== */}
+                {/* 阶段 2：招聘平台中心 (3D 环形柱面展开，基于滚轮在圆弧上下滚动)           */}
+                {/* ===================================================================== */}
+                <div
+                  ref={hubRef}
+                  className={
+                    !isChattingOrHasHistory
+                      ? "absolute inset-x-0 mx-auto w-full max-w-5xl px-2 sm:px-6 will-change-transform perspective-layer"
+                      : "relative w-full"
+                  }
+                  style={!isChattingOrHasHistory ? { transformOrigin: "center center" } : undefined}
+                >
+                  <div className="spatial-card-glow rounded-3xl">
+                    <PlatformHub
+                      lang={lang}
+                      selectedPlatform={selectedPlatform}
+                      onSelectPlatform={setSelectedPlatform}
+                    />
+                  </div>
+                </div>
 
-              {/* 人工审核卡片（如果处于 review 暂停中） */}
-              {reviewPending && (
-                <Panel title={t("panel.review")}>
-                  <ReviewCard
-                    pending={reviewPending}
-                    busy={busy}
-                    onDecision={submitReviewDecision}
-                    t={t}
-                  />
-                </Panel>
-              )}
+                {/* 人工审核卡片（如果处于 review 暂停中） */}
+                {reviewPending && (
+                  <div className="w-full max-w-5xl mx-auto px-2 sm:px-6">
+                    <Panel title={t("panel.review")}>
+                      <ReviewCard
+                        pending={reviewPending}
+                        busy={busy}
+                        onDecision={submitReviewDecision}
+                        t={t}
+                      />
+                    </Panel>
+                  </div>
+                )}
 
-              {/* ===================================================================== */}
-              {/* 阶段 3：求职画像总览 (3D 纵深层叠，展示当前目标与策略，可一键跳转详细微调) */}
-              {/* ===================================================================== */}
-              <div
-                ref={profileRef}
-                className="perspective-layer spatial-card-glow w-full rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm space-y-4 mt-8 sm:mt-12 transition-transform duration-75"
-              >
+                {/* ===================================================================== */}
+                {/* 阶段 3：求职画像总览 (3D 环形万花筒圆弧翻折展开)                         */}
+                {/* ===================================================================== */}
+                <div
+                  ref={profileRef}
+                  className={
+                    !isChattingOrHasHistory
+                      ? "absolute inset-x-0 mx-auto w-full max-w-5xl px-2 sm:px-6 will-change-transform perspective-layer"
+                      : "relative w-full"
+                  }
+                  style={!isChattingOrHasHistory ? { transformOrigin: "center center" } : undefined}
+                >
+                  <div className="spatial-card-glow w-full rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[var(--grid)]">
                   <div className="flex items-center gap-2">
                     <UserCheck className="h-4 w-4 text-amber-400" />
@@ -1544,6 +1547,55 @@ export default function Dashboard() {
                       className="font-bold underline hover:text-emerald-200 cursor-pointer"
                     >
                       {lang === "en" ? "Go to live dashboard →" : "进入大屏监控实时状态 →"}
+                    </button>
+                  </div>
+                )}
+                  </div>
+                </div>
+
+                {/* 右侧 3D 环形万花筒位置进度指示器 */}
+                {!isChattingOrHasHistory && (
+                  <div className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 z-40 hidden md:flex flex-col items-end gap-2.5 text-xs select-none">
+                    <button
+                      type="button"
+                      onClick={() => scrollToRingStage(0)}
+                      className={`group flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all cursor-pointer backdrop-blur-md shadow-sm ${
+                        ringActiveIndex === 0
+                          ? "border-[#ff5722] bg-[#ff5722]/15 text-stone-100 shadow-[0_0_12px_rgba(255,87,34,0.35)]"
+                          : "border-white/10 bg-black/40 text-stone-400 hover:text-stone-200 hover:border-white/25"
+                      }`}
+                      title={lang === "en" ? "Scroll to AI Advisor" : "跳转至 AI 顾问对话"}
+                    >
+                      <span className={`size-2 rounded-full transition-transform ${ringActiveIndex === 0 ? "bg-[#ff5722] scale-125 shadow-[0_0_6px_#ff5722]" : "bg-stone-500"}`} />
+                      <span className="font-medium text-[11px] sm:text-xs">{lang === "en" ? "AI Advisor" : "AI 顾问"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => scrollToRingStage(1)}
+                      className={`group flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all cursor-pointer backdrop-blur-md shadow-sm ${
+                        ringActiveIndex === 1
+                          ? "border-amber-500 bg-amber-500/15 text-stone-100 shadow-[0_0_12px_rgba(245,158,11,0.35)]"
+                          : "border-white/10 bg-black/40 text-stone-400 hover:text-stone-200 hover:border-white/25"
+                      }`}
+                      title={lang === "en" ? "Scroll to Platforms Hub" : "跳转至招聘平台中心"}
+                    >
+                      <span className={`size-2 rounded-full transition-transform ${ringActiveIndex === 1 ? "bg-amber-400 scale-125 shadow-[0_0_6px_#f59e0b]" : "bg-stone-500"}`} />
+                      <span className="font-medium text-[11px] sm:text-xs">{lang === "en" ? "Platforms" : "招聘平台"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => scrollToRingStage(2)}
+                      className={`group flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all cursor-pointer backdrop-blur-md shadow-sm ${
+                        ringActiveIndex === 2
+                          ? "border-emerald-500 bg-emerald-500/15 text-stone-100 shadow-[0_0_12px_rgba(16,185,129,0.35)]"
+                          : "border-white/10 bg-black/40 text-stone-400 hover:text-stone-200 hover:border-white/25"
+                      }`}
+                      title={lang === "en" ? "Scroll to Job Profile" : "跳转至求职画像"}
+                    >
+                      <span className={`size-2 rounded-full transition-transform ${ringActiveIndex === 2 ? "bg-emerald-400 scale-125 shadow-[0_0_6px_#10b981]" : "bg-stone-500"}`} />
+                      <span className="font-medium text-[11px] sm:text-xs">{lang === "en" ? "Job Profile" : "求职画像"}</span>
                     </button>
                   </div>
                 )}
