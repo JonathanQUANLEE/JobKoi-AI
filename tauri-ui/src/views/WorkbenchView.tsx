@@ -1,4 +1,5 @@
 import type { RefObject, PointerEvent } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import type { AgentChatMessage } from "../lib/ipc";
 import type { Lang } from "../lib/i18n";
 import type { Mode, RuleForm } from "../lib/profileForm";
@@ -192,55 +193,49 @@ export default function WorkbenchView({
           lang={lang}
         />
 
-        {/* 右侧 3D 环形万花筒位置指示点（纯净三点设计，无方框） */}
+        {/* 底部 3D 滚动探索指引微动图标 (无缝替代侧边三点，随圆柱站台智能引导) */}
         {!isChattingOrHasHistory && (
-          <div className="absolute right-4 sm:right-6 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-3.5 select-none">
+          <div className="absolute bottom-4 inset-x-0 mx-auto w-fit z-40 flex flex-col items-center select-none pointer-events-auto">
             <button
               type="button"
-              onClick={() => scrollToRingStage(0)}
-              className="p-1.5 cursor-pointer transition-all outline-none group"
-              title={lang === "en" ? "AI Advisor" : "AI 顾问"}
-              aria-label={lang === "en" ? "AI Advisor" : "AI 顾问"}
+              onClick={() => {
+                const nextStage = ringActiveIndex === 2 ? 0 : ((ringActiveIndex + 1) as 0 | 1 | 2);
+                scrollToRingStage(nextStage);
+              }}
+              className="group flex items-center gap-2.5 py-1.5 px-4 rounded-full bg-stone-950/80 hover:bg-stone-900/95 border border-white/10 hover:border-[#ff5722]/50 shadow-xl backdrop-blur-md transition-all duration-300 cursor-pointer outline-none hover:scale-105 active:scale-95"
+              title={
+                ringActiveIndex === 0
+                  ? lang === "en" ? "Scroll down to Platform Hub" : "向下滚动进入招聘平台中心"
+                  : ringActiveIndex === 1
+                  ? lang === "en" ? "Scroll down to Job Profile" : "向下滚动查看求职画像"
+                  : lang === "en" ? "Scroll up to return" : "已至求职画像 · 点击或向上滚动返回"
+              }
             >
-              <span
-                className={`block rounded-full transition-all duration-300 ${
-                  ringActiveIndex === 0
-                    ? "size-2.5 bg-[#ff5722] shadow-[0_0_10px_rgba(255,87,34,0.9)] scale-125"
-                    : "size-2 bg-stone-600 group-hover:bg-stone-400 group-hover:scale-125"
-                }`}
-              />
-            </button>
+              {/* 拟物化 3D 滚轮鼠标微动胶囊 */}
+              <div className="w-4 h-6.5 rounded-full border border-stone-400/50 group-hover:border-[#ff5722] flex items-start justify-center p-0.5 transition-colors">
+                <span className="w-1 h-1.5 rounded-full bg-[#ff5722] animate-scroll-wheel shadow-[0_0_6px_#ff5722]" />
+              </div>
 
-            <button
-              type="button"
-              onClick={() => scrollToRingStage(1)}
-              className="p-1.5 cursor-pointer transition-all outline-none group"
-              title={lang === "en" ? "Platforms Hub" : "招聘平台"}
-              aria-label={lang === "en" ? "Platforms Hub" : "招聘平台"}
-            >
-              <span
-                className={`block rounded-full transition-all duration-300 ${
-                  ringActiveIndex === 1
-                    ? "size-2.5 bg-[#ff5722] shadow-[0_0_10px_rgba(255,87,34,0.9)] scale-125"
-                    : "size-2 bg-stone-600 group-hover:bg-stone-400 group-hover:scale-125"
-                }`}
-              />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => scrollToRingStage(2)}
-              className="p-1.5 cursor-pointer transition-all outline-none group"
-              title={lang === "en" ? "Job Profile" : "求职画像"}
-              aria-label={lang === "en" ? "Job Profile" : "求职画像"}
-            >
-              <span
-                className={`block rounded-full transition-all duration-300 ${
-                  ringActiveIndex === 2
-                    ? "size-2.5 bg-[#ff5722] shadow-[0_0_10px_rgba(255,87,34,0.9)] scale-125"
-                    : "size-2 bg-stone-600 group-hover:bg-stone-400 group-hover:scale-125"
-                }`}
-              />
+              <span className="text-xs font-medium text-stone-300 group-hover:text-white transition-colors flex items-center gap-1">
+                {ringActiveIndex === 0 && (
+                  <>
+                    <span>{lang === "en" ? "Scroll to Explore Hub" : "向下滚动切换至招聘平台"}</span>
+                    <ChevronDown className="size-3.5 text-[#ff5722] animate-bounce" />
+                  </>
+                )}
+                {ringActiveIndex === 1 && (
+                  <>
+                    <span>{lang === "en" ? "Scroll to Job Profile" : "向下滚动切换至求职画像"}</span>
+                    <ChevronDown className="size-3.5 text-[#ff5722] animate-bounce" />
+                  </>
+                )}
+                {ringActiveIndex === 2 && (
+                  <>
+                    <span>{lang === "en" ? "Scroll to Return" : "向上滚动返回上一板块"}</span>
+                    <ChevronUp className="size-3.5 text-amber-400 animate-bounce" />
+                  </>
+                )}
+              </span>
             </button>
           </div>
         )}
