@@ -4,12 +4,6 @@ import {
   SlidersHorizontal,
   Briefcase,
   RotateCw,
-  Search,
-  Eye,
-  Zap,
-  ListOrdered,
-  Terminal,
-  Copy,
   Check,
   SkipForward,
   Square,
@@ -35,9 +29,9 @@ import ResumePanel from "../components/ResumePanel";
 import PlatformHub from "../components/PlatformHub";
 import ProfilePanel from "../components/ProfilePanel";
 import AgentPanel from "../components/AgentPanel";
+import AnalyticsPanel from "../components/AnalyticsPanel";
 import SettingsDrawer, { type DrawerTab } from "../components/SettingsDrawer";
 import SettingsModal, { type SettingsTab } from "../components/SettingsModal";
-import PipelineVisualizer from "../components/PipelineVisualizer";
 import Sidebar, { type NavItem } from "../components/Sidebar";
 import {
   buildProfileData,
@@ -127,7 +121,6 @@ export default function Dashboard() {
   const [busy, setBusy] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeNav, setActiveNav] = useState<NavItem>("workbench");
-  const [consoleTab, setConsoleTab] = useState<"pipeline" | "events" | "logs">("pipeline");
   const [drawerTab, setDrawerTab] = useState<DrawerTab>("rules");
   const [defaultResumeName, setDefaultResumeName] = useState<string>("李象泉-后端-AI-Agent开发-2027届.docx");
 
@@ -572,8 +565,6 @@ export default function Dashboard() {
     setDrawerOpen(true);
   }
 
-  const logRef = useRef<HTMLPreElement>(null);
-
   useEffect(() => {
     refreshProfiles(profileName);
     ipc.getGreeting()
@@ -598,11 +589,6 @@ export default function Dashboard() {
       .catch(() => {});
   }, [setRunning]);
 
-  useEffect(() => {
-    if (logRef.current) {
-      logRef.current.scrollTop = logRef.current.scrollHeight;
-    }
-  }, [logs.length]);
 
   // F3：BOSS 新回复轮询（60s，仅空闲时）
   useEffect(() => {
@@ -1631,112 +1617,25 @@ export default function Dashboard() {
 
           {/* TAB 5: 投递数据与自动化执行大屏 */}
           {activeNav === "analytics" && (
-            <div className="max-w-5xl mx-auto space-y-5">
-              {/* 可视化自动化执行管线大屏 */}
-              <PipelineVisualizer
-                running={running}
-                currentIndex={currentIndex}
-                mode={mode}
-                dryRun={dryRun}
-                delayMin={delayMin}
-                delayMax={delayMax}
-                stats={stats}
-                currentJob={currentJob}
-                latestSent={latestSent}
-                latestSkip={latestSkip}
-                onOpenDrawer={() => handleOpenSettings("policy")}
-              />
-
-              {/* 模式选择与巡航控制卡片 */}
-              <div className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm">
-                <div className="flex items-center justify-between pb-3 border-b border-[var(--grid)]">
-                  <span className="text-xs font-bold uppercase tracking-wider text-[var(--ink)]">巡航模式选择与控制</span>
-                  <span className={running ? "status-on" : "status-idle"}>{statusText}</span>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2 mt-4">
-                  <ModeButton
-                    active={mode === "scan"}
-                    icon={<Search className="h-4 w-4" />}
-                    title={t("mode.scan.title")}
-                    desc={t("mode.scan.desc")}
-                    onClick={() => setMode("scan")}
-                  />
-                  <ModeButton
-                    active={mode === "review"}
-                    icon={<Eye className="h-4 w-4" />}
-                    title={t("mode.review.title")}
-                    desc={t("mode.review.desc")}
-                    onClick={() => setMode("review")}
-                  />
-                  <ModeButton
-                    active={mode === "auto"}
-                    icon={<Zap className="h-4 w-4" />}
-                    title={t("mode.auto.title")}
-                    desc={t("mode.auto.desc")}
-                    onClick={() => setMode("auto")}
-                  />
-                </div>
-
-                {mode === "auto" && (
-                  <div className="risk-box mt-3">
-                    {t("warning.auto")}
-                  </div>
-                )}
-
-                {message && <div className="mt-3 message-line">{message}</div>}
-              </div>
-
-              {/* 实时事件流水与终端运行日志 */}
-              <div className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm">
-                <div className="flex items-center justify-between pb-3 border-b border-[var(--grid)]">
-                  <div className="flex gap-4 text-xs font-bold">
-                    <button
-                      type="button"
-                      className={`flex items-center gap-1.5 pb-1 transition-all ${
-                        consoleTab === "pipeline"
-                          ? "border-b-2 border-amber-500 text-amber-400"
-                          : "text-stone-400 hover:text-stone-200"
-                      }`}
-                      onClick={() => setConsoleTab("pipeline")}
-                    >
-                      <ListOrdered className="h-3.5 w-3.5" />
-                      <span>实时事件流水 ({events.length})</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`flex items-center gap-1.5 pb-1 transition-all ${
-                        consoleTab === "logs"
-                          ? "border-b-2 border-amber-500 text-amber-400"
-                          : "text-stone-400 hover:text-stone-200"
-                      }`}
-                      onClick={() => setConsoleTab("logs")}
-                    >
-                      <Terminal className="h-3.5 w-3.5" />
-                      <span>终端运行日志 ({logs.length})</span>
-                    </button>
-                  </div>
-                  <button className="btn-ghost text-xs py-0.5 px-2 flex items-center gap-1" onClick={copyLogs}>
-                    <Copy className="h-3 w-3" />
-                    <span>{t("button.copyLogs")}</span>
-                  </button>
-                </div>
-
-                <div className="mt-3">
-                  {consoleTab === "pipeline" ? (
-                    <div className="event-list h-96">
-                      {events.length === 0 ? (
-                        <p className="empty-text">{t("empty.events")}</p>
-                      ) : (
-                        events.slice(-150).map((event, index) => <EventRow key={`${event.kind}-${index}`} event={event} />)
-                      )}
-                    </div>
-                  ) : (
-                    <pre ref={logRef} className="log-box h-96">{logs.length ? logs.join("\n") : t("empty.logs")}</pre>
-                  )}
-                </div>
-              </div>
-            </div>
+            <AnalyticsPanel
+              mode={mode}
+              setMode={setMode}
+              running={running}
+              currentIndex={currentIndex}
+              dryRun={dryRun}
+              delayMin={delayMin}
+              delayMax={delayMax}
+              stats={stats}
+              currentJob={currentJob}
+              latestSent={latestSent}
+              latestSkip={latestSkip}
+              events={events}
+              logs={logs}
+              statusText={statusText}
+              message={message}
+              onOpenDrawer={handleOpenSettings}
+              onCopyLogs={copyLogs}
+            />
           )}
         </main>
       </div>
@@ -1824,45 +1723,6 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-function ModeButton({
-  active,
-  icon,
-  title,
-  desc,
-  onClick,
-}: {
-  active: boolean;
-  icon?: ReactNode;
-  title: string;
-  desc: string;
-  onClick: () => void;
-}) {
-  return (
-    <button type="button" onClick={onClick} className={active ? "mode-button active" : "mode-button"}>
-      <div className="flex items-center gap-1.5 mb-1">
-        {icon && <span className={active ? "text-amber-400" : "text-stone-400"}>{icon}</span>}
-        <span className="block text-sm font-semibold">{title}</span>
-      </div>
-      <span className="block text-xs text-[var(--muted-fg)]">{desc}</span>
-    </button>
-  );
-}
-
-function EventRow({ event }: { event: ProgressEvent }) {
-  const display = formatEventForDisplay(event, formatLocalTime());
-  return (
-    <div className={`event-row ${display.severity}`}>
-      <div className="event-meta">
-        <span className="event-time">{display.time || "-"}</span>
-        <span className="event-title">{display.title}</span>
-      </div>
-      <div className="event-body">
-        <span className="event-summary">{display.summary}</span>
-        {display.details && <span className="event-details">{display.details}</span>}
-      </div>
-    </div>
-  );
-}
 
 function ReviewCard({
   pending,
