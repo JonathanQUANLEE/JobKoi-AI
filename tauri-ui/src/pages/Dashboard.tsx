@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode } from "react";
-import { Channel } from "@tauri-apps/api/core";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   SlidersHorizontal,
   Briefcase,
@@ -14,9 +13,9 @@ import {
   FileText,
   UserCheck,
 } from "lucide-react";
-import { ipc, type AgentChatMessage, type LoadedProfile, type ProfileSummary, type ProgressEvent, type RunConfig } from "../lib/ipc";
+import { ipc, type AgentChatMessage } from "../lib/ipc";
 import { summarizeAgentProfile } from "../lib/agentPreview";
-import { optionLabel, type Lang } from "../lib/i18n";
+import { optionLabel } from "../lib/i18n";
 import ResumePanel from "../components/ResumePanel";
 import PlatformHub from "../components/PlatformHub";
 import ProfilePanel from "../components/ProfilePanel";
@@ -26,48 +25,26 @@ import HeroStage from "../components/workbench/HeroStage";
 import ProfileBentoCard from "../components/workbench/ProfileBentoCard";
 import { useWorkbenchWheel } from "../hooks/useWorkbenchWheel";
 import { useProfileFormState } from "../hooks/useProfileFormState";
+import { useJobBotRuntime } from "../hooks/useJobBotRuntime";
 import SettingsDrawer, { type DrawerTab } from "../components/SettingsDrawer";
 import SettingsModal, { type SettingsTab } from "../components/SettingsModal";
 import Sidebar, { type NavItem } from "../components/Sidebar";
-import { eventLogLine } from "../lib/eventDisplay";
-import { latestPayloadForJob } from "../lib/runView";
 import { useRunStore, useT } from "../store";
 
 import {
   extractFallbackProfile,
-  latestJob,
-  summarizeEvents,
   formatJobLine,
-  formatLocalTime,
   asRecord,
   asString,
 } from "../lib/dashboardHelpers";
 
 export default function Dashboard() {
   const t = useT();
-  const running = useRunStore((s) => s.running);
-  const events = useRunStore((s) => s.events);
-  const logs = useRunStore((s) => s.logs);
-  const currentIndex = useRunStore((s) => s.currentIndex);
-  const restoredStats = useRunStore((s) => s.restoredStats);
-  const restoredCurrentJob = useRunStore((s) => s.restoredCurrentJob);
-  const restoredLatestSkip = useRunStore((s) => s.restoredLatestSkip);
-  const restoredLatestSent = useRunStore((s) => s.restoredLatestSent);
-  const restoredPage = useRunStore((s) => s.restoredPage);
-  const restoredPageFilters = useRunStore((s) => s.restoredPageFilters);
   const lang = useRunStore((s) => s.lang);
   const setLang = useRunStore((s) => s.setLang);
-  const setRunning = useRunStore((s) => s.setRunning);
-  const pushEvent = useRunStore((s) => s.pushEvent);
-  const pushLog = useRunStore((s) => s.pushLog);
-  const clear = useRunStore((s) => s.clear);
-  const reviewPending = useRunStore((s) => s.reviewPending);
-  const setReviewPending = useRunStore((s) => s.setReviewPending);
-  const restoreRunState = useRunStore((s) => s.restoreRunState);
   const pushAgentMessage = useRunStore((s) => s.pushAgentMessage);
 
   const [selectedPlatform, setSelectedPlatform] = useState<string>("boss");
-  const [replyNotice, setReplyNotice] = useState<{ unread: number; chatUrl: string } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -130,6 +107,42 @@ export default function Dashboard() {
     t,
     setMessage,
     setBusy,
+  });
+
+  const {
+    replyNotice,
+    setReplyNotice,
+    running,
+    events,
+    logs,
+    stats,
+    currentJob,
+    latestSkip,
+    latestSent,
+    statusText,
+    currentIndex,
+    reviewPending,
+    startRun,
+    stopRun,
+    resetChrome,
+    openManualBrowser,
+    copyLogs,
+    openChatPage,
+    submitReviewDecision,
+  } = useJobBotRuntime({
+    t,
+    busy,
+    setBusy,
+    message,
+    setMessage,
+    usrName,
+    label,
+    dryRun,
+    profileName,
+    greeting,
+    greetingPath,
+    currentProfileData,
+    validateBeforeRun,
   });
 
   // 同步当前默认简历名称，供工作台策略卡片实时展示
@@ -282,172 +295,7 @@ export default function Dashboard() {
     setDrawerOpen(true);
   }
 
-  useEffect(() => {
-    ipc.getRunState()
-      .then(({ running, review, stats, current_job, latest_skip, latest_sent, page, page_filters }) => {
-        setRunning(running);
-        setReviewPending(review?.pending ?? null);
-        restoreRunState({
-          stats,
-          currentJob: current_job ?? null,
-          latestSkip: latest_skip ?? null,
-          latestSent: latest_sent ?? null,
-          page: page ?? null,
-          pageFilters: page_filters ?? [],
-        });
-      })
-      .catch(() => {});
-  }, [setRunning, setReviewPending, restoreRunState]);
 
-
-  // F3：BOSS 新回复轮询（60s，仅空闲时）
-  useEffect(() => {
-    if (running) return;
-    const timer = setInterval(async () => {
-      try {
-        const result = await ipc.checkBossReplies();
-        if (result.status === "ok" && result.new_replies) {
-          setReplyNotice({
-            unread: result.unread ?? 0,
-            chatUrl: result.chat_url ?? "https://www.zhipin.com/web/geek/chat",
-          });
-        }
-      } catch {
-        /* 轮询失败静默 */
-      }
-    }, 60_000);
-    return () => clearInterval(timer);
-  }, [running]);
-
-  const eventStats = useMemo(() => summarizeEvents(events), [events]);
-  const stats = events.length > 0 || !restoredStats ? eventStats : restoredStats;
-  const currentJob = useMemo(() => latestJob(events) ?? restoredCurrentJob ?? undefined, [events, restoredCurrentJob]);
-  const latestSkip = useMemo(
-    () => latestPayloadForJob(events, "job_skipped", currentJob) ?? (events.length === 0 ? restoredLatestSkip : undefined) ?? undefined,
-    [events, currentJob, restoredLatestSkip],
-  );
-  const latestSent = useMemo(
-    () => latestPayloadForJob(events, "letter_sent", currentJob) ?? (events.length === 0 ? restoredLatestSent : undefined) ?? undefined,
-    [events, currentJob, restoredLatestSent],
-  );
-
-  const statusText = running
-    ? currentIndex
-      ? t("status.runningIndex", { index: currentIndex })
-      : t("status.starting")
-    : t("status.idle");
-
-
-  async function startRun() {
-    const error = validateBeforeRun();
-    if (error) {
-      setMessage(error);
-      return;
-    }
-    setBusy(true);
-    setMessage(null);
-    try {
-      await ipc.saveGreeting(greeting.trim(), greetingPath.trim() || "./greetings/default.txt");
-      await ipc.saveProfile(profileName.trim(), currentProfileData());
-      clear();
-      setRunning(true);
-      const progressChannel = new Channel<ProgressEvent>((ev) => {
-        const timestamp = ev.ts_local || formatLocalTime();
-        const event = { ...ev, ts_local: timestamp };
-        pushEvent(event);
-        pushLog(eventLogLine(event, timestamp));
-      });
-      const logChannel = new Channel<string>((line) => pushLog(`${formatLocalTime()} ${line}`));
-      const config: RunConfig = {
-        usrName: usrName.trim(),
-        label: label.trim(),
-        dryRun,
-        profile: profileName.trim(),
-        useCurrentPage: true,
-      };
-      await ipc.startRun(config, progressChannel, logChannel);
-    } catch (err) {
-      setRunning(false);
-      pushLog(`${formatLocalTime()} ${t("message.startFailed", { error: String(err) })}`);
-      setMessage(t("message.startFailed", { error: String(err) }));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function stopRun() {
-    setBusy(true);
-    try {
-      await ipc.stopRun();
-    } catch (err) {
-      pushLog(`${formatLocalTime()} ${t("message.stopFailed", { error: String(err) })}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function resetChrome() {
-    setBusy(true);
-    try {
-      await ipc.shutdownBrowser();
-      pushLog(`${formatLocalTime()} ${t("message.browserClosed")}`);
-    } catch (err) {
-      pushLog(`${formatLocalTime()} ${t("message.browserCloseFailed", { error: String(err) })}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function openManualBrowser() {
-    setBusy(true);
-    setMessage(null);
-    try {
-      const state = await ipc.openManualBrowser();
-      pushLog(`${formatLocalTime()} ${t("message.manualBrowserOpened")} ${state.url || ""}`.trim());
-      setMessage(t("message.manualBrowserOpened"));
-    } catch (err) {
-      pushLog(`${formatLocalTime()} ${t("message.manualBrowserOpenFailed", { error: String(err) })}`);
-      setMessage(t("message.manualBrowserOpenFailed", { error: String(err) }));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function copyLogs() {
-    try {
-      await navigator.clipboard.writeText(logs.join("\n"));
-      setMessage(t("message.logsCopied"));
-    } catch {
-      setMessage(t("message.logsCopyFailed"));
-    }
-  }
-
-  async function openChatPage(url: string) {
-    setBusy(true);
-    try {
-      await ipc.openManualBrowser(url);
-      setReplyNotice(null);
-    } catch (err) {
-      setMessage(t("message.manualBrowserOpenFailed", { error: String(err) }));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function submitReviewDecision(decision: "send" | "skip" | "quit") {
-    setBusy(true);
-    setMessage(null);
-    try {
-      await ipc.submitReviewDecision(decision);
-      setMessage(
-        decision === "send" ? t("message.reviewSend") : decision === "skip" ? t("message.reviewSkip") : t("message.reviewQuit"),
-      );
-    } catch (err) {
-      setMessage(t("message.reviewSubmitFailed", { error: String(err) }));
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[var(--paper)] text-[var(--ink)]">
