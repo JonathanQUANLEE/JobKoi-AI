@@ -1,17 +1,9 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import {
   SlidersHorizontal,
-  Briefcase,
-  Check,
-  SkipForward,
-  Square,
   FlaskConical,
-  ShieldCheck,
   X,
   PanelLeftOpen,
-  Activity,
-  FileText,
-  UserCheck,
 } from "lucide-react";
 import { ipc, type AgentChatMessage } from "../lib/ipc";
 import { summarizeAgentProfile } from "../lib/agentPreview";
@@ -21,6 +13,7 @@ import PlatformHub from "../components/PlatformHub";
 import ProfilePanel from "../components/ProfilePanel";
 import AgentPanel from "../components/AgentPanel";
 import AnalyticsPanel from "../components/AnalyticsPanel";
+import ReviewCard, { Panel } from "../components/ReviewCard";
 import HeroStage from "../components/workbench/HeroStage";
 import ProfileBentoCard from "../components/workbench/ProfileBentoCard";
 import { useWorkbenchWheel } from "../hooks/useWorkbenchWheel";
@@ -31,12 +24,7 @@ import SettingsModal, { type SettingsTab } from "../components/SettingsModal";
 import Sidebar, { type NavItem } from "../components/Sidebar";
 import { useRunStore, useT } from "../store";
 
-import {
-  extractFallbackProfile,
-  formatJobLine,
-  asRecord,
-  asString,
-} from "../lib/dashboardHelpers";
+import { extractFallbackProfile } from "../lib/dashboardHelpers";
 
 export default function Dashboard() {
   const t = useT();
@@ -731,61 +719,4 @@ export default function Dashboard() {
   );
 }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="panel">
-      <div className="panel-title">{title}</div>
-      {children}
-    </section>
-  );
-}
 
-
-function ReviewCard({
-  pending,
-  busy,
-  onDecision,
-  t,
-}: {
-  pending: Record<string, unknown>;
-  busy: boolean;
-  onDecision: (decision: "send" | "skip" | "quit") => void;
-  t: (key: string, vars?: Record<string, string | number>) => string;
-}) {
-  const job = asRecord(pending.job);
-  const details = asRecord(pending.details);
-  return (
-    <div className="space-y-3">
-      <div className="review-title">{formatJobLine(job)}</div>
-      <InfoLine label={t("review.matchInfo")} value={asString(details.reason, "-")} />
-      <InfoLine label={t("review.jobDetail")} value={asString(pending.job_description, "-")} />
-      <div>
-        <span className="field-label">{t("review.greeting")}</span>
-        <pre className="review-greeting">{asString(pending.greeting, "")}</pre>
-      </div>
-      <div className="grid grid-cols-3 gap-2">
-        <button className="btn-primary flex items-center justify-center gap-1.5" onClick={() => onDecision("send")} disabled={busy}>
-          <Check className="h-3.5 w-3.5" />
-          <span>{t("button.send")}</span>
-        </button>
-        <button className="btn-secondary flex items-center justify-center gap-1.5" onClick={() => onDecision("skip")} disabled={busy}>
-          <SkipForward className="h-3.5 w-3.5" />
-          <span>{t("button.skip")}</span>
-        </button>
-        <button className="btn-ghost flex items-center justify-center gap-1.5" onClick={() => onDecision("quit")} disabled={busy}>
-          <Square className="h-3.5 w-3.5" />
-          <span>{t("button.stop")}</span>
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function InfoLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid grid-cols-[84px_minmax(0,1fr)] gap-2 border-b border-[var(--grid)] pb-2">
-      <span className="text-xs text-[var(--muted-fg)]">{label}</span>
-      <span className="break-words text-[var(--ink)]">{value}</span>
-    </div>
-  );
-}
