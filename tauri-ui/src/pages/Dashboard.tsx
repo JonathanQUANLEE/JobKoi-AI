@@ -21,6 +21,8 @@ import {
   X,
   Bot,
   User,
+  PanelLeftOpen,
+  PanelLeftClose,
 } from "lucide-react";
 import { ipc, type AgentChatMessage, type LoadedProfile, type ProfileSummary, type ProgressEvent, type RunConfig } from "../lib/ipc";
 import { summarizeAgentProfile } from "../lib/agentPreview";
@@ -281,6 +283,36 @@ export default function Dashboard() {
   const [activeNav, setActiveNav] = useState<NavItem>("workbench");
   const [consoleTab, setConsoleTab] = useState<"pipeline" | "events" | "logs">("pipeline");
   const [drawerTab, setDrawerTab] = useState<DrawerTab>("rules");
+
+  // 侧边栏展开/收起状态（支持本地持久化与 Ctrl+B 快捷键，高保真复刻 WorkBuddy 侧边栏伸缩）
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("jobhunter_sidebar_collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("jobhunter_sidebar_collapsed", String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === "b" || e.key === "B")) {
+        e.preventDefault();
+        toggleSidebar();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Hunt Now 风格 AI 顾问对话终端状态
   const [heroInputText, setHeroInputText] = useState("");
@@ -699,7 +731,7 @@ export default function Dashboard() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[var(--paper)] text-[var(--ink)]">
-      {/* 左侧独立导航栏 */}
+      {/* 左侧独立导航栏（支持展开/折叠伸缩） */}
       <Sidebar
         activeNav={activeNav}
         onSelectNav={setActiveNav}
@@ -714,13 +746,41 @@ export default function Dashboard() {
         onSetLang={setLang}
         dailySentCount={stats.sent}
         dailyLimit={dailyLimit}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebar}
       />
 
-      {/* 右侧主工作流区域 */}
-      <div className="flex flex-1 flex-col h-screen overflow-hidden bg-[var(--paper)]">
+      {/* 右侧主工作流区域（根据侧边栏展开/收起平滑响应式伸缩） */}
+      <div className="flex flex-1 flex-col h-screen overflow-hidden bg-[var(--paper)] transition-all duration-300 ease-in-out">
         {/* 顶部极简导航面包屑与状态 */}
-        <header className="h-12 shrink-0 border-b border-[var(--grid)] bg-[#141210]/90 backdrop-blur-md px-6 flex items-center justify-between z-20">
+        <header className="h-12 shrink-0 border-b border-[var(--grid)] bg-[#141210]/90 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between z-20 transition-all duration-300">
           <div className="flex items-center gap-2 text-xs">
+            {/* WorkBuddy 风格：展开侧边栏入口按钮（第一张照片高保真实现） */}
+            {sidebarCollapsed && (
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                className="group flex items-center gap-1.5 rounded-lg border border-[var(--grid)] bg-[#1c1917] hover:bg-[#25201d] hover:border-amber-500/50 px-2.5 py-1 text-xs font-medium text-stone-200 hover:text-amber-400 shadow-sm transition-all cursor-pointer animate-in fade-in duration-200 mr-1.5"
+                title="展开侧边栏 (Ctrl+B)"
+              >
+                <PanelLeftOpen className="h-3.5 w-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
+                <span className="font-medium">展开侧边栏</span>
+                <span className="hidden md:inline-block text-[10px] text-stone-500 font-mono ml-0.5">Ctrl+B</span>
+              </button>
+            )}
+
+            {!sidebarCollapsed && (
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                className="flex h-7 w-7 items-center justify-center rounded-lg border border-transparent hover:border-[var(--grid)] text-stone-400 hover:text-stone-200 hover:bg-[#1c1917] transition-all cursor-pointer mr-1"
+                title="收起侧边栏 (Ctrl+B)"
+                aria-label="收起侧边栏"
+              >
+                <PanelLeftClose className="h-3.5 w-3.5" />
+              </button>
+            )}
+
             <span className="text-[var(--muted-fg)]">JobHunter</span>
             <span className="text-stone-600">/</span>
             <span className="font-semibold text-[var(--ink)]">
@@ -778,13 +838,26 @@ export default function Dashboard() {
           {/* TAB 1: 巡航工作台 (Hunt Now https://www.hunt.now/ 风格高保真复刻)           */}
           {/* ========================================================================= */}
           {activeNav === "workbench" && (
-            <div className="space-y-6 max-w-6xl mx-auto">
+            <div
+              className={`space-y-6 mx-auto transition-all duration-300 ease-in-out ${
+                sidebarCollapsed ? "max-w-[1360px] px-1 sm:px-3" : "max-w-6xl"
+              }`}
+            >
               {/* Hunt Now 氛围外壳：网格底纹 + 环形暖光辉 + 居中 Hero */}
               <section className="relative isolate overflow-hidden rounded-3xl px-5 pb-8 pt-[3vh] sm:px-6">
                 <div className="dot-pattern absolute inset-0 -z-10" aria-hidden="true" />
-                <div className="fx-glow" aria-hidden="true" />
+                <div
+                  className={`fx-glow transition-all duration-300 ${
+                    sidebarCollapsed ? "w-[68rem]" : "w-[58rem]"
+                  }`}
+                  aria-hidden="true"
+                />
 
-                <div className="mx-auto flex max-w-5xl flex-col items-center text-center">
+                <div
+                  className={`mx-auto flex flex-col items-center text-center transition-all duration-300 ease-in-out ${
+                    sidebarCollapsed ? "max-w-6xl" : "max-w-5xl"
+                  }`}
+                >
                   {/* 顶部 AI 顾问就绪徽章 */}
                   <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-950/40 px-4 py-1.5 text-xs text-emerald-300 backdrop-blur shadow-sm">
                     <span className="relative flex size-2">
@@ -845,7 +918,11 @@ export default function Dashboard() {
                   </div>
 
                   {/* Hunt Now 标志性 Beam Composer (宽屏大气光轨 AI 顾问对话舱) */}
-                  <div className="relative mt-8 w-full max-w-5xl">
+                  <div
+                    className={`relative mt-8 w-full transition-all duration-300 ease-in-out ${
+                      sidebarCollapsed ? "max-w-5xl" : "max-w-4xl xl:max-w-5xl"
+                    }`}
+                  >
                     <div
                       className="absolute -inset-x-8 -inset-y-4 -z-10 rounded-[2.5rem] bg-gradient-to-b from-[#ff5722]/15 via-transparent to-transparent blur-2xl"
                       aria-hidden="true"
@@ -1086,7 +1163,11 @@ export default function Dashboard() {
               </section>
 
               {/* 平台直连支持（Hunt Now 品牌风格矩阵） */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div
+                className={`grid grid-cols-2 sm:grid-cols-4 transition-all duration-300 ease-in-out ${
+                  sidebarCollapsed ? "gap-3.5" : "gap-2.5"
+                }`}
+              >
                 {PLATFORM_SHORTCUTS.map((p) => {
                   const isSelected = selectedPlatform === p.id;
                   return (
@@ -1143,7 +1224,11 @@ export default function Dashboard() {
               )}
 
               {/* 下半部分双栏便当盒 */}
-              <div className="grid gap-5 lg:grid-cols-2">
+              <div
+                className={`grid transition-all duration-300 ease-in-out ${
+                  sidebarCollapsed ? "grid-cols-1 lg:grid-cols-2 gap-6" : "grid-cols-1 lg:grid-cols-2 gap-5"
+                }`}
+              >
                 <div className="space-y-5">
                   {/* 当前求职意向与策略摘要卡片 */}
                   <section className="panel">
