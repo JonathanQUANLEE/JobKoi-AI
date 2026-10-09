@@ -42,6 +42,7 @@ export default function ResumePanel({ onExtractProfile, onGoToProfile }: ResumeP
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [previewContent, setPreviewContent] = useState<ResumeContentResult | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   
   // 安全的本地 Blob URL（彻底解决 WebView2 下 Data URI 无法预览 PDF / 图片截断问题）
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
@@ -87,6 +88,7 @@ export default function ResumePanel({ onExtractProfile, onGoToProfile }: ResumeP
   useEffect(() => {
     if (!selectedName) {
       setPreviewContent(null);
+      setPreviewError(null);
       if (blobUrl) {
         URL.revokeObjectURL(blobUrl);
         setBlobUrl(null);
@@ -96,11 +98,13 @@ export default function ResumePanel({ onExtractProfile, onGoToProfile }: ResumeP
 
     let active = true;
     setPreviewLoading(true);
+    setPreviewError(null);
 
     ipc.getResumeContent(selectedName)
       .then((data) => {
         if (!active) return;
         setPreviewContent(data);
+        setPreviewError(null);
 
         // 将 Base64 转换为本地 Blob URL，彻底解决 WebView2 预览限制
         if (data.data_url) {
@@ -115,6 +119,7 @@ export default function ResumePanel({ onExtractProfile, onGoToProfile }: ResumeP
         if (!active) return;
         console.error(`无法获取简历内容 [${selectedName}]:`, err);
         setPreviewContent(null);
+        setPreviewError(String(err));
         setMessage({ type: "error", text: `无法预览 ${selectedName}（${String(err)}）` });
       })
       .finally(() => {
@@ -531,13 +536,13 @@ export default function ResumePanel({ onExtractProfile, onGoToProfile }: ResumeP
                       <RefreshCw className="size-7 animate-spin text-amber-500/60 mb-2.5" />
                       <span>正在加载并转换本地渲染数据流...</span>
                     </div>
-                  ) : previewContent && blobUrl ? (
+                  ) : previewContent ? (
                     <div className="w-full flex-1">
                       {/* 1. PDF 预览 (支持 WebView2 内置 PDF 插件渲染) */}
                       {previewContent.ext === ".pdf" && (
                         <div className="w-full h-full flex flex-col">
                           <iframe
-                            src={blobUrl}
+                            src={blobUrl || previewContent.data_url}
                             className="w-full h-[620px] rounded-xl border border-stone-800 bg-[#2b2b2b] shadow-inner"
                             title={previewContent.name}
                           />
@@ -579,7 +584,7 @@ export default function ResumePanel({ onExtractProfile, onGoToProfile }: ResumeP
                           </div>
 
                           <img
-                            src={blobUrl}
+                            src={blobUrl || previewContent.data_url}
                             alt={previewContent.name}
                             style={{ transform: `scale(${imgZoom})`, transformOrigin: "center top" }}
                             className="max-w-full max-h-[580px] object-contain rounded-lg shadow-2xl border border-stone-800 transition-transform duration-150"
@@ -591,7 +596,7 @@ export default function ResumePanel({ onExtractProfile, onGoToProfile }: ResumeP
                         </div>
                       )}
 
-                      {/* 3. Word 文档提取预览 (.docx) */}
+                      {/* 3. Word 文档提取预览 (.docx / .doc) */}
                       {["docx", "doc"].includes(previewContent.ext.replace(".", "")) && (
                         <div className="rounded-xl border border-stone-800/80 bg-[#191715] p-6 max-h-[620px] overflow-y-auto leading-relaxed text-stone-200">
                           <div className="flex items-center justify-between pb-3 mb-4 border-b border-stone-800 text-xs">
@@ -619,8 +624,26 @@ export default function ResumePanel({ onExtractProfile, onGoToProfile }: ResumeP
                     </div>
                   ) : (
                     <div className="text-center py-20 text-stone-500 text-xs">
-                      <AlertCircle className="mx-auto size-8 text-stone-600 mb-2" />
-                      <p>未能成功解析该文件内容，请检查文件是否损坏</p>
+                      <AlertCircle className="mx-auto size-8 text-amber-500/80 mb-2" />
+                      <p className="text-stone-300 font-medium mb-1">未能成功读取该文件内容</p>
+                      {previewError && (
+                        <p className="text-[11px] text-red-400/90 font-mono mt-1 max-w-md mx-auto bg-stone-900/80 p-2.5 rounded-lg border border-stone-800 break-all">
+                          {previewError}
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (selectedName) {
+                            const n = selectedName;
+                            setSelectedName(null);
+                            setTimeout(() => setSelectedName(n), 30);
+                          }
+                        }}
+                        className="mt-3 px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs cursor-pointer transition-colors"
+                      >
+                        重试加载
+                      </button>
                     </div>
                   )}
                 </div>
@@ -681,7 +704,8 @@ function readFileAsBase64(file: File): Promise<string> {
 function createBlobUrl(dataUrl: string, mime: string): string {
   try {
     const b64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
-    const binary = atob(b64);
+    const cleanB64 = b64.replace(/\s+/g, "");
+    const binary = atob(cleanB64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) {
       bytes[i] = binary.charCodeAt(i);
