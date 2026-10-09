@@ -235,7 +235,8 @@ export default function Dashboard() {
                     path: "",
                     data: heroChat.heroProfileResult,
                   });
-                  setActiveNav("profile");
+                  heroChat.resetHeroChat();
+                  wheel.scrollToRingStage(2, true);
                 }
               }}
               label={profileForm.label}
@@ -280,7 +281,7 @@ export default function Dashboard() {
               onGoToResumes={() => setActiveNav("resumes")}
               onBackToWorkbench={() => {
                 setActiveNav("workbench");
-                wheel.scrollToRingStage(0);
+                wheel.scrollToRingStage(2, true);
               }}
               onSaveConfig={profileForm.saveConfig}
               lang={lang}

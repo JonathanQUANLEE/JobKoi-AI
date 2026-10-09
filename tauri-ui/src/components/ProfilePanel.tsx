@@ -122,7 +122,7 @@ export default function ProfilePanel({
             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-[var(--grid)] hover:border-stone-700 bg-[#1c1917] hover:bg-[#25201d] text-xs font-medium text-stone-300 hover:text-white transition-all cursor-pointer"
           >
             <ArrowLeft className="size-3.5 text-stone-400" />
-            <span>{isEn ? "Back to Workbench" : "返回工作台"}</span>
+            <span>{isEn ? "Back to Job Profile" : "返回求职画像"}</span>
           </button>
           <button
             type="button"
@@ -436,6 +436,14 @@ export default function ProfilePanel({
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onBackToWorkbench}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-[var(--grid)] hover:border-stone-700 bg-[#1c1917] hover:bg-[#25201d] text-xs font-medium text-stone-300 hover:text-white transition-all cursor-pointer"
+          >
+            <ArrowLeft className="size-3.5 text-stone-400" />
+            <span>{isEn ? "Back to Job Profile" : "返回求职画像"}</span>
+          </button>
           <button
             type="button"
             onClick={handleSave}
