@@ -595,8 +595,7 @@ const PaperCrumple = forwardRef<PaperCrumpleHandle, PaperCrumpleProps>(({
   className = '',
 
   style
-
-}) => {
+}, ref) => {
 
   const pathCache = useRef(null);
 
