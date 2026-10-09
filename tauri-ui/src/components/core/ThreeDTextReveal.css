@@ -1,0 +1,60 @@
+.three-d-text-reveal-container {
+  perspective: 1200px;
+  perspective-origin: 50% 50%;
+  transform-style: preserve-3d;
+  position: relative;
+  width: 100%;
+  overflow: visible;
+  user-select: none;
+}
+
+.three-d-text-cylinder {
+  position: relative;
+  width: 100%;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.three-d-text-item {
+  position: absolute;
+  inset-x: 0;
+  margin: auto;
+  width: 100%;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  will-change: transform, opacity, filter;
+  transition: color 0.3s ease, text-shadow 0.3s ease;
+}
+
+.three-d-text-item.active {
+  color: #ffffff;
+  text-shadow: 0 0 24px rgba(255, 87, 34, 0.4), 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.three-d-text-item.inactive {
+  color: rgba(214, 211, 209, 0.45);
+  text-shadow: none;
+}
+
+/* 向下滚动鼠标微动特效 */
+@keyframes scrollWheelAnim {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  60% {
+    transform: translateY(8px);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(14px);
+    opacity: 0;
+  }
+}
+
+.animate-scroll-wheel {
+  animation: scrollWheelAnim 1.8s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
