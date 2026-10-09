@@ -1,0 +1,121 @@
+.option-wheel {
+  --ow-text-color: #a8a29e;
+  --ow-active-color: #fef3c7;
+  --ow-font-size: 0.95rem;
+  --ow-inset: 20px;
+
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  outline: none;
+}
+
+.option-wheel--dragging {
+  cursor: grabbing;
+}
+
+/* Each option is absolutely centered, then offset along the curve by the
+   rAF loop through transform/opacity/filter, so everything stays in step. */
+.option-wheel__item {
+  position: absolute;
+  top: 50%;
+  left: var(--ow-inset);
+  white-space: nowrap;
+  font-size: var(--ow-font-size);
+  line-height: 1.2;
+  font-weight: 400;
+  transform-origin: left center;
+  cursor: pointer;
+  will-change: transform, opacity, filter;
+  color: color-mix(in srgb, var(--ow-active-color) calc(var(--ow-p, 0) * 100%), var(--ow-text-color));
+  transition: color 0.15s ease;
+  max-width: calc(100% - var(--ow-inset));
+}
+
+.option-wheel--right .option-wheel__item {
+  left: auto;
+  right: var(--ow-inset);
+  transform-origin: right center;
+  text-align: right;
+}
+
+.option-wheel__content {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 0.75rem;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid transparent;
+  background-color: transparent;
+}
+
+.option-wheel--right .option-wheel__content {
+  justify-content: flex-end;
+}
+
+.option-wheel__item:hover .option-wheel__content {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.option-wheel__item--selected .option-wheel__content {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(217, 119, 6, 0.08) 100%);
+  border-color: rgba(245, 158, 11, 0.38);
+  box-shadow: 0 4px 16px -2px rgba(245, 158, 11, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  font-weight: 600;
+}
+
+.option-wheel__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.option-wheel__item--selected .option-wheel__icon {
+  color: #fbbf24;
+  transform: scale(1.1);
+}
+
+.option-wheel__label {
+  letter-spacing: -0.01em;
+}
+
+.option-wheel__item--selected .option-wheel__label {
+  color: #fef3c7;
+}
+
+.option-wheel__badge {
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+/* Subtle top and bottom gradient fades to enhance the 3D cylindrical depth */
+.option-wheel::before,
+.option-wheel::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 28%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.option-wheel::before {
+  top: 0;
+  background: linear-gradient(to bottom, rgba(18, 16, 14, 0.95) 0%, rgba(18, 16, 14, 0) 100%);
+}
+
+.option-wheel::after {
+  bottom: 0;
+  background: linear-gradient(to top, rgba(18, 16, 14, 0.95) 0%, rgba(18, 16, 14, 0) 100%);
+}
