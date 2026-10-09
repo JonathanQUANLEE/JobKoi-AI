@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
 import { Check, SkipForward, Square } from "lucide-react";
 import { asRecord, asString, formatJobLine } from "../lib/dashboardHelpers";
+import { MagicCard } from "./core/MagicBento";
 
 export function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="panel">
+    <MagicCard className="panel" glowColor="245, 158, 11" enableTilt={false} enableBorderGlow={true}>
       <div className="panel-title">{title}</div>
       {children}
-    </section>
+    </MagicCard>
   );
 }
 

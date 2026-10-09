@@ -9,6 +9,14 @@ import {
 } from "lucide-react";
 import { ipc, type PlatformItem } from "../lib/ipc";
 import type { Lang } from "../lib/i18n";
+import { MagicCard } from "./core/MagicBento";
+
+const PLATFORM_GLOW_MAP: Record<string, string> = {
+  boss: "0, 190, 189",     // BOSS 直聘 翡翠青
+  liepin: "255, 112, 51",  // 猎聘 活力橙
+  job51: "255, 80, 0",     // 前程无忧 赤焰橙
+  zhaopin: "25, 118, 210", // 智联招聘 商务蓝
+};
 
 interface PlatformHubProps {
   selectedPlatform: string;
@@ -105,7 +113,14 @@ export default function PlatformHub({
   }
 
   return (
-    <section className={`panel mb-6 ${className}`} style={style}>
+    <MagicCard
+      className={`panel mb-6 ${className}`}
+      style={style}
+      glowColor="245, 158, 11"
+      enableTilt={false}
+      enableStars={false}
+      enableBorderGlow={true}
+    >
       {/* 头部：专业 SaaS 矩阵 */}
       <div className="flex items-center justify-between pb-4 mb-4 border-b border-stone-800">
         <div className="flex items-center gap-3">
@@ -134,16 +149,22 @@ export default function PlatformHub({
         </button>
       </div>
 
-      {/* 便当盒卡片网格（Bento Grid） */}
+      {/* 便当盒卡片网格（Bento Grid 装备专属品牌荧光粒子效果） */}
       <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
         {platforms.map((p) => {
           const isSelected = selectedPlatform === p.id;
+          const cardGlow = PLATFORM_GLOW_MAP[p.id] || "245, 158, 11";
           return (
-            <div
+            <MagicCard
               key={p.id}
               data-platform-card="true"
               onClick={() => p.is_supported && onSelectPlatform(p.id)}
-              className={`group relative flex flex-col justify-between rounded-2xl border p-4.5 transition-all select-none ${
+              glowColor={cardGlow}
+              enableTilt={p.is_supported}
+              enableStars={p.is_supported}
+              clickEffect={p.is_supported}
+              particleCount={8}
+              className={`group relative flex flex-col justify-between rounded-2xl border p-4.5 select-none ${
                 isSelected
                   ? "border-amber-500/70 bg-gradient-to-b from-stone-900 to-amber-950/20 shadow-lg shadow-amber-500/5 ring-1 ring-amber-500/30"
                   : p.is_supported
@@ -226,7 +247,7 @@ export default function PlatformHub({
                   </button>
                 )}
               </div>
-            </div>
+            </MagicCard>
           );
         })}
       </div>
@@ -242,6 +263,6 @@ export default function PlatformHub({
           </button>
         </div>
       )}
-    </section>
+    </MagicCard>
   );
 }

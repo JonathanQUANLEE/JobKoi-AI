@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import type { Mode } from "../../lib/profileForm";
 import type { Lang } from "../../lib/i18n";
+import { MagicCard } from "../core/MagicBento";
 
 interface ProfileBentoCardProps {
   profileRef: RefObject<HTMLDivElement>;
@@ -67,7 +68,13 @@ export default function ProfileBentoCard({
           : undefined
       }
     >
-      <div className="spatial-card-glow w-full rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm space-y-4">
+      <MagicCard
+        className="spatial-card-glow w-full rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm space-y-4"
+        glowColor="245, 158, 11"
+        enableTilt={false}
+        enableStars={false}
+        enableBorderGlow={true}
+      >
         <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[var(--grid)]">
           <div className="flex items-center gap-2">
             <UserCheck className="h-4 w-4 text-amber-400" />
@@ -99,12 +106,17 @@ export default function ProfileBentoCard({
           </div>
         </div>
 
-        {/* 3列信息便当盒 */}
+        {/* 3列信息便当盒 (装备 React Bits MagicBento 光效与星芒粒子) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 text-xs">
           {/* 1. 意向岗位与地域 */}
-          <div
+          <MagicCard
             data-bento-col="0"
-            className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5 flex flex-col justify-between transition-transform duration-75"
+            className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5 flex flex-col justify-between"
+            glowColor="245, 158, 11"
+            enableTilt={true}
+            enableStars={true}
+            clickEffect={true}
+            particleCount={8}
           >
             <div>
               <div className="text-[10px] text-stone-500 font-medium">
@@ -119,12 +131,17 @@ export default function ProfileBentoCard({
               <span className="text-stone-600">·</span>
               <span>{lang === "en" ? "Edu: " : "学历: "}<strong className="text-stone-200">{educationValues || (lang === "en" ? "Any" : "不限")}</strong></span>
             </div>
-          </div>
+          </MagicCard>
 
           {/* 2. 默认投递简历 */}
-          <div
+          <MagicCard
             data-bento-col="1"
-            className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5 flex flex-col justify-between transition-transform duration-75"
+            className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5 flex flex-col justify-between"
+            glowColor="245, 158, 11"
+            enableTilt={true}
+            enableStars={true}
+            clickEffect={true}
+            particleCount={8}
           >
             <div>
               <div className="flex items-center justify-between text-[10px] text-stone-500 font-medium">
@@ -147,12 +164,17 @@ export default function ProfileBentoCard({
             <div className="mt-2 text-[11px] text-stone-400">
               {lang === "en" ? "Default attachment · Ready" : "默认附件 · 已准备就绪"}
             </div>
-          </div>
+          </MagicCard>
 
           {/* 3. 拟人风控与模式 */}
-          <div
+          <MagicCard
             data-bento-col="2"
-            className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5 flex flex-col justify-between transition-transform duration-75"
+            className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5 flex flex-col justify-between"
+            glowColor="245, 158, 11"
+            enableTilt={true}
+            enableStars={true}
+            clickEffect={true}
+            particleCount={8}
           >
             <div>
               <div className="text-[10px] text-stone-500 font-medium">
@@ -175,7 +197,7 @@ export default function ProfileBentoCard({
               <span className="text-stone-600">·</span>
               <span>{lang === "en" ? "Quota: " : "每日限额: "}<strong>{dailyLimit}{lang === "en" ? "" : "次"}</strong></span>
             </div>
-          </div>
+          </MagicCard>
         </div>
 
         {/* 巡航运行中动态条 */}
@@ -201,7 +223,7 @@ export default function ProfileBentoCard({
             </button>
           </div>
         )}
-      </div>
+      </MagicCard>
     </div>
   );
 }

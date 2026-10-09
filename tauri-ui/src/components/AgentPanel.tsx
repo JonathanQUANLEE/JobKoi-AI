@@ -14,6 +14,7 @@ import {
 import { ipc, type AgentToolResult } from "../lib/ipc";
 import { summarizeAgentProfile } from "../lib/agentPreview";
 import { useRunStore, useT } from "../store";
+import { MagicCard } from "./core/MagicBento";
 
 /**
  * 智能助手面板（借鉴 Hunt Now 搜索交互与 Beam Composer 设计）。
@@ -151,7 +152,7 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
   const modeLabel = typeof modeKey === "string" ? t(`mode.${modeKey}.title`) : "-";
 
   return (
-    <section className="panel">
+    <MagicCard className="panel" glowColor="245, 158, 11" enableTilt={false}>
       {/* 头部：专业 SaaS 极简风格 */}
       <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-stone-800">
         <div className="flex items-center gap-2.5">
@@ -187,7 +188,12 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
 
       {/* 若未配置大模型，展示轻量温和提醒卡片 */}
       {!llmConfig?.configured && (
-        <div className="mb-3.5 flex items-center justify-between rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-300">
+        <MagicCard
+          className="mb-3.5 flex items-center justify-between rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-300"
+          glowColor="245, 158, 11"
+          enableTilt={false}
+          particleCount={4}
+        >
           <div className="flex items-center gap-2">
             <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />
             <span>尚未配置大模型 API Key，配置后即可解锁自然语言生成投递画像功能</span>
@@ -199,7 +205,7 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
           >
             前往设置
           </button>
-        </div>
+        </MagicCard>
       )}
 
       {/* 对话区 */}
@@ -266,7 +272,12 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
 
       {/* 工具调用结果卡片 */}
       {toolResult && (
-        <div className="mb-3.5 rounded-2xl border border-stone-700 bg-stone-900 p-4 shadow-sm">
+        <MagicCard
+          className="mb-3.5 rounded-2xl border border-stone-700 bg-stone-900 p-4 shadow-sm"
+          glowColor="16, 185, 129"
+          enableTilt={false}
+          particleCount={6}
+        >
           <div className="flex items-center gap-2 mb-2 text-xs font-semibold text-emerald-400">
             <Terminal className="h-3.5 w-3.5" />
             <span>工具调用返回 ({toolResult.type})</span>
@@ -274,12 +285,17 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
           <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-xl bg-black/70 p-3 font-mono text-xs leading-relaxed text-stone-300 border border-stone-800">
             {toolResult.text}
           </pre>
-        </div>
+        </MagicCard>
       )}
 
       {/* 一键投递确认按钮 */}
       {prepareRunReady && (
-        <div className="mb-3.5 flex items-center justify-between gap-3 rounded-2xl border border-emerald-500/40 bg-emerald-950/20 p-3.5 shadow-sm">
+        <MagicCard
+          className="mb-3.5 flex items-center justify-between gap-3 rounded-2xl border border-emerald-500/40 bg-emerald-950/20 p-3.5 shadow-sm"
+          glowColor="16, 185, 129"
+          enableTilt={false}
+          particleCount={6}
+        >
           <span className="text-xs text-emerald-300">
             {t("agent.prepareRun.hint")}
           </span>
@@ -293,12 +309,17 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
           >
             {t("agent.prepareRun.button")}
           </button>
-        </div>
+        </MagicCard>
       )}
 
       {/* 结构化画像预览卡片 */}
       {preview && (
-        <div className="mb-3.5 rounded-2xl border border-amber-500/40 bg-gradient-to-b from-stone-900 to-amber-950/20 p-4 shadow-sm">
+        <MagicCard
+          className="mb-3.5 rounded-2xl border border-amber-500/40 bg-gradient-to-b from-stone-900 to-amber-950/20 p-4 shadow-sm"
+          glowColor="245, 158, 11"
+          enableTilt={false}
+          particleCount={8}
+        >
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
               <Target className="h-3.5 w-3.5 text-amber-400" />
@@ -345,11 +366,16 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
               </>
             )}
           </button>
-        </div>
+        </MagicCard>
       )}
 
       {/* 借鉴 Hunt Now "Beam Composer" 设计的输入框组件 */}
-      <div className="rounded-2xl border border-stone-700/80 bg-stone-900/90 p-2.5 shadow-sm focus-within:border-amber-500/60 focus-within:ring-2 focus-within:ring-amber-500/10 transition-all">
+      <MagicCard
+        className="rounded-2xl border border-stone-700/80 bg-stone-900/90 p-2.5 shadow-sm focus-within:border-amber-500/60 focus-within:ring-2 focus-within:ring-amber-500/10 transition-all"
+        glowColor="245, 158, 11"
+        enableTilt={false}
+        particleCount={4}
+      >
         <textarea
           rows={2}
           className="w-full resize-none bg-transparent px-2.5 pt-1 text-sm text-stone-100 outline-none placeholder:text-stone-500 leading-relaxed"
@@ -396,9 +422,9 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
             </button>
           </div>
         </div>
-      </div>
+      </MagicCard>
 
       {message && <p className="text-xs text-amber-400 mt-2">{message}</p>}
-    </section>
+    </MagicCard>
   );
 }

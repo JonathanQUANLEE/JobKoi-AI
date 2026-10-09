@@ -14,6 +14,7 @@ import PipelineVisualizer from "./PipelineVisualizer";
 import { formatEventForDisplay } from "../lib/eventDisplay";
 import { formatLocalTime } from "../lib/dashboardHelpers";
 import { useT } from "../store";
+import { MagicCard } from "./core/MagicBento";
 
 interface AnalyticsPanelProps {
   mode: Mode;
@@ -82,7 +83,11 @@ export default function AnalyticsPanel({
       />
 
       {/* 模式选择与巡航控制卡片 */}
-      <div className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm">
+      <MagicCard
+        glowColor="245, 158, 11"
+        className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm"
+        enableTilt={false}
+      >
         <div className="flex items-center justify-between pb-3 border-b border-[var(--grid)]">
           <span className="text-xs font-bold uppercase tracking-wider text-[var(--ink)]">巡航模式选择与控制</span>
           <span className={running ? "status-on" : "status-idle"}>{statusText}</span>
@@ -119,10 +124,14 @@ export default function AnalyticsPanel({
         )}
 
         {message && <div className="mt-3 message-line">{message}</div>}
-      </div>
+      </MagicCard>
 
       {/* 实时事件流水与终端运行日志 */}
-      <div className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm">
+      <MagicCard
+        glowColor="59, 130, 246"
+        className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm"
+        enableTilt={false}
+      >
         <div className="flex items-center justify-between pb-3 border-b border-[var(--grid)]">
           <div className="flex gap-4 text-xs font-bold">
             <button
@@ -169,7 +178,7 @@ export default function AnalyticsPanel({
             <pre ref={logRef} className="log-box h-96">{logs.length ? logs.join("\n") : t("empty.logs")}</pre>
           )}
         </div>
-      </div>
+      </MagicCard>
     </div>
   );
 }
