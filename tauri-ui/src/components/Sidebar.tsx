@@ -15,10 +15,11 @@ import {
   Languages,
   MoreVertical,
   PanelLeftClose,
+  UserCheck,
 } from "lucide-react";
 import { LANGS, type Lang } from "../lib/i18n";
 
-export type NavItem = "workbench" | "platforms" | "resumes" | "copilot" | "analytics";
+export type NavItem = "workbench" | "profile" | "resumes" | "copilot" | "analytics";
 
 interface SidebarProps {
   activeNav: NavItem;
@@ -176,11 +177,11 @@ export default function Sidebar({
         />
 
         <NavItemButton
-          active={activeNav === "platforms"}
-          onClick={() => onSelectNav("platforms")}
-          icon={<Globe className="h-4 w-4 shrink-0" />}
-          label="招聘平台中心"
-          badge="4平台"
+          active={activeNav === "profile"}
+          onClick={() => onSelectNav("profile")}
+          icon={<UserCheck className="h-4 w-4 shrink-0" />}
+          label="求职画像"
+          badge="已同步"
           badgeColor="bg-amber-500/15 text-amber-400 border border-amber-500/30"
         />
 

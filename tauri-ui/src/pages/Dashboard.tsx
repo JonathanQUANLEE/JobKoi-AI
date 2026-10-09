@@ -24,6 +24,8 @@ import {
   PanelLeftOpen,
   Activity,
   FileText,
+  UserCheck,
+  CheckCircle2,
 } from "lucide-react";
 import { ipc, type AgentChatMessage, type LoadedProfile, type ProfileSummary, type ProgressEvent, type RunConfig } from "../lib/ipc";
 import { summarizeAgentProfile } from "../lib/agentPreview";
@@ -31,6 +33,7 @@ import { optionLabel, type Lang } from "../lib/i18n";
 import { TextEffect } from "@/components/core/text-effect";
 import ResumePanel from "../components/ResumePanel";
 import PlatformHub from "../components/PlatformHub";
+import ProfilePanel from "../components/ProfilePanel";
 import AgentPanel from "../components/AgentPanel";
 import SettingsDrawer, { type DrawerTab } from "../components/SettingsDrawer";
 import PipelineVisualizer from "../components/PipelineVisualizer";
@@ -797,7 +800,7 @@ export default function Dashboard() {
             <span className="text-stone-600">/</span>
             <span className="font-semibold text-[var(--ink)]">
               {activeNav === "workbench" && "巡航工作台"}
-              {activeNav === "platforms" && "招聘平台中心"}
+              {activeNav === "profile" && "求职画像"}
               {activeNav === "resumes" && "简历资料库"}
               {activeNav === "copilot" && "AI 意向助理"}
               {activeNav === "analytics" && "投递数据与日志"}
@@ -851,12 +854,12 @@ export default function Dashboard() {
           {/* ========================================================================= */}
           {activeNav === "workbench" && (
             <div
-              className={`space-y-6 mx-auto transition-all duration-300 ease-in-out ${
-                sidebarCollapsed ? "max-w-[1360px] px-1 sm:px-3" : "max-w-6xl"
+              className={`space-y-8 mx-auto w-full transition-all duration-300 ease-in-out ${
+                sidebarCollapsed ? "max-w-5xl xl:max-w-6xl px-2 sm:px-4" : "max-w-5xl px-1 sm:px-2"
               }`}
             >
               {/* Hunt Now 氛围外壳：网格底纹 + 环形暖光辉 + 居中 Hero */}
-              <section className="relative isolate overflow-hidden rounded-3xl px-5 pb-8 pt-[3vh] sm:px-6">
+              <section className="relative isolate overflow-hidden rounded-3xl px-5 sm:px-8 py-8 sm:py-12 my-2 sm:my-3 border border-stone-850/60 shadow-xl shadow-black/20">
                 <div className="dot-pattern absolute inset-0 -z-10" aria-hidden="true" />
                 <div
                   className={`fx-glow transition-all duration-300 ${
@@ -1132,38 +1135,26 @@ export default function Dashboard() {
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                hydrateFromProfile({ name: profileName, path: "", data: heroProfileResult });
-                                startRun();
-                              }}
-                              disabled={running}
-                              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-[#ff5722] to-amber-500 text-stone-950 font-bold text-xs shadow-md hover:opacity-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                            >
-                              <Zap className="size-3.5 fill-current" />
-                              <span>一键采纳此画像并立即启动巡航</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                hydrateFromProfile({ name: profileName, path: "", data: heroProfileResult });
-                                handleOpenSettings("rules");
-                              }}
-                              className="px-3 py-2.5 rounded-xl border border-stone-800 bg-stone-900/90 text-stone-300 text-xs hover:text-white hover:border-stone-700 transition-all flex items-center gap-1 cursor-pointer"
-                            >
-                              <SlidersHorizontal className="size-3.5 text-amber-400" />
-                              <span>微调规则</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setActiveNav("copilot")}
-                              className="px-3 py-2.5 rounded-xl border border-stone-800 bg-stone-900/90 text-stone-300 text-xs hover:text-white hover:border-stone-700 transition-all flex items-center gap-1 cursor-pointer"
-                            >
-                              <Bot className="size-3.5" />
-                              <span>深度对话</span>
-                            </button>
+                          {/* 确认提示行与跳转按钮（根据大模型交互逻辑定制） */}
+                          <div className="mt-3.5 pt-3 border-t border-stone-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-2 text-xs text-stone-300">
+                              <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
+                              <span>请核对上方 AI 提炼的求职信息是否准确。确认后可前往「求职画像」进行详细配置或手动微调。</span>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  hydrateFromProfile({ name: profileName, path: "", data: heroProfileResult });
+                                  setActiveNav("profile");
+                                }}
+                                className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold text-xs shadow-md shadow-amber-500/15 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                              >
+                                <UserCheck className="size-3.5" />
+                                <span>确认信息正确，前往求职画像 →</span>
+                              </button>
+                            </div>
                           </div>
                         </div>
                       )}
@@ -1172,54 +1163,11 @@ export default function Dashboard() {
                 </div>
               </section>
 
-              {/* 平台直连支持（Hunt Now 品牌风格矩阵） */}
-              <div
-                className={`grid grid-cols-2 sm:grid-cols-4 transition-all duration-300 ease-in-out ${
-                  sidebarCollapsed ? "gap-3.5" : "gap-2.5"
-                }`}
-              >
-                {PLATFORM_SHORTCUTS.map((p) => {
-                  const isSelected = selectedPlatform === p.id;
-                  return (
-                    <div
-                      key={p.id}
-                      onClick={() => p.ready && setSelectedPlatform(p.id)}
-                      className={`group flex items-center justify-between rounded-xl border px-3.5 py-3 transition-all ${
-                        isSelected
-                          ? "border-amber-500/60 bg-amber-500/10 shadow-sm ring-1 ring-amber-500/20 cursor-pointer"
-                          : p.ready
-                          ? "border-[var(--grid)] bg-[var(--panel-2)] hover:border-stone-700 hover:bg-[var(--panel-hover)] cursor-pointer"
-                          : "border-stone-850/50 bg-stone-950/20 opacity-45 cursor-not-allowed"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span
-                          className="size-2 rounded-full shrink-0"
-                          style={{ backgroundColor: p.color }}
-                        />
-                        <div className="min-w-0">
-                          <div className="text-xs font-semibold text-[var(--ink)] truncate">
-                            {p.name}
-                          </div>
-                          <div className="text-[10px] text-[var(--muted-fg)] truncate">
-                            {p.desc}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="shrink-0 text-[10px]">
-                        {isSelected ? (
-                          <span className="text-amber-400 font-bold">主选</span>
-                        ) : p.ready ? (
-                          <span className="text-emerald-400">就绪</span>
-                        ) : (
-                          <span className="text-stone-500">筹备</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              {/* 招聘平台四大矩阵（已整合至主页面：平台切换 + 扫码登录/凭证刷新窗口） */}
+              <PlatformHub
+                selectedPlatform={selectedPlatform}
+                onSelectPlatform={setSelectedPlatform}
+              />
 
               {/* 人工审核卡片（如果处于 review 暂停中） */}
               {reviewPending && (
@@ -1233,35 +1181,35 @@ export default function Dashboard() {
                 </Panel>
               )}
 
-              {/* 求职画像与系统就绪状态总览（极简专业 SaaS 质感） */}
+              {/* 求职画像总览（展示当前目标城市、岗位等，点击可跳转详细配置与手动修改） */}
               <div className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[var(--grid)]">
                   <div className="flex items-center gap-2">
-                    <Briefcase className="h-4 w-4 text-amber-400" />
+                    <UserCheck className="h-4 w-4 text-amber-400" />
                     <span className="text-xs font-bold uppercase tracking-wider text-[var(--ink)]">
-                      求职策略与就绪画像
+                      求职画像
                     </span>
                     <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
-                      就绪中
+                      已同步
                     </span>
                   </div>
 
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => handleOpenSettings("rules")}
-                      className="text-xs flex items-center gap-1.5 py-1 px-2.5 rounded-lg border border-[var(--grid)] hover:border-amber-500/40 text-stone-300 hover:text-amber-400 bg-[#1c1917] transition-all cursor-pointer"
+                      onClick={() => setActiveNav("profile")}
+                      className="text-xs flex items-center gap-1.5 py-1 px-3 rounded-lg border border-amber-500/40 hover:border-amber-500/70 text-amber-400 hover:text-amber-300 bg-amber-500/10 transition-all cursor-pointer font-medium"
                     >
-                      <SlidersHorizontal className="h-3.5 w-3.5 text-amber-400" />
-                      <span>配置投递风控</span>
+                      <UserCheck className="h-3.5 w-3.5" />
+                      <span>查看 / 手动修改求职画像 →</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveNav("analytics")}
-                      className="text-xs flex items-center gap-1.5 py-1 px-2.5 rounded-lg border border-amber-500/30 hover:border-amber-500/60 text-amber-400 hover:text-amber-300 bg-amber-500/10 transition-all cursor-pointer font-medium"
+                      className="text-xs flex items-center gap-1.5 py-1 px-2.5 rounded-lg border border-[var(--grid)] hover:border-stone-700 text-stone-300 hover:text-white bg-[#1c1917] transition-all cursor-pointer"
                     >
-                      <Activity className="h-3.5 w-3.5" />
-                      <span>查看投递大屏 & 管线 →</span>
+                      <Activity className="h-3.5 w-3.5 text-stone-400" />
+                      <span>投递大屏 & 管线 →</span>
                     </button>
                   </div>
                 </div>
@@ -1353,14 +1301,33 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TAB 2: 招聘平台中心 */}
-          {activeNav === "platforms" && (
-            <div className="max-w-5xl mx-auto space-y-5">
-              <PlatformHub
-                selectedPlatform={selectedPlatform}
-                onSelectPlatform={setSelectedPlatform}
-              />
-            </div>
+          {/* TAB 2: 求职画像 (原“招聘平台中心”位置已升级为专属求职画像微调面板) */}
+          {activeNav === "profile" && (
+            <ProfilePanel
+              label={label}
+              setLabel={setLabel}
+              cityValues={cityValues}
+              setCityValues={setCityValues}
+              educationValues={educationValues}
+              setEducationValues={setEducationValues}
+              rule={rule}
+              setRule={setRule}
+              delayMin={delayMin}
+              setDelayMin={setDelayMin}
+              delayMax={delayMax}
+              setDelayMax={setDelayMax}
+              dailyLimit={dailyLimit}
+              setDailyLimit={setDailyLimit}
+              filterPolicy={filterPolicy}
+              setFilterPolicy={setFilterPolicy}
+              dryRun={dryRun}
+              setDryRun={setDryRun}
+              defaultResumeName={defaultResumeName}
+              onGoToResumes={() => setActiveNav("resumes")}
+              onBackToWorkbench={() => setActiveNav("workbench")}
+              onSaveConfig={saveConfig}
+              busy={busy}
+            />
           )}
 
           {/* TAB 3: 简历资料库 */}
