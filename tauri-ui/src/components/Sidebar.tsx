@@ -56,7 +56,14 @@ export default function Sidebar({
   onToggleCollapse,
 }: SidebarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [collapseRipple, setCollapseRipple] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const handleCollapseClick = () => {
+    setCollapseRipple(true);
+    setTimeout(() => setCollapseRipple(false), 750);
+    onToggleCollapse?.();
+  };
 
   // 点击外部关闭弹出的设置菜单 (WorkBuddy 交互)
   useEffect(() => {
@@ -75,47 +82,58 @@ export default function Sidebar({
 
   return (
     <aside
-      className={`relative flex h-screen shrink-0 flex-col border-r border-[var(--grid)] bg-[#141210] select-none z-30 transition-all duration-300 ease-in-out ${
+      className={`relative flex h-screen shrink-0 flex-col border-r border-[var(--grid)] bg-[#141210] select-none z-30 water-fluid-sidebar overflow-hidden ${
         collapsed
-          ? "w-0 opacity-0 -translate-x-full border-r-0 pointer-events-none overflow-hidden"
-          : "w-60 opacity-100 translate-x-0"
+          ? "w-0 opacity-0 -translate-x-6 blur-[2px] border-r-0 pointer-events-none"
+          : "w-60 opacity-100 translate-x-0 blur-0"
       }`}
     >
-      {/* 顶部 Logo 与品牌标 + 收起侧边栏按钮 */}
-      <div className="flex items-center justify-between px-3.5 py-3.5 border-b border-[var(--grid)]/60">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="relative shrink-0">
-            <img
-              src="/favicon.png"
-              alt="JobHunter Bunny"
-              className="h-8 w-8 rounded-xl object-cover shadow-md shadow-pink-500/20 border border-pink-400/40"
-            />
-            <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-[#141210]" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <span className="font-bold text-sm tracking-tight text-[var(--ink)]">JobHunter</span>
-              <span className="rounded bg-pink-500/15 border border-pink-500/30 px-1 py-0.2 text-[9px] font-semibold text-pink-300">
-                Offer版
-              </span>
-            </div>
-            <p className="text-[10px] text-[var(--muted-fg)] truncate">全平台智能求职助手</p>
-          </div>
-        </div>
+      {/* 水面张力微光光晕边线 */}
+      <div className="absolute top-0 right-0 bottom-0 w-[1px] bg-gradient-to-b from-transparent via-amber-400/25 via-cyan-400/20 to-transparent pointer-events-none z-40" />
 
-        {/* 收起侧边栏按钮 (WorkBuddy 标配) */}
-        {onToggleCollapse && (
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            className="flex h-7 w-7 items-center justify-center rounded-lg border border-transparent hover:border-[var(--grid)] text-stone-400 hover:text-stone-200 hover:bg-[#1f1c19] transition-all ml-1 shrink-0 cursor-pointer"
-            title="收起侧边栏 (Ctrl+B)"
-            aria-label="收起侧边栏"
-          >
-            <PanelLeftClose className="h-4 w-4" />
-          </button>
-        )}
-      </div>
+      {/* 内部固定宽度容器，防止侧边栏展开/收起时内容被挤压变形 */}
+      <div className="w-60 min-w-[15rem] h-full flex flex-col justify-between overflow-hidden">
+        {/* 顶部 Logo 与品牌标 + 收起侧边栏按钮 */}
+        <div className="flex items-center justify-between px-3.5 py-3.5 border-b border-[var(--grid)]/60 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="relative shrink-0">
+              <img
+                src="/favicon.png"
+                alt="JobHunter Bunny"
+                className="h-8 w-8 rounded-xl object-cover shadow-md shadow-pink-500/20 border border-pink-400/40"
+              />
+              <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-[#141210]" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-sm tracking-tight text-[var(--ink)]">JobHunter</span>
+                <span className="rounded bg-pink-500/15 border border-pink-500/30 px-1 py-0.2 text-[9px] font-semibold text-pink-300">
+                  Offer版
+                </span>
+              </div>
+              <p className="text-[10px] text-[var(--muted-fg)] truncate">全平台智能求职助手</p>
+            </div>
+          </div>
+
+          {/* 收起侧边栏按钮 (雨滴滴入河面同心水波涟漪动效) */}
+          {onToggleCollapse && (
+            <button
+              type="button"
+              onClick={handleCollapseClick}
+              className="relative flex h-7 w-7 items-center justify-center rounded-lg border border-transparent hover:border-[var(--grid)] text-stone-400 hover:text-stone-200 hover:bg-[#1f1c19] active:scale-95 transition-all ml-1 shrink-0 cursor-pointer overflow-visible"
+              title="收起侧边栏 (Ctrl+B)"
+              aria-label="收起侧边栏"
+            >
+              {collapseRipple && (
+                <span className="pointer-events-none absolute inset-0 -m-3 flex items-center justify-center">
+                  <span className="absolute h-8 w-8 rounded-full border border-amber-400/80 bg-amber-400/20 animate-raindrop-1" />
+                  <span className="absolute h-8 w-8 rounded-full border border-cyan-400/70 bg-cyan-400/15 animate-raindrop-2" />
+                </span>
+              )}
+              <PanelLeftClose className="h-4 w-4 relative z-10" />
+            </button>
+          )}
+        </div>
 
       {/* 快捷主按钮：启动 / 停止巡航 */}
       <div className="p-3">
@@ -351,6 +369,7 @@ export default function Sidebar({
             <MoreVertical className="h-4 w-4" />
           </div>
         </button>
+      </div>
       </div>
     </aside>
   );

@@ -22,7 +22,6 @@ import {
   Bot,
   User,
   PanelLeftOpen,
-  PanelLeftClose,
 } from "lucide-react";
 import { ipc, type AgentChatMessage, type LoadedProfile, type ProfileSummary, type ProgressEvent, type RunConfig } from "../lib/ipc";
 import { summarizeAgentProfile } from "../lib/agentPreview";
@@ -301,6 +300,14 @@ export default function Dashboard() {
       } catch {}
       return next;
     });
+  };
+
+  const [expandRipple, setExpandRipple] = useState(false);
+
+  const handleExpandSidebar = () => {
+    setExpandRipple(true);
+    setTimeout(() => setExpandRipple(false), 750);
+    toggleSidebar();
   };
 
   useEffect(() => {
@@ -750,34 +757,28 @@ export default function Dashboard() {
         onToggleCollapse={toggleSidebar}
       />
 
-      {/* 右侧主工作流区域（根据侧边栏展开/收起平滑响应式伸缩） */}
-      <div className="flex flex-1 flex-col h-screen overflow-hidden bg-[var(--paper)] transition-all duration-300 ease-in-out">
+      {/* 右侧主工作流区域（水波流体缓动，跟随侧边栏伸缩丝滑平移） */}
+      <div className="flex flex-1 flex-col h-screen overflow-hidden bg-[var(--paper)] water-fluid-sidebar">
         {/* 顶部极简导航面包屑与状态 */}
-        <header className="h-12 shrink-0 border-b border-[var(--grid)] bg-[#141210]/90 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between z-20 transition-all duration-300">
+        <header className="h-12 shrink-0 border-b border-[var(--grid)] bg-[#141210]/90 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between z-20">
           <div className="flex items-center gap-2 text-xs">
-            {/* WorkBuddy 风格：展开侧边栏入口按钮（第一张照片高保真实现） */}
+            {/* WorkBuddy 风格：展开侧边栏入口按钮（侧边栏收起时呈现，如水露凝结浮现；点击触发雨滴涟漪） */}
             {sidebarCollapsed && (
               <button
                 type="button"
-                onClick={toggleSidebar}
-                className="group flex items-center gap-1.5 rounded-lg border border-[var(--grid)] bg-[#1c1917] hover:bg-[#25201d] hover:border-amber-500/50 px-2.5 py-1 text-xs font-medium text-stone-200 hover:text-amber-400 shadow-sm transition-all cursor-pointer animate-in fade-in duration-200 mr-1.5"
+                onClick={handleExpandSidebar}
+                className="relative group flex items-center gap-1.5 rounded-lg border border-[var(--grid)] bg-[#1c1917] hover:bg-[#25201d] hover:border-amber-500/50 px-2.5 py-1 text-xs font-medium text-stone-200 hover:text-amber-400 shadow-sm transition-all cursor-pointer water-drop-btn mr-1.5 overflow-visible"
                 title="展开侧边栏 (Ctrl+B)"
               >
-                <PanelLeftOpen className="h-3.5 w-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
-                <span className="font-medium">展开侧边栏</span>
-                <span className="hidden md:inline-block text-[10px] text-stone-500 font-mono ml-0.5">Ctrl+B</span>
-              </button>
-            )}
-
-            {!sidebarCollapsed && (
-              <button
-                type="button"
-                onClick={toggleSidebar}
-                className="flex h-7 w-7 items-center justify-center rounded-lg border border-transparent hover:border-[var(--grid)] text-stone-400 hover:text-stone-200 hover:bg-[#1c1917] transition-all cursor-pointer mr-1"
-                title="收起侧边栏 (Ctrl+B)"
-                aria-label="收起侧边栏"
-              >
-                <PanelLeftClose className="h-3.5 w-3.5" />
+                {expandRipple && (
+                  <span className="pointer-events-none absolute inset-0 -m-3 flex items-center justify-center">
+                    <span className="absolute h-8 w-8 rounded-full border border-amber-400/80 bg-amber-400/20 animate-raindrop-1" />
+                    <span className="absolute h-8 w-8 rounded-full border border-cyan-400/70 bg-cyan-400/15 animate-raindrop-2" />
+                  </span>
+                )}
+                <PanelLeftOpen className="h-3.5 w-3.5 text-amber-400 group-hover:scale-110 transition-transform relative z-10" />
+                <span className="font-medium relative z-10">展开侧边栏</span>
+                <span className="hidden md:inline-block text-[10px] text-stone-500 font-mono ml-0.5 relative z-10">Ctrl+B</span>
               </button>
             )}
 
