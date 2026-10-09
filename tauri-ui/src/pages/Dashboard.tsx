@@ -22,6 +22,8 @@ import {
   Bot,
   User,
   PanelLeftOpen,
+  Activity,
+  FileText,
 } from "lucide-react";
 import { ipc, type AgentChatMessage, type LoadedProfile, type ProfileSummary, type ProgressEvent, type RunConfig } from "../lib/ipc";
 import { summarizeAgentProfile } from "../lib/agentPreview";
@@ -282,6 +284,15 @@ export default function Dashboard() {
   const [activeNav, setActiveNav] = useState<NavItem>("workbench");
   const [consoleTab, setConsoleTab] = useState<"pipeline" | "events" | "logs">("pipeline");
   const [drawerTab, setDrawerTab] = useState<DrawerTab>("rules");
+  const [defaultResumeName, setDefaultResumeName] = useState<string>("李象泉-后端-AI-Agent开发-2027届.docx");
+
+  // 同步当前默认简历名称，供工作台策略卡片实时展示
+  useEffect(() => {
+    ipc.listResumes().then((res) => {
+      const def = res.resumes.find((r) => r.is_default) || res.resumes[0];
+      if (def) setDefaultResumeName(def.name);
+    }).catch(() => {});
+  }, [activeNav]);
 
   // 侧边栏展开/收起状态（支持本地持久化与 Ctrl+B 快捷键，高保真复刻 WorkBuddy 侧边栏伸缩）
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
@@ -1222,125 +1233,122 @@ export default function Dashboard() {
                 </Panel>
               )}
 
-              {/* 下半部分双栏便当盒 */}
-              <div
-                className={`grid transition-all duration-300 ease-in-out ${
-                  sidebarCollapsed ? "grid-cols-1 lg:grid-cols-2 gap-6" : "grid-cols-1 lg:grid-cols-2 gap-5"
-                }`}
-              >
-                <div className="space-y-5">
-                  {/* 当前求职意向与策略摘要卡片 */}
-                  <section className="panel">
-                    <div className="panel-title">
-                      <span className="flex items-center gap-2">
-                        <Briefcase className="h-4 w-4 text-[var(--accent)]" />
-                        <span>求职意向与规则摘要</span>
-                      </span>
-                      <button
-                        type="button"
-                        className="btn-ghost text-xs flex items-center gap-1.5 py-1 px-2.5 rounded-lg border border-[var(--grid)] hover:border-amber-500/40 text-amber-400"
-                        onClick={() => handleOpenSettings("rules")}
-                      >
-                        <SlidersHorizontal className="h-3.5 w-3.5" />
-                        <span>详细规则 (Drawer)</span>
-                      </button>
-                    </div>
+              {/* 求职画像与系统就绪状态总览（极简专业 SaaS 质感） */}
+              <div className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[var(--grid)]">
+                  <div className="flex items-center gap-2">
+                    <Briefcase className="h-4 w-4 text-amber-400" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-[var(--ink)]">
+                      求职策略与就绪画像
+                    </span>
+                    <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                      就绪中
+                    </span>
+                  </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2 text-xs">
-                      <div className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5">
-                        <div className="text-[10px] text-[var(--muted-fg)]">目标岗位与地区</div>
-                        <div className="text-sm font-bold text-[var(--ink)] mt-0.5">{label || "未指定岗位"}</div>
-                        <div className="text-[11px] text-stone-400 mt-1">
-                          城市: <span className="text-[var(--ink)]">{cityValues || "全国/不限"}</span> · 学历: <span className="text-[var(--ink)]">{educationValues || "不限"}</span>
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5">
-                        <div className="text-[10px] text-[var(--muted-fg)]">关键词过滤约束</div>
-                        <div className="text-[11px] text-emerald-400 truncate mt-0.5 font-medium">
-                          必含: {rule.requiredKeywords || "无特定必含词"}
-                        </div>
-                        <div className="text-[11px] text-red-400 truncate mt-1">
-                          黑名单排除: {rule.excludeKeywords || "无"}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--muted-fg)] pt-2.5 border-t border-[var(--grid)]">
-                      <div className="flex items-center gap-2">
-                        <ShieldCheck className="h-3.5 w-3.5 text-amber-400" />
-                        <span>拟人延时: <strong className="text-[var(--ink)]">{delayMin}~{delayMax}s</strong></span>
-                        <span>· 每日保护限额: <strong className="text-[var(--ink)]">{dailyLimit} 次</strong></span>
-                      </div>
-                      <button
-                        type="button"
-                        className="text-amber-400 hover:text-amber-300 underline underline-offset-2"
-                        onClick={() => handleOpenSettings("rules")}
-                      >
-                        展开全部规则
-                      </button>
-                    </div>
-                  </section>
-
-                  <ResumePanel />
-                </div>
-
-                <div className="space-y-5">
-                  {/* 可视化自动化执行管线 */}
-                  <PipelineVisualizer
-                    running={running}
-                    currentIndex={currentIndex}
-                    mode={mode}
-                    dryRun={dryRun}
-                    delayMin={delayMin}
-                    delayMax={delayMax}
-                    stats={stats}
-                    currentJob={currentJob}
-                    latestSent={latestSent}
-                    latestSkip={latestSkip}
-                    onOpenDrawer={() => handleOpenSettings("policy")}
-                  />
-
-                  {/* 模式选择与巡航控制卡片 */}
-                  <div className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm">
-                    <div className="flex items-center justify-between pb-3 border-b border-[var(--grid)]">
-                      <span className="text-xs font-bold uppercase tracking-wider text-[var(--ink)]">巡航模式选择</span>
-                      <span className={running ? "status-on" : "status-idle"}>{statusText}</span>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2 mt-4">
-                      <ModeButton
-                        active={mode === "scan"}
-                        icon={<Search className="h-4 w-4" />}
-                        title={t("mode.scan.title")}
-                        desc={t("mode.scan.desc")}
-                        onClick={() => setMode("scan")}
-                      />
-                      <ModeButton
-                        active={mode === "review"}
-                        icon={<Eye className="h-4 w-4" />}
-                        title={t("mode.review.title")}
-                        desc={t("mode.review.desc")}
-                        onClick={() => setMode("review")}
-                      />
-                      <ModeButton
-                        active={mode === "auto"}
-                        icon={<Zap className="h-4 w-4" />}
-                        title={t("mode.auto.title")}
-                        desc={t("mode.auto.desc")}
-                        onClick={() => setMode("auto")}
-                      />
-                    </div>
-
-                    {mode === "auto" && (
-                      <div className="risk-box mt-3">
-                        {t("warning.auto")}
-                      </div>
-                    )}
-
-                    {message && <div className="mt-3 message-line">{message}</div>}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenSettings("rules")}
+                      className="text-xs flex items-center gap-1.5 py-1 px-2.5 rounded-lg border border-[var(--grid)] hover:border-amber-500/40 text-stone-300 hover:text-amber-400 bg-[#1c1917] transition-all cursor-pointer"
+                    >
+                      <SlidersHorizontal className="h-3.5 w-3.5 text-amber-400" />
+                      <span>配置投递风控</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveNav("analytics")}
+                      className="text-xs flex items-center gap-1.5 py-1 px-2.5 rounded-lg border border-amber-500/30 hover:border-amber-500/60 text-amber-400 hover:text-amber-300 bg-amber-500/10 transition-all cursor-pointer font-medium"
+                    >
+                      <Activity className="h-3.5 w-3.5" />
+                      <span>查看投递大屏 & 管线 →</span>
+                    </button>
                   </div>
                 </div>
+
+                {/* 3列信息便当盒 */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 text-xs">
+                  {/* 1. 意向岗位与地域 */}
+                  <div className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5 flex flex-col justify-between">
+                    <div>
+                      <div className="text-[10px] text-stone-500 font-medium">目标岗位与城市</div>
+                      <div className="text-sm font-bold text-[var(--ink)] mt-1 truncate">
+                        {label || "未指定岗位"}
+                      </div>
+                    </div>
+                    <div className="mt-2 text-[11px] text-stone-400 flex items-center gap-2">
+                      <span>城市: <strong className="text-stone-200">{cityValues || "全国/不限"}</strong></span>
+                      <span className="text-stone-600">·</span>
+                      <span>学历: <strong className="text-stone-200">{educationValues || "不限"}</strong></span>
+                    </div>
+                  </div>
+
+                  {/* 2. 默认投递简历 */}
+                  <div className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between text-[10px] text-stone-500 font-medium">
+                        <span>当前绑定简历</span>
+                        <button
+                          type="button"
+                          onClick={() => setActiveNav("resumes")}
+                          className="text-amber-400 hover:underline hover:text-amber-300 cursor-pointer"
+                        >
+                          管理简历库 →
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1 min-w-0">
+                        <FileText className="h-4 w-4 text-amber-400 shrink-0" />
+                        <span className="text-xs font-semibold text-stone-200 truncate" title={defaultResumeName}>
+                          {defaultResumeName || "李象泉-后端-AI-Agent开发-2027届.docx"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-2 text-[11px] text-stone-400">
+                      默认附件 · 已准备就绪
+                    </div>
+                  </div>
+
+                  {/* 3. 拟人风控与模式 */}
+                  <div className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5 flex flex-col justify-between">
+                    <div>
+                      <div className="text-[10px] text-stone-500 font-medium">巡航模式与安全保护</div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="rounded bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 text-[11px] font-bold text-amber-300">
+                          {mode === "auto" ? "全自动投递" : mode === "review" ? "逐条人工确认" : "仅扫描测试"}
+                        </span>
+                        {dryRun && (
+                          <span className="rounded bg-cyan-500/15 border border-cyan-500/30 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-300">
+                            演练模式
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-2 text-[11px] text-stone-400 flex items-center gap-1.5">
+                      <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                      <span>拟人间歇: <strong>{delayMin}~{delayMax}s</strong></span>
+                      <span className="text-stone-600">·</span>
+                      <span>每日限额: <strong>{dailyLimit}次</strong></span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 巡航运行中动态条 */}
+                {running && (
+                  <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-2.5 text-xs text-emerald-300 animate-pulse">
+                    <div className="flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-emerald-400 animate-ping" />
+                      <span className="font-semibold">自动巡航正在运行中...</span>
+                      <span className="text-stone-400">已扫描: {stats.scanned} · 成功投递: {stats.sent} · 跳过: {stats.skipped}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveNav("analytics")}
+                      className="font-bold underline hover:text-emerald-200 cursor-pointer"
+                    >
+                      进入大屏监控实时状态 →
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1374,9 +1382,65 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TAB 5: 投递数据与日志 */}
+          {/* TAB 5: 投递数据与自动化执行大屏 */}
           {activeNav === "analytics" && (
             <div className="max-w-5xl mx-auto space-y-5">
+              {/* 可视化自动化执行管线大屏 */}
+              <PipelineVisualizer
+                running={running}
+                currentIndex={currentIndex}
+                mode={mode}
+                dryRun={dryRun}
+                delayMin={delayMin}
+                delayMax={delayMax}
+                stats={stats}
+                currentJob={currentJob}
+                latestSent={latestSent}
+                latestSkip={latestSkip}
+                onOpenDrawer={() => handleOpenSettings("policy")}
+              />
+
+              {/* 模式选择与巡航控制卡片 */}
+              <div className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm">
+                <div className="flex items-center justify-between pb-3 border-b border-[var(--grid)]">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[var(--ink)]">巡航模式选择与控制</span>
+                  <span className={running ? "status-on" : "status-idle"}>{statusText}</span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 mt-4">
+                  <ModeButton
+                    active={mode === "scan"}
+                    icon={<Search className="h-4 w-4" />}
+                    title={t("mode.scan.title")}
+                    desc={t("mode.scan.desc")}
+                    onClick={() => setMode("scan")}
+                  />
+                  <ModeButton
+                    active={mode === "review"}
+                    icon={<Eye className="h-4 w-4" />}
+                    title={t("mode.review.title")}
+                    desc={t("mode.review.desc")}
+                    onClick={() => setMode("review")}
+                  />
+                  <ModeButton
+                    active={mode === "auto"}
+                    icon={<Zap className="h-4 w-4" />}
+                    title={t("mode.auto.title")}
+                    desc={t("mode.auto.desc")}
+                    onClick={() => setMode("auto")}
+                  />
+                </div>
+
+                {mode === "auto" && (
+                  <div className="risk-box mt-3">
+                    {t("warning.auto")}
+                  </div>
+                )}
+
+                {message && <div className="mt-3 message-line">{message}</div>}
+              </div>
+
+              {/* 实时事件流水与终端运行日志 */}
               <div className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm">
                 <div className="flex items-center justify-between pb-3 border-b border-[var(--grid)]">
                   <div className="flex gap-4 text-xs font-bold">
