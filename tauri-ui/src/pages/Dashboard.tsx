@@ -440,7 +440,8 @@ export default function Dashboard() {
     if (!heroStage || !hub || !profile) return;
 
     const vh = window.innerHeight || 800;
-    const stepY = Math.min(320, Math.max(220, vh * 0.35));
+    // 关键修复：增大垂直位移至至少 600px (或 vh * 0.8)，确保卡片完全移出黄金视界，杜绝上下卡片重叠！
+    const stepY = Math.max(600, vh * 0.8);
 
     const stages = [
       { el: heroStage, index: 0 },
@@ -453,6 +454,7 @@ export default function Dashboard() {
       const dist = Math.abs(d);
 
       if (dist < 0.02) {
+        // 当前卡片处于正中心展示
         el.style.transform = "none";
         el.style.opacity = "1";
         el.style.filter = "none";
@@ -463,30 +465,21 @@ export default function Dashboard() {
 
       if (d > 0) {
         // 位于中心下方（尚未滚入的未来站台）
-        // 关键视觉原则：首屏 (pos <= 0.05) 时，下方俩卡片绝对不显现 (opacity: 0)！
-        if (pos <= 0.05) {
+        // 如果用户在首屏 (pos <= 0.05) 或该卡片离中心较远 (d >= 0.85)，彻底隐藏 (opacity: 0)，绝不露脸重叠！
+        if (pos <= 0.05 || d >= 0.85) {
           el.style.opacity = "0";
-          el.style.transform = `perspective(1400px) translateY(${(stepY * 1.5).toFixed(1)}px) rotateX(24deg) scale(0.82)`;
+          el.style.transform = `perspective(1400px) translateY(${(stepY * 1.3).toFixed(1)}px) rotateX(24deg) scale(0.8)`;
           el.style.pointerEvents = "none";
           el.style.zIndex = "10";
           return;
         }
 
-        const startPos = index === 1 ? 0.05 : 0.45;
-        if (pos < startPos) {
-          el.style.opacity = "0";
-          el.style.transform = `perspective(1400px) translateY(${(stepY * 1.5).toFixed(1)}px) rotateX(24deg) scale(0.82)`;
-          el.style.pointerEvents = "none";
-          el.style.zIndex = "10";
-          return;
-        }
-
-        // 平滑从下方向中心飞入上升：entryProg 从 0 ➔ 1
-        const entryProg = Math.min(1, Math.max(0, (pos - startPos) / (index - startPos)));
-        const transY = stepY * (1.35 - 1.35 * Math.pow(entryProg, 0.88));
+        // 当 0 < d < 0.85 时，平滑从下方向中心飞入上升：entryProg 从 0 ➔ 1
+        const entryProg = Math.min(1, Math.max(0, (0.85 - d) / 0.85));
+        const transY = stepY * (1.2 - 1.2 * Math.pow(entryProg, 0.88));
         const rotX = 22 * (1 - entryProg);
         const scale = 0.82 + 0.18 * entryProg;
-        const opacity = 0.15 + 0.85 * Math.pow(entryProg, 1.15);
+        const opacity = entryProg;
         const blur = Math.min(2.5, 2 * (1 - entryProg));
 
         el.style.transform = `perspective(1400px) translateY(${transY.toFixed(1)}px) rotateX(${rotX.toFixed(1)}deg) scale(${scale.toFixed(4)})`;
@@ -495,19 +488,30 @@ export default function Dashboard() {
         el.style.pointerEvents = "none";
         el.style.zIndex = "15";
       } else {
-        // 位于中心上方（已被滑过的过去站台，向天穹后仰折入上圆弧：变透明形成环形柱面，绝不直接消失）
+        // 位于中心上方（已被滑过的过去站台，向上翻折折入天穹弧面）
         const pastProg = Math.min(1.8, Math.max(0, -d));
+        
+        // 关键修复：当 pastProg >= 0.8 时彻底透明淡出（opacity = 0），绝不挂在后方成为鬼影重叠！
+        if (pastProg >= 0.8) {
+          el.style.opacity = "0";
+          el.style.transform = `perspective(1400px) translateY(${(-stepY * 1.3).toFixed(1)}px) rotateX(-22deg) scale(0.7)`;
+          el.style.pointerEvents = "none";
+          el.style.zIndex = "10";
+          return;
+        }
+
+        const pastFade = 1 - pastProg / 0.8;
         const transY = -stepY * Math.pow(pastProg, 0.92);
         const rotX = -21 * Math.pow(pastProg, 0.85);
-        const scale = Math.max(0.74, 1 - 0.16 * pastProg);
-        const opacity = Math.max(0.24, 1 - 0.58 * pastProg);
-        const blur = Math.min(2.5, 1.8 * pastProg);
+        const scale = Math.max(0.74, 1 - 0.22 * pastProg);
+        const opacity = Math.max(0, pastFade * 0.55);
+        const blur = Math.min(2.5, 2 * pastProg);
 
         el.style.transform = `perspective(1400px) translateY(${transY.toFixed(1)}px) rotateX(${rotX.toFixed(1)}deg) scale(${scale.toFixed(4)})`;
         el.style.opacity = opacity.toFixed(3);
         el.style.filter = blur > 0.3 ? `blur(${blur.toFixed(1)}px)` : "none";
         el.style.pointerEvents = "none";
-        el.style.zIndex = pastProg < 0.9 ? "20" : "10";
+        el.style.zIndex = "10";
       }
     });
   }, [isChattingOrHasHistory]);
@@ -605,6 +609,17 @@ export default function Dashboard() {
       if (stageRafRef.current != null) cancelAnimationFrame(stageRafRef.current);
     };
   }, [isChattingOrHasHistory, applyStageTarget, renderStageTransforms]);
+
+  // 监听导航切换：无论何时切回工作台，强制彻底重置到首屏 Hero 站台 0，绝不残留或重叠
+  useEffect(() => {
+    if (activeNav === "workbench" && !isChattingOrHasHistory) {
+      stagePosRef.current = 0;
+      stageTargetRef.current = 0;
+      ringActiveIndexRef.current = 0;
+      setRingActiveIndex(0);
+      renderStageTransforms(0);
+    }
+  }, [activeNav, isChattingOrHasHistory, renderStageTransforms]);
 
   // Pointer 拖拽处理（支持鼠标光标按住上下拖动 3D 轮盘卡片）
   const handleStagePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -1156,7 +1171,11 @@ export default function Dashboard() {
                       ? "absolute inset-x-0 mx-auto w-full max-w-5xl px-2 sm:px-6 will-change-transform perspective-layer"
                       : "relative isolate overflow-visible w-full flex flex-col items-center justify-center py-6"
                   }
-                  style={!isChattingOrHasHistory ? { transformOrigin: "center center" } : undefined}
+                  style={
+                    !isChattingOrHasHistory
+                      ? { transformOrigin: "center center", opacity: 1, zIndex: 30, transform: "none" }
+                      : undefined
+                  }
                 >
                 <div
                   ref={heroInnerRef}
@@ -1473,7 +1492,17 @@ export default function Dashboard() {
                       ? "absolute inset-x-0 mx-auto w-full max-w-5xl px-2 sm:px-6 will-change-transform perspective-layer"
                       : "relative w-full"
                   }
-                  style={!isChattingOrHasHistory ? { transformOrigin: "center center" } : undefined}
+                  style={
+                    !isChattingOrHasHistory
+                      ? {
+                          transformOrigin: "center center",
+                          opacity: 0,
+                          pointerEvents: "none",
+                          zIndex: 10,
+                          transform: "perspective(1400px) translateY(120vh) rotateX(24deg) scale(0.8)",
+                        }
+                      : undefined
+                  }
                 >
                   <div className="spatial-card-glow rounded-3xl">
                     <PlatformHub
@@ -1508,7 +1537,17 @@ export default function Dashboard() {
                       ? "absolute inset-x-0 mx-auto w-full max-w-5xl px-2 sm:px-6 will-change-transform perspective-layer"
                       : "relative w-full"
                   }
-                  style={!isChattingOrHasHistory ? { transformOrigin: "center center" } : undefined}
+                  style={
+                    !isChattingOrHasHistory
+                      ? {
+                          transformOrigin: "center center",
+                          opacity: 0,
+                          pointerEvents: "none",
+                          zIndex: 10,
+                          transform: "perspective(1400px) translateY(120vh) rotateX(24deg) scale(0.8)",
+                        }
+                      : undefined
+                  }
                 >
                   <div className="spatial-card-glow w-full rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[var(--grid)]">
@@ -1720,7 +1759,10 @@ export default function Dashboard() {
               setDryRun={setDryRun}
               defaultResumeName={defaultResumeName}
               onGoToResumes={() => setActiveNav("resumes")}
-              onBackToWorkbench={() => setActiveNav("workbench")}
+              onBackToWorkbench={() => {
+                setActiveNav("workbench");
+                scrollToRingStage(0);
+              }}
               onSaveConfig={saveConfig}
               lang={lang}
               busy={busy}
