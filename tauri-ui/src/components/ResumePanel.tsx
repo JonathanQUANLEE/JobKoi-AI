@@ -35,6 +35,7 @@ import { MagicCard } from "./core/MagicBento";
 import EnergyCapsule from "./core/EnergyCapsule";
 import CardSwap, { Card, type CardSwapHandle } from "./core/CardSwap";
 import ResumeShredderModal from "./ResumeShredderModal";
+import ErrorBoundary from "./ErrorBoundary";
 
 interface ResumePanelProps {
   onExtractProfile?: (resumeName: string, text?: string) => void;
@@ -782,13 +783,18 @@ export default function ResumePanel({
 
       {/* 3D 纸张揉皱与碎纸机物理销毁弹窗 */}
       {shredTarget && (
-        <ResumeShredderModal
-          item={shredTarget}
-          content={contentsCache[shredTarget.name]}
-          blobUrl={blobCache[shredTarget.name]}
-          onClose={() => setShredTarget(null)}
-          onDeleted={handleDeleteConfirmed}
-        />
+        <ErrorBoundary
+          fallbackTitle="3D 碎纸机弹窗渲染异常"
+          onReset={() => setShredTarget(null)}
+        >
+          <ResumeShredderModal
+            item={shredTarget}
+            content={contentsCache[shredTarget.name]}
+            blobUrl={blobCache[shredTarget.name]}
+            onClose={() => setShredTarget(null)}
+            onDeleted={handleDeleteConfirmed}
+          />
+        </ErrorBoundary>
       )}
     </div>
   );

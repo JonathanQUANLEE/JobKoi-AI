@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   Trash2,
   X,
   RotateCcw,
   Sparkles,
   Flame,
+  FileText,
+  AlertTriangle,
 } from "lucide-react";
 import PaperCrumple, { type PaperCrumpleHandle } from "./core/PaperCrumple";
 import type { ResumeItem, ResumeContentResult } from "../lib/ipc";
@@ -37,112 +40,136 @@ function createDocumentTexture(
   imageSrc?: string
 ): Promise<string> {
   return new Promise((resolve) => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 720;
-    canvas.height = 960;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      resolve("");
-      return;
-    }
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 720;
+      canvas.height = 960;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve("");
+        return;
+      }
 
-    const ext = getFileExtension(item.name);
-    const isImg = isImageFile(item.name);
+      const ext = getFileExtension(item.name);
+      const isImg = isImageFile(item.name);
 
-    // 1. 底层米黄色道林纸质感底色
-    ctx.fillStyle = "#faf7f2";
-    ctx.fillRect(0, 0, 720, 960);
+      // 1. 底层米黄色道林纸质感底色
+      ctx.fillStyle = "#faf7f2";
+      ctx.fillRect(0, 0, 720, 960);
 
-    // 纸张微细浅格纹
-    ctx.strokeStyle = "rgba(0, 0, 0, 0.025)";
-    ctx.lineWidth = 1;
-    for (let y = 48; y < 960; y += 36) {
+      // 纸张微细浅格纹
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.025)";
+      ctx.lineWidth = 1;
+      for (let y = 48; y < 960; y += 36) {
+        ctx.beginPath();
+        ctx.moveTo(48, y);
+        ctx.lineTo(672, y);
+        ctx.stroke();
+      }
+
+      // 纸张边缘装订线与安全框
+      ctx.strokeStyle = "#e3dacd";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(36, 36, 648, 888);
+
+      // 顶部安全公文条
+      ctx.fillStyle = "#1e1b18";
+      ctx.fillRect(52, 52, 616, 52);
+
+      ctx.fillStyle = "#f59e0b";
+      ctx.font = "bold 16px sans-serif";
+      ctx.fillText("RESUME ARCHIVE // 简历与能力资料库", 72, 84);
+
+      ctx.fillStyle = "#9ca3af";
+      ctx.font = "bold 13px monospace";
+      ctx.fillText(ext ? ext.toUpperCase() : "DOC", 610, 84);
+
+      // 文档大标题
+      ctx.fillStyle = "#1c1917";
+      ctx.font = "bold 24px sans-serif";
+      const displayName =
+        item.name.length > 26 ? item.name.slice(0, 24) + "..." : item.name;
+      ctx.fillText(displayName, 64, 146);
+
+      // 文档元信息
+      ctx.fillStyle = "#78716c";
+      ctx.font = "14px sans-serif";
+      const sizeKb = (item.size / 1024).toFixed(1);
+      ctx.fillText(
+        `规格: ${sizeKb} KB   |   入库记录: ${item.mtime || "2026-10"}   |   密级: 核心资产`,
+        64,
+        176
+      );
+
+      // 装饰分隔红线
+      ctx.strokeStyle = "#ef4444";
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(48, y);
-      ctx.lineTo(672, y);
+      ctx.moveTo(64, 192);
+      ctx.lineTo(656, 192);
       ctx.stroke();
-    }
 
-    // 纸张边缘装订线与安全框
-    ctx.strokeStyle = "#e3dacd";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(36, 36, 648, 888);
-
-    // 顶部安全公文条
-    ctx.fillStyle = "#1e1b18";
-    ctx.fillRect(52, 52, 616, 52);
-
-    ctx.fillStyle = "#f59e0b";
-    ctx.font = "bold 16px sans-serif";
-    ctx.fillText("RESUME ARCHIVE // 简历与能力资料库", 72, 84);
-
-    ctx.fillStyle = "#9ca3af";
-    ctx.font = "bold 13px monospace";
-    ctx.fillText(ext ? ext.toUpperCase() : "DOC", 610, 84);
-
-    // 文档大标题
-    ctx.fillStyle = "#1c1917";
-    ctx.font = "bold 24px sans-serif";
-    const displayName =
-      item.name.length > 26 ? item.name.slice(0, 24) + "..." : item.name;
-    ctx.fillText(displayName, 64, 146);
-
-    // 文档元信息
-    ctx.fillStyle = "#78716c";
-    ctx.font = "14px sans-serif";
-    const sizeKb = (item.size / 1024).toFixed(1);
-    ctx.fillText(
-      `规格: ${sizeKb} KB   |   入库记录: ${item.mtime || "2026-10"}   |   密级: 核心资产`,
-      64,
-      176
-    );
-
-    // 装饰分隔红线
-    ctx.strokeStyle = "#ef4444";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(64, 192);
-    ctx.lineTo(656, 192);
-    ctx.stroke();
-
-    // 如果是纯图片且有原图
-    if (isImg && imageSrc) {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => {
-        try {
-          // 在公文中心优雅居中贴图
-          const drawW = 592;
-          const drawH = 560;
-          const imgAspect = img.width / img.height;
-          let w = drawW;
-          let h = drawW / imgAspect;
-          if (h > drawH) {
-            h = drawH;
-            w = drawH * imgAspect;
+      // 如果是纯图片且有原图
+      if (isImg && imageSrc) {
+        const img = new Image();
+        // 关键安全修复：本地 blob: 或 data: URI 绝不能设置 crossOrigin = anonymous，否则 Chromium 会拦截并污染 canvas
+        if (imageSrc.startsWith("http://") || imageSrc.startsWith("https://")) {
+          if (!imageSrc.includes("localhost") && !imageSrc.includes("127.0.0.1")) {
+            img.crossOrigin = "anonymous";
           }
-          const x = 64 + (drawW - w) / 2;
-          const y = 210 + (drawH - h) / 2;
-          ctx.drawImage(img, x, y, w, h);
-        } catch {
-          // ignore
         }
-        drawStampAndWatermark(ctx);
-        resolve(canvas.toDataURL("image/png"));
-      };
-      img.onerror = () => {
-        drawFallbackText(ctx, content, item);
-        drawStampAndWatermark(ctx);
-        resolve(canvas.toDataURL("image/png"));
-      };
-      img.src = imageSrc;
-      return;
-    }
+        img.onload = () => {
+          try {
+            const drawW = 592;
+            const drawH = 560;
+            const imgAspect = (img.width / img.height) || 1;
+            let w = drawW;
+            let h = drawW / imgAspect;
+            if (h > drawH) {
+              h = drawH;
+              w = drawH * imgAspect;
+            }
+            const x = 64 + (drawW - w) / 2;
+            const y = 210 + (drawH - h) / 2;
+            ctx.drawImage(img, x, y, w, h);
+            drawStampAndWatermark(ctx);
+            resolve(canvas.toDataURL("image/png"));
+          } catch (err) {
+            console.warn("Canvas export fallback:", err);
+            drawFallbackText(ctx, content, item);
+            drawStampAndWatermark(ctx);
+            try {
+              resolve(canvas.toDataURL("image/png"));
+            } catch {
+              resolve("");
+            }
+          }
+        };
+        img.onerror = () => {
+          drawFallbackText(ctx, content, item);
+          drawStampAndWatermark(ctx);
+          try {
+            resolve(canvas.toDataURL("image/png"));
+          } catch {
+            resolve("");
+          }
+        };
+        img.src = imageSrc;
+        return;
+      }
 
-    // 非图片（PDF、DOCX、TXT），提取真实文字渲染版面
-    drawFallbackText(ctx, content, item);
-    drawStampAndWatermark(ctx);
-    resolve(canvas.toDataURL("image/png"));
+      // 非图片（PDF、DOCX、TXT），提取真实文字渲染版面
+      drawFallbackText(ctx, content, item);
+      drawStampAndWatermark(ctx);
+      try {
+        resolve(canvas.toDataURL("image/png"));
+      } catch {
+        resolve("");
+      }
+    } catch (e) {
+      console.error("createDocumentTexture unexpected error:", e);
+      resolve("");
+    }
   });
 }
 
@@ -237,6 +264,7 @@ export default function ResumeShredderModal({
   onDeleted,
 }: ResumeShredderModalProps) {
   const [paperTextureUrl, setPaperTextureUrl] = useState<string>("");
+  const [paperError, setPaperError] = useState(false);
   const [isOverTrash, setIsOverTrash] = useState(false);
   const [isCrumpled, setIsCrumpled] = useState(false);
   const [isShredding, setIsShredding] = useState(false);
@@ -248,9 +276,16 @@ export default function ResumeShredderModal({
   // 1. 生成高分辨率纸张贴图
   useEffect(() => {
     let active = true;
-    createDocumentTexture(item, content, blobUrl).then((url) => {
-      if (active) setPaperTextureUrl(url);
-    });
+    createDocumentTexture(item, content, blobUrl)
+      .then((url) => {
+        if (active) {
+          setPaperTextureUrl(url);
+        }
+      })
+      .catch((err) => {
+        console.warn("createDocumentTexture error:", err);
+        if (active) setPaperError(true);
+      });
     return () => {
       active = false;
     };
@@ -260,12 +295,11 @@ export default function ResumeShredderModal({
   const handleDragMove = useCallback((e: PointerEvent) => {
     if (!trashZoneRef.current) return;
     const rect = trashZoneRef.current.getBoundingClientRect();
-    // 增加一定的磁吸感应边界
     const inside =
-      e.clientX >= rect.left - 50 &&
-      e.clientX <= rect.right + 50 &&
-      e.clientY >= rect.top - 60 &&
-      e.clientY <= rect.bottom + 80;
+      e.clientX >= rect.left - 60 &&
+      e.clientX <= rect.right + 60 &&
+      e.clientY >= rect.top - 70 &&
+      e.clientY <= rect.bottom + 90;
     setIsOverTrash(inside);
   }, []);
 
@@ -274,7 +308,6 @@ export default function ResumeShredderModal({
     if (isShredding) return;
     setIsShredding(true);
 
-    // 碎纸进度条动效
     for (let p = 0; p <= 100; p += 20) {
       setShredProgress(p);
       await new Promise((r) => setTimeout(r, 60));
@@ -302,12 +335,26 @@ export default function ResumeShredderModal({
     paperRef.current?.crumple();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-between bg-black/85 backdrop-blur-xl select-none animate-in fade-in duration-200">
+  // 使用 React Portal 保证模态舱脱离任何内部 3D transform 容器，直接覆盖在视窗最顶层
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] flex flex-col items-center justify-between bg-stone-950/92 backdrop-blur-md select-none animate-in fade-in duration-200"
+      style={{ isolation: "isolate" }}
+      onPointerMove={(e) => {
+        if (isCrumpled) {
+          handleDragMove(e.nativeEvent);
+        }
+      }}
+      onPointerUp={() => {
+        if (isOverTrash) {
+          executeShred();
+        }
+      }}
+    >
       {/* 顶部状态栏与关闭控制 */}
       <div className="w-full max-w-5xl px-6 pt-5 flex items-center justify-between z-30">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-950/70 border border-red-500/40 text-red-300 text-xs font-mono tracking-wider shadow-lg shadow-red-950/50">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-950/80 border border-red-500/50 text-red-300 text-xs font-mono tracking-wider shadow-lg shadow-red-950/60">
             <Flame className="size-3.5 text-red-400 animate-pulse" />
             <span>物理碎纸销毁舱 · PERMANENT REMOVAL</span>
           </div>
@@ -320,7 +367,7 @@ export default function ResumeShredderModal({
           type="button"
           onClick={onClose}
           disabled={isShredding}
-          className="flex items-center gap-1.5 text-xs text-stone-400 hover:text-stone-100 bg-stone-900/80 hover:bg-stone-800 border border-stone-800 hover:border-stone-700 px-3 py-1.5 rounded-xl cursor-pointer transition-all"
+          className="flex items-center gap-1.5 text-xs text-stone-300 hover:text-stone-100 bg-stone-900/90 hover:bg-stone-800 border border-stone-800 hover:border-stone-700 px-3.5 py-1.5 rounded-xl cursor-pointer transition-all shadow-md active:scale-95"
         >
           <X className="size-4" />
           <span>取消 (保留档案)</span>
@@ -328,10 +375,10 @@ export default function ResumeShredderModal({
       </div>
 
       {/* 中间核心 3D 纸张舞台 */}
-      <div className="relative flex-1 w-full flex flex-col items-center justify-center overflow-hidden">
+      <div className="relative flex-1 w-full flex flex-col items-center justify-center overflow-hidden py-4">
         {/* 操作提示气泡 */}
-        <div className="absolute top-4 text-center z-20 pointer-events-none">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-2xl bg-stone-900/80 border border-stone-800 text-stone-300 text-xs shadow-xl backdrop-blur">
+        <div className="absolute top-2 text-center z-20 pointer-events-none">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-2xl bg-stone-900/90 border border-stone-800 text-stone-300 text-xs shadow-xl backdrop-blur">
             <Sparkles className="size-3.5 text-amber-400 animate-spin" />
             <span>
               {isCrumpled
@@ -341,8 +388,8 @@ export default function ResumeShredderModal({
           </div>
         </div>
 
-        {/* PaperCrumple 3D 物理画布 */}
-        {paperTextureUrl ? (
+        {/* 3D WebGL 纸张渲染 或 优雅 2D/3D 卡片兜底 */}
+        {paperTextureUrl && !paperError ? (
           <div
             className={`transition-all duration-500 ${
               isShredding
@@ -374,6 +421,7 @@ export default function ResumeShredderModal({
               returnToOrigin={false}
               onDragMove={handleDragMove}
               onDragEnd={handleDragEnd}
+              onError={() => setPaperError(true)}
               onStateChange={(state: string) => {
                 if (state === "crumpling" || state === "holding" || state === "crumpled") {
                   setIsCrumpled(true);
@@ -382,9 +430,44 @@ export default function ResumeShredderModal({
             />
           </div>
         ) : (
-          <div className="w-80 h-96 flex flex-col items-center justify-center border border-dashed border-stone-800 rounded-2xl bg-stone-900/30 text-stone-500 gap-3">
-            <div className="size-6 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
-            <span className="text-xs">正在渲染拟真纸张材质...</span>
+          /* 当 3D 纹理初始化中或硬件不支持 WebGL 时的高保真实体卡片兜底 */
+          <div
+            className={`w-[320px] h-[430px] rounded-2xl bg-[#faf7f2] border-2 border-[#e3dacd] shadow-2xl p-5 flex flex-col justify-between text-stone-900 cursor-grab active:cursor-grabbing transition-all duration-500 ${
+              isCrumpled ? "scale-75 rotate-6 rounded-3xl ring-4 ring-amber-500/40" : ""
+            } ${
+              isShredding
+                ? "scale-0 rotate-[180deg] opacity-0 translate-y-64 pointer-events-none"
+                : ""
+            }`}
+            onClick={handleForceCrumple}
+          >
+            <div className="space-y-3">
+              <div className="flex items-center justify-between border-b border-stone-300 pb-2">
+                <span className="font-bold text-xs text-amber-700 tracking-wider">
+                  RESUME ARCHIVE // 档案资料
+                </span>
+                <span className="text-[10px] font-mono text-stone-500">
+                  {getFileExtension(item.name).toUpperCase() || "DOC"}
+                </span>
+              </div>
+              <h3 className="font-bold text-base text-stone-900 truncate">
+                {item.name}
+              </h3>
+              <p className="text-xs text-stone-500">
+                规格: {(item.size / 1024).toFixed(1)} KB | 状态: 待粉碎
+              </p>
+              <div className="h-44 bg-stone-100 rounded-xl p-3 text-[11px] text-stone-600 space-y-1.5 overflow-hidden border border-stone-200/80">
+                <p className="font-semibold text-teal-800">【档案摘要内容】</p>
+                <p className="line-clamp-5 leading-relaxed">
+                  {content?.text || "本地求职资料资产，已建立本地索引。包含简历结构化信息。"}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-stone-300 pt-2 text-[10px] text-stone-400">
+              <span>★ 官方归档印章 ★</span>
+              <span className="text-amber-800 font-medium">点击可预捏成团</span>
+            </div>
           </div>
         )}
       </div>
@@ -395,15 +478,15 @@ export default function ResumeShredderModal({
           ref={trashZoneRef}
           className={`relative w-full max-w-md p-5 rounded-3xl border transition-all duration-300 flex flex-col items-center justify-center cursor-pointer shadow-2xl ${
             isOverTrash
-              ? "bg-red-950/80 border-red-500 scale-105 shadow-red-500/30 ring-4 ring-red-500/20"
+              ? "bg-red-950/90 border-red-500 scale-105 shadow-red-500/40 ring-4 ring-red-500/30"
               : isShredding
               ? "bg-stone-900/90 border-amber-500 shadow-amber-500/20"
-              : "bg-stone-900/60 border-stone-800 hover:border-red-900/60 shadow-black/60"
+              : "bg-stone-900/80 border-stone-800 hover:border-red-900/80 shadow-black/60"
           }`}
           onClick={executeShred}
         >
           {/* 碎纸机入纸口仿真槽 */}
-          <div className="w-48 h-3 rounded-full bg-black/80 border border-stone-800 mb-3 overflow-hidden relative shadow-inner">
+          <div className="w-52 h-3.5 rounded-full bg-black/90 border border-stone-800 mb-3 overflow-hidden relative shadow-inner">
             <div
               className={`absolute inset-0 bg-gradient-to-r transition-all duration-300 ${
                 isOverTrash
@@ -470,7 +553,7 @@ export default function ResumeShredderModal({
             type="button"
             onClick={handleForceCrumple}
             disabled={isShredding || isCrumpled}
-            className="flex items-center gap-1.5 text-xs text-stone-400 hover:text-stone-200 bg-stone-900/60 hover:bg-stone-800 border border-stone-800/80 px-3.5 py-1.5 rounded-xl cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 text-xs text-stone-400 hover:text-stone-200 bg-stone-900/70 hover:bg-stone-800 border border-stone-800/80 px-3.5 py-1.5 rounded-xl cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
           >
             <RotateCcw className="size-3.5" />
             <span>一键团成纸球</span>
@@ -480,13 +563,14 @@ export default function ResumeShredderModal({
             type="button"
             onClick={executeShred}
             disabled={isShredding}
-            className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 bg-red-950/40 hover:bg-red-950/80 border border-red-900/50 px-3.5 py-1.5 rounded-xl cursor-pointer transition-all disabled:opacity-40"
+            className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 bg-red-950/50 hover:bg-red-950/90 border border-red-900/60 px-3.5 py-1.5 rounded-xl cursor-pointer transition-all disabled:opacity-40 active:scale-95 shadow-sm"
           >
             <Trash2 className="size-3.5" />
             <span>直接粉碎入库文档</span>
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
