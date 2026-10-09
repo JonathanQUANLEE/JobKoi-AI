@@ -138,6 +138,24 @@ def delete_resume_file(name: str, resume_dir: Path | None = None) -> dict:
     return {"status": "deleted", "name": clean}
 
 
+def open_resume_native(name: str, resume_dir: Path | None = None) -> dict:
+    """使用 Windows 默认关联软件（WPS / Word / PDF 查阅器 / 照片）直接打开本地原版文件。"""
+    import os
+
+    base = _ensure_dir(resume_dir)
+    clean = _validate_resume_name(name)
+    target = base / clean
+    if not target.is_file():
+        raise ValueError(f"简历文件不存在: {clean}")
+
+    try:
+        os.startfile(str(target.resolve()))
+        return {"status": "ok", "name": clean, "path": str(target.resolve())}
+    except Exception as e:
+        log.warning("调起原生软件打开失败: %s", e)
+        raise RuntimeError(f"无法用系统默认程序打开: {e}")
+
+
 def get_resume_content(name: str, resume_dir: Path | None = None) -> dict:
     """读取指定简历文件内容，返回 Base64 Data URL 及提取文本（针对 Word 等格式）。"""
     import base64

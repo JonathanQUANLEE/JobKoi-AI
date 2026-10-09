@@ -231,4 +231,6 @@ export const ipc = {
     ),
   deleteResumeFile: (name: string) =>
     pyInvoke<{ status: string; name: string }>("delete_resume_file", { name }),
+  openResumeNative: (name: string) =>
+    pyInvoke<{ status: string; name: string; path: string }>("open_resume_native", { name }),
 };

@@ -453,6 +453,18 @@ async def delete_resume_file(body: _DeleteResumeFileBody) -> dict:
     return _delete_file(body.name)
 
 
+class _OpenResumeNativeBody(_CamelModel):
+    name: str
+
+
+@commands.command()
+async def open_resume_native(body: _OpenResumeNativeBody) -> dict:
+    """使用系统原生应用直接打开简历源文件（如 WPS、Word、PDF 查阅器等）。"""
+    from boss_zhipin.gui.resume_io import open_resume_native as _open_native
+
+    return _open_native(body.name)
+
+
 
 # ---------- 工具执行层（F4：agent 声明意图，这里执行） ----------
 # 隔离红线：agent 包只产出 action 意图；真正动手（读日志/读页面）在这里，
