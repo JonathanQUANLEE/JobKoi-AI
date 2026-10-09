@@ -74,10 +74,10 @@ export function useWorkbenchWheel({
     if (!heroStage || !hub || !profile) return;
 
     const vh = (typeof window !== "undefined" && window.innerHeight) || 800;
-    // 3D 空间圆柱半径 R（如同巨大的水平圆柱鼓面）
-    const cylinderRadius = Math.max(780, vh * 0.95);
-    // 卡片在圆柱侧面上的夹角（度）：每卡片跨越 44 度弧长，紧密贴合在圆柱侧面
-    const cardAngleDelta = 44;
+    // 紧凑 3D 折叠圆柱弧面：
+    // stepY 控制相邻卡片在视口中的紧凑露头距离（约 300px ~ 330px），保证在招聘平台中心时，
+    // 上方 AI 搜索页面与下方求职画像页面的实体卡片影像紧凑清晰可见，绝不推到屏幕外
+    const stepY = Math.min(330, Math.max(270, vh * 0.38));
 
     const stages = [
       { el: heroStage, index: 0 },
@@ -85,55 +85,91 @@ export function useWorkbenchWheel({
       { el: profile, index: 2 },
     ];
 
-    stages.forEach(({ el, index }) => {
-      // 当前卡片在圆柱面上的角位移（度）
-      // 当 pos = index 时，theta = 0（正对屏幕正前方，正面朝向用户）
-      const theta = (index - pos) * cardAngleDelta;
-      const rad = (theta * Math.PI) / 180;
-      const absTheta = Math.abs(theta);
+    // 规则 (a): 首屏处于 AI 顾问对话舱 (pos <= 0.06) 时，
+    // 招聘平台中心与求职画像完全隐藏，保持首屏搜索对话舱纯净无扰。
+    if (pos <= 0.06) {
+      heroStage.style.transform = "translate3d(0, 0px, 0px) rotateX(0deg) scale(1)";
+      heroStage.style.opacity = "1";
+      heroStage.style.filter = "none";
+      heroStage.style.pointerEvents = "auto";
+      heroStage.style.zIndex = "30";
 
-      // 圆柱侧面几何坐标方程：
-      // Y 轴沿圆柱切面展开：R * sin(theta)
-      // Z 轴深度向圆柱轴心后退：-R * (1 - cos(theta))
-      // X 轴旋转角度：与切面法线一致，角度即为 theta
-      const y = cylinderRadius * Math.sin(rad);
-      const z = -cylinderRadius * (1 - Math.cos(rad));
-      const rotX = -theta; // 围绕圆柱横轴切线旋转：严格贴合圆柱侧表面曲率与法线方向
-
-      // 规则 (a): 首屏处于 AI 顾问对话舱 (pos <= 0.04) 时，
-      // 招聘平台中心与求职画像完全隐藏，保持首屏搜索对话舱纯净无扰。
-      if (index > 0 && pos <= 0.04) {
-        el.style.transform = `translate3d(0, ${y.toFixed(1)}px, ${z.toFixed(1)}px) rotateX(${rotX.toFixed(2)}deg)`;
+      [hub, profile].forEach((el, idx) => {
         el.style.opacity = "0";
-        el.style.filter = "none";
         el.style.pointerEvents = "none";
         el.style.zIndex = "10";
+        el.style.filter = "none";
+        const factor = idx === 0 ? 1.0 : 1.7;
+        el.style.transform = `translate3d(0, ${(stepY * factor).toFixed(1)}px, -140px) rotateX(-20deg) scale(0.88)`;
+      });
+      return;
+    }
+
+    // 规则 (b) & 紧凑 3D 折叠影像系统：处于当前站台时，紧凑呈现关联板块的高质感实体影像（透明度适中，轮廓与内容清晰）
+    stages.forEach(({ el, index }) => {
+      const d = index - pos; // d = 0 时处于正中心黄金视界
+      const absD = Math.abs(d);
+
+      if (absD < 0.012) {
+        // 当前卡片处于正中心焦平面展示
+        el.style.transform = "translate3d(0, 0px, 0px) rotateX(0deg) scale(1)";
+        el.style.opacity = "1";
+        el.style.filter = "none";
+        el.style.pointerEvents = "auto";
+        el.style.zIndex = "30";
         return;
       }
 
-      // 黄金正面视界判断（处于正前方焦平面）
-      const isFront = absTheta < 2.0;
+      if (d > 0) {
+        // 位于中心下方（尚未滚入的未来站台，圆柱下部紧凑折叠）
+        const u = Math.min(1.8, d);
+        const transY = stepY * (u <= 1 ? u : 1 + (u - 1) * 0.75);
+        const transZ = -130 * Math.min(1, u) - 80 * Math.max(0, u - 1);
+        const rotX = -20 * Math.min(1, u) - 10 * Math.max(0, u - 1);
+        const scale = 1 - 0.11 * Math.min(1, u) - 0.07 * Math.max(0, u - 1);
 
-      // 随圆柱旋转的角度透明度衰减与景深微模糊
-      let opacity = 0;
-      let blur = 0;
+        // 透明度设计：不采用极淡虚化，而是保留清晰的半透明实体影像（d=1 时 opacity ≈ 0.58）
+        let opacity = 0;
+        if (d <= 1.0) {
+          opacity = 1 - 0.42 * d;
+        } else {
+          opacity = Math.max(0, 0.58 - 0.45 * (d - 1.0));
+        }
 
-      if (absTheta <= cardAngleDelta * 1.6) {
-        // 沿圆柱侧面渐显渐隐
-        opacity = Math.max(0, 1 - (absTheta / (cardAngleDelta * 1.2)) * 0.65);
-        if (index > 0 && pos < 0.35) {
-          // 从首屏滚入时的平滑淡入系数
-          const enterFade = Math.min(1, Math.max(0, (pos - 0.04) / 0.28));
+        // 首屏滚入时的平滑淡入系数
+        if (index > 0 && pos < 0.32) {
+          const enterFade = Math.min(1, Math.max(0, (pos - 0.06) / 0.24));
           opacity *= enterFade;
         }
-        blur = Math.min(1.5, (absTheta / cardAngleDelta) * 1.0);
-      }
 
-      el.style.transform = `translate3d(0, ${y.toFixed(1)}px, ${z.toFixed(1)}px) rotateX(${rotX.toFixed(2)}deg)`;
-      el.style.opacity = isFront ? "1" : opacity.toFixed(3);
-      el.style.filter = blur > 0.3 ? `blur(${blur.toFixed(1)}px)` : "none";
-      el.style.pointerEvents = isFront ? "auto" : "none";
-      el.style.zIndex = isFront ? "30" : Math.round(20 - absTheta).toString();
+        el.style.transform = `translate3d(0, ${transY.toFixed(1)}px, ${transZ.toFixed(1)}px) rotateX(${rotX.toFixed(1)}deg) scale(${scale.toFixed(4)})`;
+        el.style.opacity = opacity.toFixed(3);
+        el.style.filter = "none"; // 保持清晰锐利，无模糊遮挡
+        el.style.pointerEvents = "none";
+        el.style.zIndex = u <= 1.0 ? "20" : "10";
+      } else {
+        // 位于中心上方（已被滑过的站台，向上圆柱弧面紧凑折叠）
+        const v = Math.min(1.8, -d);
+        const transY = -stepY * (v <= 1 ? v : 1 + (v - 1) * 0.75);
+        const transZ = -130 * Math.min(1, v) - 80 * Math.max(0, v - 1);
+        const rotX = 20 * Math.min(1, v) + 10 * Math.max(0, v - 1);
+        const scale = 1 - 0.11 * Math.min(1, v) - 0.07 * Math.max(0, v - 1);
+
+        // 在招聘平台中心 (pos=1) 时，上方 AI 搜索主页面 (d=-1) 呈现清晰的 opacity ≈ 0.58 紧凑影像
+        // 在求职画像 (pos=2) 时，上方招聘平台中心呈现 opacity ≈ 0.58 紧凑影像，更高处 Hero 呈现 0.20 叠层
+        let opacity = 0;
+        if (v <= 1.0) {
+          opacity = 1 - 0.42 * v;
+        } else {
+          opacity = Math.max(0.15, 0.58 - 0.38 * (v - 1.0));
+        }
+
+        el.style.transform = `translate3d(0, ${transY.toFixed(1)}px, ${transZ.toFixed(1)}px) rotateX(${rotX.toFixed(1)}deg) scale(${scale.toFixed(4)})`;
+        el.style.opacity = opacity.toFixed(3);
+        el.style.filter = "none"; // 保持清晰锐利，无模糊遮挡
+        el.style.pointerEvents = "none";
+        el.style.zIndex = v <= 1.0 ? "20" : "10";
+      }
     });
   }, [isChattingOrHasHistory]);
 
