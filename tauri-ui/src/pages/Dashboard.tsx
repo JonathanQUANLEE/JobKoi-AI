@@ -455,22 +455,17 @@ export default function Dashboard() {
       const currentIndex: 0 | 1 | 2 = t < 0.28 ? 0 : t < 0.72 ? 1 : 2;
       setRingActiveIndex((prev) => (prev !== currentIndex ? currentIndex : prev));
 
-      // 三个阶段在 3D 环形万花筒圆柱面中的相对偏移位置
-      // p1: Hero (0 ➔ 2)
-      // p2: PlatformHub (-1 ➔ +1)
-      // p3: Profile Bento (-2 ➔ 0)
-      const p1 = t / 0.5;
-      const p2 = (t - 0.5) / 0.5;
-      const p3 = (t - 1.0) / 0.5;
-
       const applyRingTransform = (
         el: HTMLElement | null,
-        p: number,
+        k: 0 | 1 | 2,
         staggerItems?: NodeListOf<HTMLElement>
       ) => {
         if (!el) return;
-        const absP = Math.abs(p);
-        const isCenter = absP < 0.12;
+
+        // 目标中心点（0: Hero, 1: PlatformHub, 2: ProfileBento）
+        const targetT = k * 0.5;
+        const dist = Math.abs(t - targetT);
+        const isCenter = dist < 0.06;
 
         if (isCenter) {
           el.style.transform = "none";
@@ -483,51 +478,85 @@ export default function Dashboard() {
               item.style.transform = "none";
             });
           }
-        } else {
-          // 有死区缓冲的平滑相对偏移
-          const effectiveP = Math.sign(p) * ((absP - 0.12) / 0.88);
-          const sign = Math.sign(effectiveP);
-          const progress = Math.min(Math.abs(effectiveP), 1.6);
+          return;
+        }
 
-          // 核心 3D 环形弯曲方程：
-          // sign > 0: 向上沿柱面圆弧弯折（rotateX 为负值仰角，translateY 向上）
-          // sign < 0: 向下沿柱面圆弧弯折（rotateX 为正值俯角，translateY 向下）
-          const transY = -sign * stepY * Math.pow(progress, 0.92);
-          const rotX = -sign * 21 * Math.pow(progress, 0.85);
-          const scale = Math.max(0.76, 1 - 0.15 * progress);
-          // 变透明但绝不直接消失！保持半透明 3D 空间环形质感（最小透明度 0.26）
-          const opacity = Math.max(0.26, 1 - 0.58 * progress);
-          const blur = Math.min(2.5, 1.8 * progress);
+        // 当卡片位于中心下方 (尚未滑到该卡片，t < targetT):
+        if (t < targetT) {
+          // 关键需求：在首屏 (用户刚进来看到搜索框，t <= 0.05) 时，
+          // 下方俩卡片 (招聘平台 k=1, 求职画像 k=2) 绝对不显现 (opacity: 0)！
+          if (t <= 0.05) {
+            el.style.opacity = "0";
+            el.style.transform = `perspective(1400px) translateY(${(stepY * 1.5).toFixed(2)}px) rotateX(25deg) scale(0.8)`;
+            el.style.pointerEvents = "none";
+            el.style.zIndex = "10";
+            return;
+          }
+
+          // 招聘平台中心 (k=1) 在 t 从 0.05 ➔ 0.45 之间平滑浮现升入中心
+          // 求职画像总览 (k=2) 在 t <= 0.35 时保持隐藏，在 0.35 ➔ 0.95 之间平滑浮现升入中心
+          const startT = k === 1 ? 0.05 : 0.35;
+          if (t < startT) {
+            el.style.opacity = "0";
+            el.style.transform = `perspective(1400px) translateY(${(stepY * 1.5).toFixed(2)}px) rotateX(25deg) scale(0.8)`;
+            el.style.pointerEvents = "none";
+            el.style.zIndex = "10";
+            return;
+          }
+
+          // 平滑从下方向中心飞入上升
+          const entryProg = clamp((t - startT) / (targetT - startT), 0, 1);
+          const transY = stepY * (1.35 - 1.35 * Math.pow(entryProg, 0.88));
+          const rotX = 22 * (1 - entryProg);
+          const scale = 0.82 + 0.18 * entryProg;
+          const opacity = 0.15 + 0.85 * Math.pow(entryProg, 1.15);
+          const blur = Math.min(2.5, 2 * (1 - entryProg));
 
           el.style.transform = `perspective(1400px) translateY(${transY.toFixed(2)}px) rotateX(${rotX.toFixed(2)}deg) scale(${scale.toFixed(4)})`;
           el.style.opacity = opacity.toFixed(4);
-          el.style.filter = blur > 0.3 ? `blur(${blur.toFixed(1)}px)` : "none";
+          el.style.filter = blur > 0.4 ? `blur(${blur.toFixed(1)}px)` : "none";
           el.style.pointerEvents = "none";
-          el.style.zIndex = progress < 0.8 ? "20" : "10";
+          el.style.zIndex = "15";
 
           if (staggerItems && staggerItems.length > 0) {
             const n = staggerItems.length;
             staggerItems.forEach((item, idx) => {
               const centerIdx = (n - 1) / 2;
               const normIdx = idx - centerIdx;
-              const staggerRotY = normIdx * 2.2 * progress;
-              const staggerY = Math.abs(normIdx) * 6 * progress;
+              const staggerRotY = normIdx * 2.2 * (1 - entryProg);
+              const staggerY = Math.abs(normIdx) * 6 * (1 - entryProg);
               item.style.transform = `translateY(${staggerY.toFixed(1)}px) rotateY(${staggerRotY.toFixed(1)}deg)`;
             });
           }
+          return;
         }
+
+        // 当卡片位于中心上方 (已被滑过，向天穹后仰折入上圆弧，t > targetT):
+        // 核心要求：变透明形成环形柱面，绝不直接消失！
+        const pastProg = clamp((t - targetT) / 0.5, 0, 1.8);
+        const transY = -stepY * Math.pow(pastProg, 0.92);
+        const rotX = -21 * Math.pow(pastProg, 0.85);
+        const scale = Math.max(0.74, 1 - 0.16 * pastProg);
+        const opacity = Math.max(0.24, 1 - 0.58 * pastProg);
+        const blur = Math.min(2.5, 1.8 * pastProg);
+
+        el.style.transform = `perspective(1400px) translateY(${transY.toFixed(2)}px) rotateX(${rotX.toFixed(2)}deg) scale(${scale.toFixed(4)})`;
+        el.style.opacity = opacity.toFixed(4);
+        el.style.filter = blur > 0.3 ? `blur(${blur.toFixed(1)}px)` : "none";
+        el.style.pointerEvents = "none";
+        el.style.zIndex = pastProg < 0.9 ? "20" : "10";
       };
 
-      // 阶段 1：Hero
-      applyRingTransform(heroStage, p1);
+      // 阶段 1：Hero (k = 0)
+      applyRingTransform(heroStage, 0);
 
-      // 阶段 2：招聘平台中心（包含 4 大卡片 3D 微环绕视差）
+      // 阶段 2：招聘平台中心 (k = 1)
       const platformCards = hub?.querySelectorAll<HTMLElement>("[data-platform-card]");
-      applyRingTransform(hub, p2, platformCards);
+      applyRingTransform(hub, 1, platformCards);
 
-      // 阶段 3：求职画像总览（包含 3 列便当盒错峰微环绕视差）
+      // 阶段 3：求职画像总览 (k = 2)
       const bentoCols = profile?.querySelectorAll<HTMLElement>("[data-bento-col]");
-      applyRingTransform(profile, p3, bentoCols);
+      applyRingTransform(profile, 2, bentoCols);
     };
 
     const handleScroll = () => {
@@ -941,7 +970,18 @@ export default function Dashboard() {
       />
 
       {/* 右侧主工作流区域（水波流体缓动，跟随侧边栏伸缩丝滑平移） */}
-      <div className="flex flex-1 flex-col h-screen overflow-hidden bg-[var(--paper)] water-fluid-sidebar">
+      <div className="flex flex-1 flex-col h-screen overflow-hidden bg-[var(--paper)] water-fluid-sidebar relative">
+        {/* 左下角常驻状态徽章：AI 顾问在线（全局固定，无论切换哪个页面或卡片都保持不变） */}
+        <div className="absolute bottom-4 left-6 z-30 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-950/80 px-3 py-1 text-xs text-emerald-300 backdrop-blur-md shadow-lg select-none pointer-events-none">
+          <span className="relative flex size-2">
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex size-2 rounded-full bg-emerald-400"></span>
+          </span>
+          <span className="font-medium text-[11px] sm:text-xs">
+            {lang === "en" ? "AI Advisor Online" : "AI 顾问在线"}
+          </span>
+        </div>
+
         {/* 顶部极简导航面包屑与状态 */}
         <header className="h-12 shrink-0 border-b border-[var(--grid)] bg-[#141210]/90 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between z-20">
           <div className="flex items-center gap-2 text-xs">
@@ -1064,16 +1104,6 @@ export default function Dashboard() {
                     aria-hidden="true"
                   />
 
-                  {/* 右上角 AI 顾问在线状态徽章（简化文案） */}
-                  <div className="self-end sm:absolute sm:top-2 sm:right-2 z-10 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-950/60 px-3 py-1 text-xs text-emerald-300 backdrop-blur shadow-sm select-none mb-4 sm:mb-0">
-                    <span className="relative flex size-2">
-                      <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex size-2 rounded-full bg-emerald-400"></span>
-                    </span>
-                    <span className="font-medium text-[11px] sm:text-xs">
-                      {lang === "en" ? "AI Advisor Online" : "AI 顾问在线"}
-                    </span>
-                  </div>
                   {/* 主标题与副标题 (逐行渐显动效流) */}
                   <div
                     className={`w-full transition-opacity duration-500 ease-out ${
@@ -1553,49 +1583,55 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* 右侧 3D 环形万花筒位置进度指示器 */}
+                {/* 右侧 3D 环形万花筒位置指示点（纯净三点设计，无方框） */}
                 {!isChattingOrHasHistory && (
-                  <div className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 z-40 hidden md:flex flex-col items-end gap-2.5 text-xs select-none">
+                  <div className="absolute right-4 sm:right-6 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-3.5 select-none">
                     <button
                       type="button"
                       onClick={() => scrollToRingStage(0)}
-                      className={`group flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all cursor-pointer backdrop-blur-md shadow-sm ${
-                        ringActiveIndex === 0
-                          ? "border-[#ff5722] bg-[#ff5722]/15 text-stone-100 shadow-[0_0_12px_rgba(255,87,34,0.35)]"
-                          : "border-white/10 bg-black/40 text-stone-400 hover:text-stone-200 hover:border-white/25"
-                      }`}
-                      title={lang === "en" ? "Scroll to AI Advisor" : "跳转至 AI 顾问对话"}
+                      className="p-1.5 cursor-pointer transition-all outline-none group"
+                      title={lang === "en" ? "AI Advisor" : "AI 顾问"}
+                      aria-label={lang === "en" ? "AI Advisor" : "AI 顾问"}
                     >
-                      <span className={`size-2 rounded-full transition-transform ${ringActiveIndex === 0 ? "bg-[#ff5722] scale-125 shadow-[0_0_6px_#ff5722]" : "bg-stone-500"}`} />
-                      <span className="font-medium text-[11px] sm:text-xs">{lang === "en" ? "AI Advisor" : "AI 顾问"}</span>
+                      <span
+                        className={`block rounded-full transition-all duration-300 ${
+                          ringActiveIndex === 0
+                            ? "size-2.5 bg-[#ff5722] shadow-[0_0_10px_rgba(255,87,34,0.9)] scale-125"
+                            : "size-2 bg-stone-600 group-hover:bg-stone-400 group-hover:scale-125"
+                        }`}
+                      />
                     </button>
 
                     <button
                       type="button"
                       onClick={() => scrollToRingStage(1)}
-                      className={`group flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all cursor-pointer backdrop-blur-md shadow-sm ${
-                        ringActiveIndex === 1
-                          ? "border-amber-500 bg-amber-500/15 text-stone-100 shadow-[0_0_12px_rgba(245,158,11,0.35)]"
-                          : "border-white/10 bg-black/40 text-stone-400 hover:text-stone-200 hover:border-white/25"
-                      }`}
-                      title={lang === "en" ? "Scroll to Platforms Hub" : "跳转至招聘平台中心"}
+                      className="p-1.5 cursor-pointer transition-all outline-none group"
+                      title={lang === "en" ? "Platforms Hub" : "招聘平台"}
+                      aria-label={lang === "en" ? "Platforms Hub" : "招聘平台"}
                     >
-                      <span className={`size-2 rounded-full transition-transform ${ringActiveIndex === 1 ? "bg-amber-400 scale-125 shadow-[0_0_6px_#f59e0b]" : "bg-stone-500"}`} />
-                      <span className="font-medium text-[11px] sm:text-xs">{lang === "en" ? "Platforms" : "招聘平台"}</span>
+                      <span
+                        className={`block rounded-full transition-all duration-300 ${
+                          ringActiveIndex === 1
+                            ? "size-2.5 bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.9)] scale-125"
+                            : "size-2 bg-stone-600 group-hover:bg-stone-400 group-hover:scale-125"
+                        }`}
+                      />
                     </button>
 
                     <button
                       type="button"
                       onClick={() => scrollToRingStage(2)}
-                      className={`group flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all cursor-pointer backdrop-blur-md shadow-sm ${
-                        ringActiveIndex === 2
-                          ? "border-emerald-500 bg-emerald-500/15 text-stone-100 shadow-[0_0_12px_rgba(16,185,129,0.35)]"
-                          : "border-white/10 bg-black/40 text-stone-400 hover:text-stone-200 hover:border-white/25"
-                      }`}
-                      title={lang === "en" ? "Scroll to Job Profile" : "跳转至求职画像"}
+                      className="p-1.5 cursor-pointer transition-all outline-none group"
+                      title={lang === "en" ? "Job Profile" : "求职画像"}
+                      aria-label={lang === "en" ? "Job Profile" : "求职画像"}
                     >
-                      <span className={`size-2 rounded-full transition-transform ${ringActiveIndex === 2 ? "bg-emerald-400 scale-125 shadow-[0_0_6px_#10b981]" : "bg-stone-500"}`} />
-                      <span className="font-medium text-[11px] sm:text-xs">{lang === "en" ? "Job Profile" : "求职画像"}</span>
+                      <span
+                        className={`block rounded-full transition-all duration-300 ${
+                          ringActiveIndex === 2
+                            ? "size-2.5 bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.9)] scale-125"
+                            : "size-2 bg-stone-600 group-hover:bg-stone-400 group-hover:scale-125"
+                        }`}
+                      />
                     </button>
                   </div>
                 )}
