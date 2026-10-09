@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { LANGS, type Lang } from "../lib/i18n";
 import { ipc, type LLMConfig, type LLMPreset } from "../lib/ipc";
+import OptionWheel, { type OptionWheelItemData } from "./OptionWheel";
 
 export type SettingsTab = "general" | "profile" | "appearance" | "shortcuts" | "model" | "about";
 
@@ -132,81 +133,121 @@ export default function SettingsModal({
 
   const isEn = lang === "en";
 
+  const tabItems: OptionWheelItemData[] = [
+    {
+      id: "general",
+      label: isEn ? "General" : "通用设置",
+      icon: <Settings className="size-4" />,
+    },
+    {
+      id: "profile",
+      label: isEn ? "Profile" : "个人主页",
+      icon: <User className="size-4" />,
+    },
+    {
+      id: "appearance",
+      label: isEn ? "Appearance" : "外观主题",
+      icon: <Palette className="size-4" />,
+    },
+    {
+      id: "shortcuts",
+      label: isEn ? "Shortcuts" : "快捷键一览",
+      icon: <Keyboard className="size-4" />,
+    },
+    {
+      id: "model",
+      label: isEn ? "AI Model" : "AI 大模型",
+      icon: <Bot className="size-4" />,
+      badge: llmConfig?.configured ? (isEn ? "Configured" : "已配置") : (isEn ? "Unset" : "未配置"),
+      badgeColor: llmConfig?.configured
+        ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/30"
+        : "bg-stone-800 text-stone-400 border border-stone-700/40",
+    },
+    {
+      id: "about",
+      label: isEn ? "About & Help" : "关于与帮助",
+      icon: <Info className="size-4" />,
+    },
+  ];
+
+  const activeTabIndex = Math.max(
+    0,
+    tabItems.findIndex((t) => t.id === activeTab)
+  );
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/75 backdrop-blur-md animate-in fade-in duration-150"
+      onClick={onClose}
+    >
       <div
-        className="relative w-full max-w-3xl rounded-2xl border border-[var(--grid)] bg-[#171513] shadow-2xl flex flex-col md:flex-row overflow-hidden max-h-[88vh] text-stone-200"
+        className="relative flex flex-col md:flex-row items-center md:items-stretch gap-4 sm:gap-6 w-full max-w-4xl max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 左侧导航栏 (WorkBuddy 架构) */}
-        <aside className="w-full md:w-56 shrink-0 bg-[#12100f] border-b md:border-b-0 md:border-r border-[var(--grid)] p-3 flex flex-col justify-between">
-          <div>
-            <div className="px-3 py-2 mb-2 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-stone-100 font-bold text-sm">
-                <Settings className="size-4 text-amber-400" />
-                <span>{isEn ? "Settings" : "系统设置"}</span>
-              </div>
-              <span className="text-[10px] text-stone-500 font-mono">v0.2.0</span>
+        {/* 左侧：独立浮岛 3D 轮盘导航 Dock (OptionWheel) */}
+        <aside className="w-full md:w-60 shrink-0 bg-[#12100e]/95 backdrop-blur-xl border border-[var(--grid)] rounded-2xl shadow-2xl shadow-black/80 flex flex-col justify-between overflow-hidden h-64 md:h-[580px] text-stone-200">
+          <div className="px-4 py-3.5 border-b border-[var(--grid)]/80 flex items-center justify-between shrink-0 bg-[#171513]/60">
+            <div className="flex items-center gap-2 text-stone-100 font-bold text-sm">
+              <Settings className="size-4 text-amber-400" />
+              <span>{isEn ? "Settings" : "系统设置"}</span>
             </div>
-
-            <nav className="space-y-1 text-xs">
-              <NavItemBtn
-                active={activeTab === "general"}
-                onClick={() => setActiveTab("general")}
-                icon={<Settings className="size-3.5" />}
-                label={isEn ? "General" : "通用设置"}
-              />
-              <NavItemBtn
-                active={activeTab === "profile"}
-                onClick={() => setActiveTab("profile")}
-                icon={<User className="size-3.5" />}
-                label={isEn ? "Profile" : "个人主页"}
-              />
-              <NavItemBtn
-                active={activeTab === "appearance"}
-                onClick={() => setActiveTab("appearance")}
-                icon={<Palette className="size-3.5" />}
-                label={isEn ? "Appearance" : "外观主题"}
-              />
-              <NavItemBtn
-                active={activeTab === "shortcuts"}
-                onClick={() => setActiveTab("shortcuts")}
-                icon={<Keyboard className="size-3.5" />}
-                label={isEn ? "Shortcuts" : "快捷键一览"}
-              />
-              <NavItemBtn
-                active={activeTab === "model"}
-                onClick={() => setActiveTab("model")}
-                icon={<Bot className="size-3.5" />}
-                label={isEn ? "AI Model" : "AI 大模型"}
-                badge={llmConfig?.configured ? "已配置" : "未配置"}
-                badgeColor={llmConfig?.configured ? "bg-emerald-950 text-emerald-400 border border-emerald-500/30" : "bg-stone-800 text-stone-400"}
-              />
-              <NavItemBtn
-                active={activeTab === "about"}
-                onClick={() => setActiveTab("about")}
-                icon={<Info className="size-3.5" />}
-                label={isEn ? "About & Help" : "关于与帮助"}
-              />
-            </nav>
+            <span className="text-[10px] text-stone-500 font-mono px-1.5 py-0.5 rounded bg-stone-900 border border-stone-800">
+              v0.2.0
+            </span>
           </div>
 
-          <div className="hidden md:block pt-3 border-t border-[var(--grid)]/80 px-2 text-[11px] text-stone-500">
-            <span>JobHunter Offer Edition</span>
+          {/* 3D OptionWheel 弯曲轮盘导航 */}
+          <div className="flex-1 relative w-full overflow-hidden">
+            <OptionWheel<OptionWheelItemData>
+              items={tabItems}
+              selected={activeTabIndex}
+              onChange={(_idx, item) => {
+                if (item?.id) setActiveTab(item.id as SettingsTab);
+              }}
+              side="right"
+              fontSize={0.92}
+              spacing={2.3}
+              curve={1.1}
+              tilt={6.5}
+              blur={1.2}
+              fade={0.25}
+              minOpacity={0.16}
+              smoothing={190}
+              inset={18}
+              loop={false}
+              draggable={true}
+              soundUrl="synth"
+              soundVolume={0.35}
+            />
+          </div>
+
+          <div className="hidden md:flex px-4 py-3 border-t border-[var(--grid)]/80 bg-[#171513]/60 items-center justify-between text-[11px] text-stone-500 shrink-0">
+            <span className="truncate">JobHunter Edition</span>
+            <span className="text-[10px] text-stone-400">滚轮/拖拽切换</span>
           </div>
         </aside>
 
-        {/* 右侧主设置内容区 */}
-        <main className="flex-1 flex flex-col min-w-0 bg-[#171513] overflow-y-auto">
+        {/* 右侧：独立浮岛 主设置内容区 */}
+        <main className="flex-1 w-full flex flex-col min-w-0 bg-[#171513]/95 backdrop-blur-xl border border-[var(--grid)] rounded-2xl shadow-2xl shadow-black/80 overflow-hidden h-[480px] md:h-[580px] text-stone-200">
           {/* 顶栏关闭按钮 */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--grid)]/70">
-            <h2 className="text-sm font-bold text-stone-100">
-              {activeTab === "general" && (isEn ? "General Settings" : "通用设置")}
-              {activeTab === "profile" && (isEn ? "User Profile" : "个人主页与求职者信息")}
-              {activeTab === "appearance" && (isEn ? "Appearance & Theme" : "外观与显示主题")}
-              {activeTab === "shortcuts" && (isEn ? "Keyboard Shortcuts" : "常用快捷键")}
-              {activeTab === "model" && (isEn ? "AI Model Configuration" : "AI 大模型服务配置")}
-              {activeTab === "about" && (isEn ? "About JobHunter" : "关于与帮助支持")}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--grid)]/70 shrink-0 bg-[#1b1916]/50">
+            <h2 className="text-sm font-bold text-stone-100 flex items-center gap-2">
+              <span className="text-amber-400">
+                {activeTab === "general" && <Settings className="size-4" />}
+                {activeTab === "profile" && <User className="size-4" />}
+                {activeTab === "appearance" && <Palette className="size-4" />}
+                {activeTab === "shortcuts" && <Keyboard className="size-4" />}
+                {activeTab === "model" && <Bot className="size-4" />}
+                {activeTab === "about" && <Info className="size-4" />}
+              </span>
+              <span>
+                {activeTab === "general" && (isEn ? "General Settings" : "通用设置")}
+                {activeTab === "profile" && (isEn ? "User Profile" : "个人主页与求职者信息")}
+                {activeTab === "appearance" && (isEn ? "Appearance & Theme" : "外观与显示主题")}
+                {activeTab === "shortcuts" && (isEn ? "Keyboard Shortcuts" : "常用快捷键")}
+                {activeTab === "model" && (isEn ? "AI Model Configuration" : "AI 大模型服务配置")}
+                {activeTab === "about" && (isEn ? "About JobHunter" : "关于与帮助支持")}
+              </span>
             </h2>
             <button
               type="button"
@@ -219,7 +260,7 @@ export default function SettingsModal({
           </div>
 
           {/* 内容面板 */}
-          <div className="p-6 space-y-6 text-xs flex-1">
+          <div className="p-6 space-y-6 text-xs flex-1 overflow-y-auto">
             {/* 1. 通用设置 */}
             {activeTab === "general" && (
               <div className="space-y-5">
@@ -541,44 +582,6 @@ export default function SettingsModal({
         </main>
       </div>
     </div>
-  );
-}
-
-function NavItemBtn({
-  active,
-  onClick,
-  icon,
-  label,
-  badge,
-  badgeColor,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-  badge?: string;
-  badgeColor?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl font-medium transition-all cursor-pointer ${
-        active
-          ? "bg-amber-500/15 text-amber-300 font-bold border border-amber-500/20 shadow-sm"
-          : "text-stone-400 hover:bg-[#1a1816] hover:text-stone-200"
-      }`}
-    >
-      <div className="flex items-center gap-2.5">
-        {icon}
-        <span>{label}</span>
-      </div>
-      {badge && (
-        <span className={`text-[9px] px-1.5 py-0.2 rounded-md ${badgeColor || "bg-stone-800 text-stone-400"}`}>
-          {badge}
-        </span>
-      )}
-    </button>
   );
 }
 
