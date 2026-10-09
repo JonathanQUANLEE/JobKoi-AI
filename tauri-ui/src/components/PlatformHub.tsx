@@ -8,15 +8,22 @@ import {
   X,
 } from "lucide-react";
 import { ipc, type PlatformItem } from "../lib/ipc";
+import type { Lang } from "../lib/i18n";
 
 interface PlatformHubProps {
   selectedPlatform: string;
   onSelectPlatform: (platformId: string) => void;
+  lang?: Lang;
+  className?: string;
+  style?: React.CSSProperties;
 }
 
 export default function PlatformHub({
   selectedPlatform,
   onSelectPlatform,
+  lang = "zh",
+  className = "",
+  style,
 }: PlatformHubProps) {
   const [platforms, setPlatforms] = useState<PlatformItem[]>([]);
   const [busy, setBusy] = useState(false);
@@ -98,7 +105,7 @@ export default function PlatformHub({
   }
 
   return (
-    <section className="panel mb-6">
+    <section className={`panel mb-6 ${className}`} style={style}>
       {/* 头部：专业 SaaS 矩阵 */}
       <div className="flex items-center justify-between pb-4 mb-4 border-b border-stone-800">
         <div className="flex items-center gap-3">
@@ -107,23 +114,23 @@ export default function PlatformHub({
           </div>
           <div>
             <h2 className="text-sm font-bold text-stone-100 tracking-tight flex items-center gap-2">
-              <span>招聘平台中心</span>
+              <span>{lang === "en" ? "Job Platforms Center" : "招聘平台中心"}</span>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-normal">
-                4 个平台矩阵
+                {lang === "en" ? "4 Platforms Grid" : "4 个平台矩阵"}
               </span>
             </h2>
             <p className="text-[11px] text-stone-400 mt-0.5">
-              点击卡片切换当前工作平台 · 手机一键扫码绑定登录态
+              {lang === "en" ? "Click to switch active platform · Scan QR code to sync session" : "点击卡片切换当前工作平台 · 手机一键扫码绑定登录态"}
             </p>
           </div>
         </div>
 
         <button
           onClick={loadPlatforms}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-stone-800 bg-stone-900/60 hover:border-amber-500/40 text-xs text-stone-400 hover:text-stone-200 transition-all select-none"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-stone-800 bg-stone-900/60 hover:border-amber-500/40 text-xs text-stone-400 hover:text-stone-200 transition-all select-none cursor-pointer"
         >
           <RefreshCw className="h-3.5 w-3.5" />
-          <span>刷新凭证状态</span>
+          <span>{lang === "en" ? "Refresh Session" : "刷新凭证状态"}</span>
         </button>
       </div>
 
@@ -134,6 +141,7 @@ export default function PlatformHub({
           return (
             <div
               key={p.id}
+              data-platform-card="true"
               onClick={() => p.is_supported && onSelectPlatform(p.id)}
               className={`group relative flex flex-col justify-between rounded-2xl border p-4.5 transition-all select-none ${
                 isSelected

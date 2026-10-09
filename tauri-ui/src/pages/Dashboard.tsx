@@ -388,6 +388,190 @@ export default function Dashboard() {
     };
   }, [heroAnimCycle]);
 
+  // 滚动驱动 3D 叙事舞台 (Scroll-driven 3D Storytelling) DOM Refs 与状态
+  const mainScrollRef = useRef<HTMLElement>(null);
+  const heroStageRef = useRef<HTMLDivElement>(null);
+  const heroInnerRef = useRef<HTMLDivElement>(null);
+  const hubRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  const isChattingOrHasHistory = heroChatMessages.length > 0 || heroChatting;
+
+  useEffect(() => {
+    const scrollEl = mainScrollRef.current;
+    if (!scrollEl) return;
+
+    let rafId: number | null = null;
+    const clamp = (val: number, min: number, max: number) => Math.min(max, Math.max(min, val));
+
+    const updateTransforms = () => {
+      rafId = null;
+      const heroInner = heroInnerRef.current;
+      const hub = hubRef.current;
+      const profile = profileRef.current;
+
+      const isReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const isMobile = window.innerWidth < 768;
+
+      if (isChattingOrHasHistory || isReduced || isMobile) {
+        if (heroInner) {
+          heroInner.style.transform = "none";
+          heroInner.style.opacity = "1";
+          heroInner.style.filter = "none";
+          heroInner.style.pointerEvents = "auto";
+        }
+        if (hub) {
+          hub.style.transform = "none";
+          hub.style.opacity = "1";
+          const cards = hub.querySelectorAll<HTMLElement>("[data-platform-card]");
+          cards.forEach((c) => {
+            c.style.transform = "none";
+          });
+        }
+        if (profile) {
+          profile.style.transform = "none";
+          profile.style.opacity = "1";
+          const cols = profile.querySelectorAll<HTMLElement>("[data-bento-col]");
+          cols.forEach((c) => {
+            c.style.transform = "none";
+          });
+        }
+        return;
+      }
+
+      const scrollTop = scrollEl.scrollTop;
+      const vh = scrollEl.clientHeight || window.innerHeight || 800;
+
+      // 1. 首屏 Hero 随着滚动缩小并向空间纵深后退淡出
+      const heroThreshold = Math.max(260, vh * 0.45);
+      const heroProgress = clamp(scrollTop / heroThreshold, 0, 1);
+      if (heroInner) {
+        if (heroProgress === 0) {
+          heroInner.style.transform = "none";
+          heroInner.style.opacity = "1";
+          heroInner.style.filter = "none";
+          heroInner.style.pointerEvents = "auto";
+        } else if (heroProgress >= 1) {
+          heroInner.style.transform = "perspective(1200px) scale(0.85) translateY(-55px) rotateX(-5deg)";
+          heroInner.style.opacity = "0";
+          heroInner.style.filter = "blur(3px)";
+          heroInner.style.pointerEvents = "none";
+        } else {
+          const scale = 1 - 0.14 * heroProgress;
+          const translateY = -45 * heroProgress;
+          const rotateX = -4.5 * heroProgress;
+          const opacity = Math.max(0, 1 - 1.25 * heroProgress);
+          const blur = 2.5 * heroProgress;
+          heroInner.style.transform = `perspective(1200px) scale(${scale.toFixed(4)}) translateY(${translateY.toFixed(2)}px) rotateX(${rotateX.toFixed(2)}deg)`;
+          heroInner.style.opacity = opacity.toFixed(4);
+          heroInner.style.filter = `blur(${blur.toFixed(2)}px)`;
+          heroInner.style.pointerEvents = heroProgress > 0.75 ? "none" : "auto";
+        }
+      }
+
+      // 2. 招聘平台中心以 3D 独立视觉层与错峰视差进入
+      const hubStart = Math.max(80, (hub?.offsetTop ?? vh) - vh * 0.92);
+      const hubEnd = Math.max(340, hubStart + vh * 0.45);
+      const hubProgress = clamp((scrollTop - hubStart) / (hubEnd - hubStart), 0, 1);
+      if (hub) {
+        if (hubProgress >= 1) {
+          hub.style.transform = "none";
+          hub.style.opacity = "1";
+          const cards = hub.querySelectorAll<HTMLElement>("[data-platform-card]");
+          cards.forEach((c) => {
+            c.style.transform = "none";
+          });
+        } else if (hubProgress <= 0) {
+          hub.style.transform = "perspective(1200px) rotateX(13deg) translateY(80px) scale(0.93)";
+          hub.style.opacity = "0.08";
+          const cards = hub.querySelectorAll<HTMLElement>("[data-platform-card]");
+          cards.forEach((c, idx) => {
+            const staggerY = 22 + idx * 14;
+            const staggerRotY = (idx - 1.5) * 2;
+            c.style.transform = `translateY(${staggerY}px) rotateY(${staggerRotY}deg) rotateX(5deg)`;
+          });
+        } else {
+          const remaining = 1 - hubProgress;
+          const rotX = 12 * remaining;
+          const transY = 75 * remaining;
+          const scale = 0.93 + 0.07 * hubProgress;
+          const opacity = 0.1 + 0.9 * hubProgress;
+          hub.style.transform = `perspective(1200px) rotateX(${rotX.toFixed(2)}deg) translateY(${transY.toFixed(2)}px) scale(${scale.toFixed(4)})`;
+          hub.style.opacity = opacity.toFixed(4);
+
+          // 4大平台卡片错峰 3D 微环绕视差
+          const cards = hub.querySelectorAll<HTMLElement>("[data-platform-card]");
+          cards.forEach((c, idx) => {
+            const cardProg = clamp((hubProgress - idx * 0.08) / 0.75, 0, 1);
+            const cardRemaining = 1 - cardProg;
+            const cY = (20 + idx * 13) * cardRemaining;
+            const cRotY = (idx - 1.5) * 1.8 * cardRemaining;
+            const cRotX = 4 * cardRemaining;
+            c.style.transform = `translateY(${cY.toFixed(2)}px) rotateY(${cRotY.toFixed(2)}deg) rotateX(${cRotX.toFixed(2)}deg)`;
+          });
+        }
+      }
+
+      // 3. 求职画像总览以另一层 3D 卡片层叠弧形轨迹展开
+      const profStart = Math.max(260, (profile?.offsetTop ?? (vh * 1.5)) - vh * 0.92);
+      const profEnd = Math.max(540, profStart + vh * 0.45);
+      const profileProgress = clamp((scrollTop - profStart) / (profEnd - profStart), 0, 1);
+      if (profile) {
+        if (profileProgress >= 1) {
+          profile.style.transform = "none";
+          profile.style.opacity = "1";
+          const cols = profile.querySelectorAll<HTMLElement>("[data-bento-col]");
+          cols.forEach((c) => {
+            c.style.transform = "none";
+          });
+        } else if (profileProgress <= 0) {
+          profile.style.transform = "perspective(1200px) rotateX(10deg) translateY(65px) scale(0.94)";
+          profile.style.opacity = "0.08";
+          const cols = profile.querySelectorAll<HTMLElement>("[data-bento-col]");
+          cols.forEach((c, idx) => {
+            const staggerY = 20 + idx * 15;
+            const staggerRotY = (idx - 1) * 1.5;
+            c.style.transform = `translateY(${staggerY}px) rotateY(${staggerRotY}deg)`;
+          });
+        } else {
+          const remaining = 1 - profileProgress;
+          const rotX = 10 * remaining;
+          const transY = 65 * remaining;
+          const scale = 0.94 + 0.06 * profileProgress;
+          const opacity = 0.12 + 0.88 * profileProgress;
+          profile.style.transform = `perspective(1200px) rotateX(${rotX.toFixed(2)}deg) translateY(${transY.toFixed(2)}px) scale(${scale.toFixed(4)})`;
+          profile.style.opacity = opacity.toFixed(4);
+
+          // 3列便当盒错峰展开
+          const cols = profile.querySelectorAll<HTMLElement>("[data-bento-col]");
+          cols.forEach((c, idx) => {
+            const colProg = clamp((profileProgress - idx * 0.1) / 0.75, 0, 1);
+            const colRemaining = 1 - colProg;
+            const cY = (18 + idx * 14) * colRemaining;
+            const cRotY = (idx - 1) * 1.5 * colRemaining;
+            c.style.transform = `translateY(${cY.toFixed(2)}px) rotateY(${cRotY.toFixed(2)}deg)`;
+          });
+        }
+      }
+    };
+
+    const handleScroll = () => {
+      if (rafId === null) {
+        rafId = requestAnimationFrame(updateTransforms);
+      }
+    };
+
+    scrollEl.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll, { passive: true });
+    updateTransforms();
+
+    return () => {
+      scrollEl.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+  }, [isChattingOrHasHistory]);
+
   function handleNextRecBatch() {
     setIsRotatingRec(true);
     setTimeout(() => {
@@ -839,8 +1023,15 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* 主内容区域 */}
-        <main className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+        {/* 主内容区域（挂载 3D 滚轮叙事引擎 Ref，工作台初始态下无冗余内边距以保证 100vh 居中） */}
+        <main
+          ref={mainScrollRef}
+          className={`flex-1 overflow-y-auto ${
+            activeNav === "workbench" && !isChattingOrHasHistory
+              ? "px-4 sm:px-6 py-0 scroll-smooth"
+              : "px-6 py-5 space-y-6"
+          }`}
+        >
           {replyNotice && (
             <div className="flex items-center gap-3 border border-[var(--signal)] bg-[var(--panel-2)] px-4 py-3 rounded-xl shadow-md">
               <span className="min-w-0 flex-1 break-words text-sm text-[var(--signal)]">
@@ -860,30 +1051,41 @@ export default function Dashboard() {
           )}
 
           {/* ========================================================================= */}
-          {/* TAB 1: 巡航工作台 (Hunt Now https://www.hunt.now/ 风格高保真复刻)           */}
+          {/* TAB 1: 巡航工作台 (基于滚轮驱动的 3D 层叠叙事与沉浸式首页体验)            */}
           {/* ========================================================================= */}
           {activeNav === "workbench" && (
-            <div className="space-y-12 mx-auto w-full max-w-7xl px-2 sm:px-6 transition-all duration-300 ease-in-out">
-              {/* 自然分布全屏居中 Hero：网格底纹 + 居中暖光辉 + 无方框自然铺展 */}
-              <section className="relative isolate overflow-visible py-6 sm:py-12 w-full flex flex-col items-center justify-center">
-                <div className="dot-pattern absolute inset-0 -z-10 opacity-70" aria-hidden="true" />
+            <div className="perspective-stage mx-auto w-full max-w-7xl px-2 sm:px-6 pb-16 transition-all duration-300 ease-in-out">
+              {/* ===================================================================== */}
+              {/* 阶段 1：首屏绝对主角 Hero Section (接近 100vh，聚焦 AI 求职对话，无竞争元素) */}
+              {/* ===================================================================== */}
+              <section
+                ref={heroStageRef}
+                className={`relative isolate overflow-visible w-full flex flex-col items-center justify-center transition-all ${
+                  isChattingOrHasHistory
+                    ? "py-8 min-h-0"
+                    : "min-h-[calc(100vh-3.5rem)] py-8 sm:py-12"
+                }`}
+              >
                 <div
-                  className="fx-glow w-full max-w-5xl pointer-events-none transition-all duration-500"
-                  aria-hidden="true"
-                />
+                  ref={heroInnerRef}
+                  className="mx-auto w-full flex flex-col items-center text-center perspective-layer relative z-10"
+                >
+                  <div className="dot-pattern absolute inset-0 -z-10 opacity-70 pointer-events-none" aria-hidden="true" />
+                  <div
+                    className="fx-glow w-full max-w-5xl pointer-events-none transition-all duration-500"
+                    aria-hidden="true"
+                  />
 
-                {/* 右上角 AI 顾问在线状态徽章（简化文案） */}
-                <div className="self-end sm:absolute sm:top-2 sm:right-2 z-10 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-950/60 px-3 py-1 text-xs text-emerald-300 backdrop-blur shadow-sm select-none mb-4 sm:mb-0">
-                  <span className="relative flex size-2">
-                    <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex size-2 rounded-full bg-emerald-400"></span>
-                  </span>
-                  <span className="font-medium text-[11px] sm:text-xs">
-                    {lang === "en" ? "AI Advisor Online" : "AI 顾问在线"}
-                  </span>
-                </div>
-
-                <div className="mx-auto w-full flex flex-col items-center text-center">
+                  {/* 右上角 AI 顾问在线状态徽章（简化文案） */}
+                  <div className="self-end sm:absolute sm:top-2 sm:right-2 z-10 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-950/60 px-3 py-1 text-xs text-emerald-300 backdrop-blur shadow-sm select-none mb-4 sm:mb-0">
+                    <span className="relative flex size-2">
+                      <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex size-2 rounded-full bg-emerald-400"></span>
+                    </span>
+                    <span className="font-medium text-[11px] sm:text-xs">
+                      {lang === "en" ? "AI Advisor Online" : "AI 顾问在线"}
+                    </span>
+                  </div>
                   {/* 主标题与副标题 (逐行渐显动效流) */}
                   <div
                     className={`w-full transition-opacity duration-500 ease-out ${
@@ -1179,11 +1381,19 @@ export default function Dashboard() {
                 </div>
               </section>
 
-              {/* 招聘平台四大矩阵（已整合至主页面：平台切换 + 扫码登录/凭证刷新窗口） */}
-              <PlatformHub
-                selectedPlatform={selectedPlatform}
-                onSelectPlatform={setSelectedPlatform}
-              />
+              {/* ===================================================================== */}
+              {/* 阶段 2：招聘平台中心 (3D 独立视觉层，基于滚轮倾斜、景深浮现与错峰展开)    */}
+              {/* ===================================================================== */}
+              <div
+                ref={hubRef}
+                className="perspective-layer spatial-card-glow w-full rounded-3xl mt-8 sm:mt-12 transition-transform duration-75"
+              >
+                <PlatformHub
+                  lang={lang}
+                  selectedPlatform={selectedPlatform}
+                  onSelectPlatform={setSelectedPlatform}
+                />
+              </div>
 
               {/* 人工审核卡片（如果处于 review 暂停中） */}
               {reviewPending && (
@@ -1197,8 +1407,13 @@ export default function Dashboard() {
                 </Panel>
               )}
 
-              {/* 求职画像总览（展示当前目标城市、岗位等，点击可跳转详细配置与手动修改） */}
-              <div className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm space-y-4">
+              {/* ===================================================================== */}
+              {/* 阶段 3：求职画像总览 (3D 纵深层叠，展示当前目标与策略，可一键跳转详细微调) */}
+              {/* ===================================================================== */}
+              <div
+                ref={profileRef}
+                className="perspective-layer spatial-card-glow w-full rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm space-y-4 mt-8 sm:mt-12 transition-transform duration-75"
+              >
                 <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[var(--grid)]">
                   <div className="flex items-center gap-2">
                     <UserCheck className="h-4 w-4 text-amber-400" />
@@ -1233,7 +1448,10 @@ export default function Dashboard() {
                 {/* 3列信息便当盒 */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 text-xs">
                   {/* 1. 意向岗位与地域 */}
-                  <div className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5 flex flex-col justify-between">
+                  <div
+                    data-bento-col="0"
+                    className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5 flex flex-col justify-between transition-transform duration-75"
+                  >
                     <div>
                       <div className="text-[10px] text-stone-500 font-medium">
                         {lang === "en" ? "Target Role & Cities" : "目标岗位与城市"}
@@ -1250,7 +1468,10 @@ export default function Dashboard() {
                   </div>
 
                   {/* 2. 默认投递简历 */}
-                  <div className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5 flex flex-col justify-between">
+                  <div
+                    data-bento-col="1"
+                    className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5 flex flex-col justify-between transition-transform duration-75"
+                  >
                     <div>
                       <div className="flex items-center justify-between text-[10px] text-stone-500 font-medium">
                         <span>{lang === "en" ? "Bound Resume" : "当前绑定简历"}</span>
@@ -1275,7 +1496,10 @@ export default function Dashboard() {
                   </div>
 
                   {/* 3. 拟人风控与模式 */}
-                  <div className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5 flex flex-col justify-between">
+                  <div
+                    data-bento-col="2"
+                    className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-3.5 flex flex-col justify-between transition-transform duration-75"
+                  >
                     <div>
                       <div className="text-[10px] text-stone-500 font-medium">
                         {lang === "en" ? "Cruise Mode & Safety" : "巡航模式与安全保护"}
