@@ -291,8 +291,19 @@ export default function Dashboard() {
 
           {/* TAB 3: 简历资料库 */}
           {activeNav === "resumes" && (
-            <div className="max-w-4xl mx-auto space-y-5">
-              <ResumePanel />
+            <div className="max-w-6xl mx-auto space-y-5">
+              <ResumePanel
+                onExtractProfile={(resumeName, text) => {
+                  pushAgentMessage({
+                    role: "user",
+                    content: `请基于我的简历资料库中的「${resumeName}」来识别提取我的求职画像（目标岗位、意向城市、核心技能及排除方向）。${
+                      text ? `\n\n简历内容参考：\n${text.slice(0, 1200)}` : ""
+                    }`,
+                  });
+                  setActiveNav("copilot");
+                }}
+                onGoToProfile={() => setActiveNav("profile")}
+              />
             </div>
           )}
 
