@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import type { RuleForm } from "../lib/profileForm";
 import type { Lang } from "../lib/i18n";
+import { useRunStore } from "../store";
 import { MagicCard } from "./core/MagicBento";
 
 interface ProfilePanelProps {
@@ -64,10 +65,16 @@ export default function ProfilePanel({
 }: ProfilePanelProps) {
   const [savedSuccess, setSavedSuccess] = useState(false);
   const isEn = lang === "en";
+  const notify = useRunStore((s) => s.notify);
 
   const handleSave = async () => {
     await onSaveConfig();
     setSavedSuccess(true);
+    notify({
+      type: "success",
+      text: isEn ? "Job profile successfully saved!" : "求职画像与配置已成功保存！",
+      source: isEn ? "Profile" : "求职画像"
+    });
     setTimeout(() => setSavedSuccess(false), 2500);
   };
 
