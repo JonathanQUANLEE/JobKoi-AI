@@ -854,22 +854,20 @@ export default function Dashboard() {
                   aria-hidden="true"
                 />
 
+                {/* 右上角 AI 顾问在线状态徽章（简化文案） */}
+                <div className="absolute top-3.5 right-4 sm:top-4 sm:right-6 z-10 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-950/50 px-2.5 py-1 text-xs text-emerald-300 backdrop-blur shadow-sm select-none">
+                  <span className="relative flex size-2">
+                    <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex size-2 rounded-full bg-emerald-400"></span>
+                  </span>
+                  <span className="font-medium text-[11px] sm:text-xs">AI 顾问在线</span>
+                </div>
+
                 <div
                   className={`mx-auto flex flex-col items-center text-center transition-all duration-300 ease-in-out ${
                     sidebarCollapsed ? "max-w-6xl" : "max-w-5xl"
                   }`}
                 >
-                  {/* 顶部 AI 顾问就绪徽章 */}
-                  <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-950/40 px-4 py-1.5 text-xs text-emerald-300 backdrop-blur shadow-sm">
-                    <span className="relative flex size-2">
-                      <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex size-2 rounded-full bg-emerald-400"></span>
-                    </span>
-                    <span className="font-medium">AI 专属求职顾问在线</span>
-                    <span className="text-emerald-500/70">·</span>
-                    <span className="text-stone-300">倾听你的背景与诉求</span>
-                  </div>
-
                   {/* 主标题与副标题 (30秒逐行渐显动效流: 第1行 -> 第2行 -> 第3行) */}
                   <div
                     className={`w-full transition-opacity duration-500 ease-out ${
