@@ -11,6 +11,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { type Mode } from "../lib/profileForm";
+import { MagicCard } from "./core/MagicBento";
 
 interface PipelineVisualizerProps {
   running: boolean;
@@ -79,7 +80,11 @@ export default function PipelineVisualizer({
   return (
     <div className="space-y-4">
       {/* 自动化运行管线（Pipeline Stepper） */}
-      <div className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm">
+      <MagicCard
+        glowColor="245, 158, 11"
+        className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm"
+        enableTilt={false}
+      >
         <div className="flex items-center justify-between pb-3 border-b border-[var(--grid)]">
           <div className="flex items-center gap-2">
             <span className={`h-2.5 w-2.5 rounded-full ${running ? "bg-emerald-400 animate-pulse" : "bg-stone-500"}`} />
@@ -129,7 +134,12 @@ export default function PipelineVisualizer({
         </div>
 
         {/* 当前处理中岗位卡片 (Live Job Focus Card) */}
-        <div className="mt-4 rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-4 transition-all">
+        <MagicCard
+          glowColor="245, 158, 11"
+          className="mt-4 rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-4 transition-all"
+          enableTilt={false}
+          particleCount={6}
+        >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
@@ -174,7 +184,7 @@ export default function PipelineVisualizer({
             <span className="font-semibold text-amber-400 mr-1.5">比对结论:</span>
             <span className="text-[var(--ink)] leading-relaxed">{matchReason}</span>
           </div>
-        </div>
+        </MagicCard>
 
         {/* 统计漏斗指标 */}
         <div className="grid grid-cols-4 gap-2 pt-4">
@@ -183,10 +193,15 @@ export default function PipelineVisualizer({
           <MetricCell label="规则跳过" value={stats.skipped} color="text-stone-400" />
           <MetricCell label="投递转化率" value={rate} color="text-amber-400" />
         </div>
-      </div>
+      </MagicCard>
 
       {/* 安全合规徽章（SaaSFrame Trust Badge） */}
-      <div className="flex items-center justify-between rounded-xl border border-stone-800/80 bg-stone-900/30 px-4 py-3 text-xs text-stone-400">
+      <MagicCard
+        glowColor="16, 185, 129"
+        className="flex items-center justify-between rounded-xl border border-stone-800/80 bg-stone-900/30 px-4 py-3 text-xs text-stone-400"
+        enableTilt={false}
+        particleCount={4}
+      >
         <div className="flex items-center gap-2">
           <ShieldCheck className="h-4 w-4 text-amber-400 shrink-0" />
           <span>拟人化风控保护：随机拟真浏览间隔，本地私密会话隔离</span>
@@ -200,7 +215,7 @@ export default function PipelineVisualizer({
             调整风控
           </button>
         )}
-      </div>
+      </MagicCard>
     </div>
   );
 }
@@ -245,9 +260,15 @@ function PipelineStep({
 
 function MetricCell({ label, value, color }: { label: string; value: string | number; color: string }) {
   return (
-    <div className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-2.5 text-center">
+    <MagicCard
+      glowColor="245, 158, 11"
+      className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-2.5 text-center"
+      enableTilt={true}
+      particleCount={4}
+      spotlightRadius={180}
+    >
       <div className="text-[10px] text-[var(--muted-fg)]">{label}</div>
       <div className={`mt-0.5 text-base font-bold font-mono ${color}`}>{value}</div>
-    </div>
+    </MagicCard>
   );
 }

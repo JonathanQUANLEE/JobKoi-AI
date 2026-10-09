@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { ipc, type ResumeItem } from "../lib/ipc";
 import { useT } from "../store";
+import { MagicCard } from "./core/MagicBento";
 
 /**
  * 我的简历资料库：列出 resume/ 目录里的简历文件，支持设默认简历。
@@ -52,7 +53,7 @@ export default function ResumePanel() {
   }
 
   return (
-    <section className="panel">
+    <MagicCard className="panel" glowColor="245, 158, 11" enableTilt={false}>
       <div className="panel-title">
         <span className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-[var(--accent)]" />
@@ -73,21 +74,30 @@ export default function ResumePanel() {
       </p>
 
       {resumes.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-[var(--grid)] bg-[var(--panel-2)]/50 p-6 text-center">
+        <MagicCard
+          className="rounded-xl border border-dashed border-[var(--grid)] bg-[var(--panel-2)]/50 p-6 text-center"
+          glowColor="245, 158, 11"
+          enableTilt={false}
+          particleCount={6}
+        >
           <UploadCloud className="mx-auto h-8 w-8 text-stone-600 mb-2" />
           <p className="text-xs text-[var(--muted-fg)]">{t("resume.empty")}</p>
           <p className="text-[11px] text-stone-500 mt-1">支持格式：PDF、Word (.docx)、PNG/JPG 图片</p>
-        </div>
+        </MagicCard>
       ) : (
         <div className="space-y-2">
           {resumes.map((item) => (
-            <div
+            <MagicCard
               key={item.name}
+              glowColor={item.is_default ? "245, 158, 11" : "120, 113, 108"}
               className={`group flex items-center justify-between rounded-xl border p-3 transition-all ${
                 item.is_default
                   ? "border-amber-500/40 bg-amber-500/5 shadow-sm"
                   : "border-[var(--grid)] bg-[var(--panel-2)] hover:border-stone-700 hover:bg-[var(--panel-hover)]"
               }`}
+              enableTilt={false}
+              particleCount={6}
+              spotlightRadius={180}
             >
               <div className="min-w-0 flex items-center gap-3">
                 <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${
@@ -122,7 +132,7 @@ export default function ResumePanel() {
                   {t("resume.setDefault")}
                 </button>
               )}
-            </div>
+            </MagicCard>
           ))}
         </div>
       )}
@@ -133,7 +143,7 @@ export default function ResumePanel() {
           <span>{message}</span>
         </div>
       )}
-    </section>
+    </MagicCard>
   );
 }
 

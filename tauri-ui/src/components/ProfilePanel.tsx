@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import type { RuleForm } from "../lib/profileForm";
 import type { Lang } from "../lib/i18n";
+import { MagicCard } from "./core/MagicBento";
 
 interface ProfilePanelProps {
   label: string;
@@ -149,7 +150,14 @@ export default function ProfilePanel({
       {/* 主配置网格 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* 卡片 1: 目标岗位与求职城市 */}
-        <section className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm space-y-4">
+        <MagicCard
+          className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm space-y-4"
+          glowColor="245, 158, 11"
+          enableTilt={false}
+          enableStars={true}
+          particleCount={6}
+          clickEffect={true}
+        >
           <div className="flex items-center gap-2 pb-2.5 border-b border-[var(--grid)]">
             <Briefcase className="size-4 text-amber-400" />
             <h2 className="text-xs font-bold uppercase tracking-wider text-stone-200">
@@ -242,10 +250,17 @@ export default function ProfilePanel({
               </div>
             </div>
           </div>
-        </section>
+        </MagicCard>
 
         {/* 卡片 2: 技能偏好与不考虑的方向 */}
-        <section className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm space-y-4">
+        <MagicCard
+          className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm space-y-4"
+          glowColor="16, 185, 129"
+          enableTilt={false}
+          enableStars={true}
+          particleCount={6}
+          clickEffect={true}
+        >
           <div className="flex items-center gap-2 pb-2.5 border-b border-[var(--grid)]">
             <Filter className="size-4 text-emerald-400" />
             <h2 className="text-xs font-bold uppercase tracking-wider text-stone-200">
@@ -303,10 +318,17 @@ export default function ProfilePanel({
               💡 {isEn ? "Matches jobs containing your skills and automatically skips jobs containing unwanted terms." : "系统将优先匹配包含您技能词的职位，并自动滤除包含不想考虑词汇的岗位。"}
             </div>
           </div>
-        </section>
+        </MagicCard>
 
         {/* 卡片 3: 投递设置与账号保护 */}
-        <section className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm space-y-4">
+        <MagicCard
+          className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm space-y-4"
+          glowColor="6, 182, 212"
+          enableTilt={false}
+          enableStars={true}
+          particleCount={6}
+          clickEffect={true}
+        >
           <div className="flex items-center gap-2 pb-2.5 border-b border-[var(--grid)]">
             <ShieldCheck className="size-4 text-cyan-400" />
             <h2 className="text-xs font-bold uppercase tracking-wider text-stone-200">
@@ -378,10 +400,17 @@ export default function ProfilePanel({
               </button>
             </div>
           </div>
-        </section>
+        </MagicCard>
 
         {/* 卡片 4: 默认投递简历关联 */}
-        <section className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm space-y-4">
+        <MagicCard
+          className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm space-y-4"
+          glowColor="245, 158, 11"
+          enableTilt={false}
+          enableStars={true}
+          particleCount={6}
+          clickEffect={true}
+        >
           <div className="flex items-center justify-between pb-2.5 border-b border-[var(--grid)]">
             <div className="flex items-center gap-2">
               <FileText className="size-4 text-amber-400" />
@@ -421,7 +450,7 @@ export default function ProfilePanel({
               {isEn ? "Change" : "更换"}
             </button>
           </div>
-        </section>
+        </MagicCard>
       </div>
 
       {/* 底部确认行动栏 */}

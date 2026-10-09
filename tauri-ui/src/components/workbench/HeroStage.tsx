@@ -14,6 +14,7 @@ import type { RuleForm } from "../../lib/profileForm";
 import type { Lang } from "../../lib/i18n";
 import { TextEffect } from "../core/text-effect";
 import { summarizeAgentProfile } from "../../lib/agentPreview";
+import { MagicCard } from "../core/MagicBento";
 import {
   PLACEHOLDERS,
   BACKGROUND_TAGS,
@@ -285,7 +286,12 @@ export default function HeroStage({
 
         {/* 人与 Agent 对话交互展示区（发送对话或点击情况案例后优雅展开） */}
         {(heroChatMessages.length > 0 || heroChatting) && (
-          <div className="rise-in mt-6 w-full max-w-5xl rounded-2xl border border-[#ff5722]/40 bg-gradient-to-b from-[#1c1917]/95 to-[#12100e]/95 p-5 shadow-2xl backdrop-blur-xl text-left">
+          <MagicCard
+            className="rise-in mt-6 w-full max-w-5xl rounded-2xl border border-[#ff5722]/40 bg-gradient-to-b from-[#1c1917]/95 to-[#12100e]/95 p-5 shadow-2xl backdrop-blur-xl text-left"
+            glowColor="255, 87, 34"
+            enableTilt={false}
+            particleCount={8}
+          >
             <div className="flex items-center justify-between pb-3 border-b border-stone-800/80 mb-3.5">
               <span className="text-xs font-bold text-stone-200 flex items-center gap-1.5">
                 <Bot className="size-4 text-[#ff5722]" />
@@ -350,7 +356,12 @@ export default function HeroStage({
 
             {/* 提炼出的投递画像卡片 */}
             {heroProfileResult && (
-              <div className="rounded-xl border border-white/10 bg-black/40 p-4">
+              <MagicCard
+                className="rounded-xl border border-white/10 bg-black/40 p-4"
+                glowColor="245, 158, 11"
+                enableTilt={false}
+                particleCount={6}
+              >
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
                     <Sparkles className="size-3.5 text-[#ff5722]" />
@@ -410,9 +421,9 @@ export default function HeroStage({
                     </button>
                   </div>
                 </div>
-              </div>
+              </MagicCard>
             )}
-          </div>
+          </MagicCard>
         )}
       </div>
     </section>
