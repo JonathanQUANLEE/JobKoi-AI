@@ -63,7 +63,6 @@ export default function ProfileBentoCard({
               opacity: 0,
               pointerEvents: "none",
               zIndex: 10,
-              transform: "perspective(1400px) translateY(120vh) rotateX(24deg) scale(0.8)",
             }
           : undefined
       }
