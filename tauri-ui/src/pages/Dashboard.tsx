@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode } from "react";
 import { Channel } from "@tauri-apps/api/core";
 import {
   SlidersHorizontal,
@@ -388,193 +388,254 @@ export default function Dashboard() {
     };
   }, [heroAnimCycle]);
 
-  // 滚动驱动 3D 环形万花筒空间系统 (3D Cylindrical Ring Carousel) DOM Refs 与状态
+  // =========================================================================
+  // 学习 OptionWheel (React Bits) 的物理动力学平滑引擎 (Cylindrical 3D Wheel Physics)
+  // =========================================================================
   const mainScrollRef = useRef<HTMLElement>(null);
   const heroStageRef = useRef<HTMLDivElement>(null);
   const heroInnerRef = useRef<HTMLDivElement>(null);
   const hubRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
 
+  const stagePosRef = useRef<number>(0);
+  const stageTargetRef = useRef<number>(0);
+  const stageRafRef = useRef<number | null>(null);
+  const stageLastTimeRef = useRef<number>(0);
+  const stageWheelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stageDragRef = useRef<{ y: number; start: number; id: number } | null>(null);
+  const stageDragMovedRef = useRef<boolean>(false);
+  const ringActiveIndexRef = useRef<0 | 1 | 2>(0);
+
   const [ringActiveIndex, setRingActiveIndex] = useState<0 | 1 | 2>(0);
   const isChattingOrHasHistory = heroChatMessages.length > 0 || heroChatting;
 
-  const scrollToRingStage = (index: 0 | 1 | 2) => {
-    const scrollEl = mainScrollRef.current;
-    if (!scrollEl) return;
-    const maxScroll = scrollEl.scrollHeight - scrollEl.clientHeight;
-    if (maxScroll <= 0) return;
-    const targetT = index === 0 ? 0 : index === 1 ? 0.5 : 1.0;
-    scrollEl.scrollTo({ top: targetT * maxScroll, behavior: "smooth" });
-  };
+  // 将 3D 环形柱面矩阵变换直接映射到 3 个卡片 DOM Ref（零 React Re-render 开销，GPU 硬件加速合成）
+  const renderStageTransforms = useCallback((pos: number) => {
+    const heroStage = heroStageRef.current;
+    const hub = hubRef.current;
+    const profile = profileRef.current;
 
-  useEffect(() => {
-    const scrollEl = mainScrollRef.current;
-    if (!scrollEl) return;
+    const isReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const isMobile = window.innerWidth < 768;
 
-    let rafId: number | null = null;
-    const clamp = (val: number, min: number, max: number) => Math.min(max, Math.max(min, val));
-
-    const updateTransforms = () => {
-      rafId = null;
-      const heroStage = heroStageRef.current;
-      const hub = hubRef.current;
-      const profile = profileRef.current;
-
-      const isReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      const isMobile = window.innerWidth < 768;
-
-      if (isChattingOrHasHistory || isReduced || isMobile) {
-        [heroStage, hub, profile].forEach((el) => {
-          if (el) {
-            el.style.transform = "none";
-            el.style.opacity = "1";
-            el.style.filter = "none";
-            el.style.pointerEvents = "auto";
-            el.style.zIndex = "auto";
-          }
-        });
-        const heroInner = heroInnerRef.current;
-        if (heroInner) {
-          heroInner.style.transform = "none";
-          heroInner.style.opacity = "1";
-          heroInner.style.filter = "none";
-        }
-        return;
-      }
-
-      const maxScroll = scrollEl.scrollHeight - scrollEl.clientHeight;
-      if (maxScroll <= 0) return;
-
-      const scrollTop = scrollEl.scrollTop;
-      const t = clamp(scrollTop / maxScroll, 0, 1);
-      const vh = scrollEl.clientHeight || window.innerHeight || 800;
-      // 动态计算圆弧上下偏移距离，确保在所有屏幕高度下卡片均处于黄金视界
-      const stepY = Math.min(320, Math.max(220, vh * 0.35));
-
-      // 计算当前处于哪个站台（0: Hero, 1: PlatformHub, 2: ProfileBento）
-      const currentIndex: 0 | 1 | 2 = t < 0.28 ? 0 : t < 0.72 ? 1 : 2;
-      setRingActiveIndex((prev) => (prev !== currentIndex ? currentIndex : prev));
-
-      const applyRingTransform = (
-        el: HTMLElement | null,
-        k: 0 | 1 | 2,
-        staggerItems?: NodeListOf<HTMLElement>
-      ) => {
-        if (!el) return;
-
-        // 目标中心点（0: Hero, 1: PlatformHub, 2: ProfileBento）
-        const targetT = k * 0.5;
-        const dist = Math.abs(t - targetT);
-        const isCenter = dist < 0.06;
-
-        if (isCenter) {
+    if (isChattingOrHasHistory || isReduced || isMobile) {
+      [heroStage, hub, profile].forEach((el) => {
+        if (el) {
           el.style.transform = "none";
           el.style.opacity = "1";
           el.style.filter = "none";
           el.style.pointerEvents = "auto";
-          el.style.zIndex = "30";
-          if (staggerItems) {
-            staggerItems.forEach((item) => {
-              item.style.transform = "none";
-            });
-          }
-          return;
+          el.style.zIndex = "auto";
         }
+      });
+      const heroInner = heroInnerRef.current;
+      if (heroInner) {
+        heroInner.style.transform = "none";
+        heroInner.style.opacity = "1";
+        heroInner.style.filter = "none";
+      }
+      return;
+    }
 
-        // 当卡片位于中心下方 (尚未滑到该卡片，t < targetT):
-        if (t < targetT) {
-          // 关键需求：在首屏 (用户刚进来看到搜索框，t <= 0.05) 时，
-          // 下方俩卡片 (招聘平台 k=1, 求职画像 k=2) 绝对不显现 (opacity: 0)！
-          if (t <= 0.05) {
-            el.style.opacity = "0";
-            el.style.transform = `perspective(1400px) translateY(${(stepY * 1.5).toFixed(2)}px) rotateX(25deg) scale(0.8)`;
-            el.style.pointerEvents = "none";
-            el.style.zIndex = "10";
-            return;
-          }
+    if (!heroStage || !hub || !profile) return;
 
-          // 招聘平台中心 (k=1) 在 t 从 0.05 ➔ 0.45 之间平滑浮现升入中心
-          // 求职画像总览 (k=2) 在 t <= 0.35 时保持隐藏，在 0.35 ➔ 0.95 之间平滑浮现升入中心
-          const startT = k === 1 ? 0.05 : 0.35;
-          if (t < startT) {
-            el.style.opacity = "0";
-            el.style.transform = `perspective(1400px) translateY(${(stepY * 1.5).toFixed(2)}px) rotateX(25deg) scale(0.8)`;
-            el.style.pointerEvents = "none";
-            el.style.zIndex = "10";
-            return;
-          }
+    const vh = window.innerHeight || 800;
+    const stepY = Math.min(320, Math.max(220, vh * 0.35));
 
-          // 平滑从下方向中心飞入上升
-          const entryProg = clamp((t - startT) / (targetT - startT), 0, 1);
-          const transY = stepY * (1.35 - 1.35 * Math.pow(entryProg, 0.88));
-          const rotX = 22 * (1 - entryProg);
-          const scale = 0.82 + 0.18 * entryProg;
-          const opacity = 0.15 + 0.85 * Math.pow(entryProg, 1.15);
-          const blur = Math.min(2.5, 2 * (1 - entryProg));
+    const stages = [
+      { el: heroStage, index: 0 },
+      { el: hub, index: 1 },
+      { el: profile, index: 2 },
+    ];
 
-          el.style.transform = `perspective(1400px) translateY(${transY.toFixed(2)}px) rotateX(${rotX.toFixed(2)}deg) scale(${scale.toFixed(4)})`;
-          el.style.opacity = opacity.toFixed(4);
-          el.style.filter = blur > 0.4 ? `blur(${blur.toFixed(1)}px)` : "none";
+    stages.forEach(({ el, index }) => {
+      const d = index - pos; // d = 0 时处于正中心黄金视界
+      const dist = Math.abs(d);
+
+      if (dist < 0.02) {
+        el.style.transform = "none";
+        el.style.opacity = "1";
+        el.style.filter = "none";
+        el.style.pointerEvents = "auto";
+        el.style.zIndex = "30";
+        return;
+      }
+
+      if (d > 0) {
+        // 位于中心下方（尚未滚入的未来站台）
+        // 关键视觉原则：首屏 (pos <= 0.05) 时，下方俩卡片绝对不显现 (opacity: 0)！
+        if (pos <= 0.05) {
+          el.style.opacity = "0";
+          el.style.transform = `perspective(1400px) translateY(${(stepY * 1.5).toFixed(1)}px) rotateX(24deg) scale(0.82)`;
           el.style.pointerEvents = "none";
-          el.style.zIndex = "15";
-
-          if (staggerItems && staggerItems.length > 0) {
-            const n = staggerItems.length;
-            staggerItems.forEach((item, idx) => {
-              const centerIdx = (n - 1) / 2;
-              const normIdx = idx - centerIdx;
-              const staggerRotY = normIdx * 2.2 * (1 - entryProg);
-              const staggerY = Math.abs(normIdx) * 6 * (1 - entryProg);
-              item.style.transform = `translateY(${staggerY.toFixed(1)}px) rotateY(${staggerRotY.toFixed(1)}deg)`;
-            });
-          }
+          el.style.zIndex = "10";
           return;
         }
 
-        // 当卡片位于中心上方 (已被滑过，向天穹后仰折入上圆弧，t > targetT):
-        // 核心要求：变透明形成环形柱面，绝不直接消失！
-        const pastProg = clamp((t - targetT) / 0.5, 0, 1.8);
+        const startPos = index === 1 ? 0.05 : 0.45;
+        if (pos < startPos) {
+          el.style.opacity = "0";
+          el.style.transform = `perspective(1400px) translateY(${(stepY * 1.5).toFixed(1)}px) rotateX(24deg) scale(0.82)`;
+          el.style.pointerEvents = "none";
+          el.style.zIndex = "10";
+          return;
+        }
+
+        // 平滑从下方向中心飞入上升：entryProg 从 0 ➔ 1
+        const entryProg = Math.min(1, Math.max(0, (pos - startPos) / (index - startPos)));
+        const transY = stepY * (1.35 - 1.35 * Math.pow(entryProg, 0.88));
+        const rotX = 22 * (1 - entryProg);
+        const scale = 0.82 + 0.18 * entryProg;
+        const opacity = 0.15 + 0.85 * Math.pow(entryProg, 1.15);
+        const blur = Math.min(2.5, 2 * (1 - entryProg));
+
+        el.style.transform = `perspective(1400px) translateY(${transY.toFixed(1)}px) rotateX(${rotX.toFixed(1)}deg) scale(${scale.toFixed(4)})`;
+        el.style.opacity = opacity.toFixed(3);
+        el.style.filter = blur > 0.4 ? `blur(${blur.toFixed(1)}px)` : "none";
+        el.style.pointerEvents = "none";
+        el.style.zIndex = "15";
+      } else {
+        // 位于中心上方（已被滑过的过去站台，向天穹后仰折入上圆弧：变透明形成环形柱面，绝不直接消失）
+        const pastProg = Math.min(1.8, Math.max(0, -d));
         const transY = -stepY * Math.pow(pastProg, 0.92);
         const rotX = -21 * Math.pow(pastProg, 0.85);
         const scale = Math.max(0.74, 1 - 0.16 * pastProg);
         const opacity = Math.max(0.24, 1 - 0.58 * pastProg);
         const blur = Math.min(2.5, 1.8 * pastProg);
 
-        el.style.transform = `perspective(1400px) translateY(${transY.toFixed(2)}px) rotateX(${rotX.toFixed(2)}deg) scale(${scale.toFixed(4)})`;
-        el.style.opacity = opacity.toFixed(4);
+        el.style.transform = `perspective(1400px) translateY(${transY.toFixed(1)}px) rotateX(${rotX.toFixed(1)}deg) scale(${scale.toFixed(4)})`;
+        el.style.opacity = opacity.toFixed(3);
         el.style.filter = blur > 0.3 ? `blur(${blur.toFixed(1)}px)` : "none";
         el.style.pointerEvents = "none";
         el.style.zIndex = pastProg < 0.9 ? "20" : "10";
-      };
-
-      // 阶段 1：Hero (k = 0)
-      applyRingTransform(heroStage, 0);
-
-      // 阶段 2：招聘平台中心 (k = 1)
-      const platformCards = hub?.querySelectorAll<HTMLElement>("[data-platform-card]");
-      applyRingTransform(hub, 1, platformCards);
-
-      // 阶段 3：求职画像总览 (k = 2)
-      const bentoCols = profile?.querySelectorAll<HTMLElement>("[data-bento-col]");
-      applyRingTransform(profile, 2, bentoCols);
-    };
-
-    const handleScroll = () => {
-      if (rafId === null) {
-        rafId = requestAnimationFrame(updateTransforms);
       }
+    });
+  }, [isChattingOrHasHistory]);
+
+  // OptionWheel 核心 rAF 物理指数平滑渲染主循环
+  const runStageFrame = useCallback((now: number) => {
+    const dt = Math.min((now - stageLastTimeRef.current) / 1000, 0.05);
+    stageLastTimeRef.current = now;
+
+    // tau = 0.20 (200ms 时间阻尼常数，兼具响应度与丝滑度)
+    const tau = 0.20;
+    const k = 1 - Math.exp(-dt / tau);
+
+    const target = stageTargetRef.current;
+    const cur = stagePosRef.current;
+    let next = cur + (target - cur) * k;
+    const settled = Math.abs(target - next) < 0.001;
+    if (settled) next = target;
+    stagePosRef.current = next;
+
+    renderStageTransforms(next);
+
+    // 仅在整数索引改变时通知 React 更新右侧指示点
+    const roundedIdx = Math.min(2, Math.max(0, Math.round(next))) as 0 | 1 | 2;
+    if (roundedIdx !== ringActiveIndexRef.current) {
+      ringActiveIndexRef.current = roundedIdx;
+      setRingActiveIndex(roundedIdx);
+    }
+
+    if (!settled) {
+      stageRafRef.current = requestAnimationFrame(runStageFrame);
+    } else {
+      stageRafRef.current = null;
+    }
+  }, [renderStageTransforms]);
+
+  const startStageLoop = useCallback(() => {
+    if (stageRafRef.current != null) {
+      cancelAnimationFrame(stageRafRef.current);
+    }
+    stageLastTimeRef.current = performance.now();
+    stageRafRef.current = requestAnimationFrame(runStageFrame);
+  }, [runStageFrame]);
+
+  const applyStageTarget = useCallback((value: number, snap: boolean) => {
+    let v = Math.min(Math.max(value, 0), 2);
+    if (snap) v = Math.round(v);
+    stageTargetRef.current = v;
+    startStageLoop();
+  }, [startStageLoop]);
+
+  const scrollToRingStage = useCallback((index: 0 | 1 | 2) => {
+    applyStageTarget(index, true);
+  }, [applyStageTarget]);
+
+  // 滚轮与触控板事件监听（学习 OptionWheel 处理方式：非被动捕获、步长限制与自动吸附）
+  useEffect(() => {
+    const scrollEl = mainScrollRef.current;
+    if (!scrollEl || isChattingOrHasHistory) return;
+
+    const onWheel = (e: WheelEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "TEXTAREA" || target.tagName === "INPUT" || target.isContentEditable)) {
+        if (target.scrollHeight > target.clientHeight) return;
+      }
+
+      e.preventDefault();
+      const delta = e.deltaMode === 1 ? e.deltaY * 24 : e.deltaY;
+      
+      // 学习 OptionWheel：将每个滚轮 step 映射为平滑的位移增量（步长限制防止跳帧）
+      const step = Math.max(-1, Math.min(1, delta / 120));
+      const nextTarget = Math.min(Math.max(stageTargetRef.current + step, 0), 2);
+      applyStageTarget(nextTarget, false);
+
+      if (stageWheelTimerRef.current) clearTimeout(stageWheelTimerRef.current);
+      stageWheelTimerRef.current = setTimeout(() => {
+        applyStageTarget(stageTargetRef.current, true);
+      }, 150);
     };
 
-    scrollEl.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("resize", handleScroll, { passive: true });
-    updateTransforms();
+    const handleResize = () => {
+      renderStageTransforms(stagePosRef.current);
+    };
+
+    scrollEl.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("resize", handleResize, { passive: true });
+    
+    // 初始化首屏渲染
+    renderStageTransforms(stagePosRef.current);
 
     return () => {
-      scrollEl.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("resize", handleScroll);
-      if (rafId !== null) cancelAnimationFrame(rafId);
+      scrollEl.removeEventListener("wheel", onWheel);
+      window.removeEventListener("resize", handleResize);
+      if (stageWheelTimerRef.current) clearTimeout(stageWheelTimerRef.current);
+      if (stageRafRef.current != null) cancelAnimationFrame(stageRafRef.current);
     };
-  }, [isChattingOrHasHistory]);
+  }, [isChattingOrHasHistory, applyStageTarget, renderStageTransforms]);
+
+  // Pointer 拖拽处理（支持鼠标光标按住上下拖动 3D 轮盘卡片）
+  const handleStagePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    if (target.closest("button, input, textarea, a, [role='button'], .cursor-pointer")) return;
+    stageDragRef.current = { y: e.clientY, start: stageTargetRef.current, id: e.pointerId };
+    stageDragMovedRef.current = false;
+  }, []);
+
+  const handleStagePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = stageDragRef.current;
+    if (!drag) return;
+    const dy = e.clientY - drag.y;
+    if (!stageDragMovedRef.current && Math.abs(dy) > 5) {
+      stageDragMovedRef.current = true;
+      e.currentTarget.setPointerCapture(drag.id);
+    }
+    if (stageDragMovedRef.current) {
+      const vh = window.innerHeight || 800;
+      const step = -dy / (vh * 0.4);
+      applyStageTarget(Math.min(Math.max(drag.start + step, 0), 2), false);
+    }
+  }, [applyStageTarget]);
+
+  const handleStagePointerEnd = useCallback(() => {
+    if (!stageDragRef.current) return;
+    stageDragRef.current = null;
+    if (stageDragMovedRef.current) {
+      applyStageTarget(stageTargetRef.current, true);
+    }
+  }, [applyStageTarget]);
 
   function handleNextRecBatch() {
     setIsRotatingRec(true);
@@ -1038,13 +1099,13 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* 主内容区域（挂载 3D 滚轮叙事引擎 Ref，工作台初始态下无冗余内边距以保证 100vh 居中） */}
+        {/* 主内容区域（挂载 3D 物理动力学轮盘叙事引擎 Ref，初始态下全屏沉浸防跳帧） */}
         <main
           ref={mainScrollRef}
-          className={`flex-1 overflow-y-auto ${
+          className={`flex-1 ${
             activeNav === "workbench" && !isChattingOrHasHistory
-              ? "px-4 sm:px-6 py-0 scroll-smooth"
-              : "px-6 py-5 space-y-6"
+              ? "px-4 sm:px-6 py-0 overflow-hidden"
+              : "px-6 py-5 space-y-6 overflow-y-auto"
           }`}
         >
           {replyNotice && (
@@ -1066,23 +1127,26 @@ export default function Dashboard() {
           )}
 
           {/* ========================================================================= */}
-          {/* TAB 1: 巡航工作台 (3D 万花筒环形滚轮空间系统)                             */}
+          {/* TAB 1: 巡航工作台 (3D 万花筒环形滚轮空间系统 - OptionWheel 动力学驱动)    */}
           {/* ========================================================================= */}
           {activeNav === "workbench" && (
             <div
               className={
                 !isChattingOrHasHistory
-                  ? "relative w-full"
+                  ? "relative w-full h-[calc(100vh-3rem)] overflow-hidden flex items-center justify-center select-none"
                   : "space-y-8 mx-auto w-full max-w-5xl px-2 sm:px-6 py-6 transition-all"
               }
-              style={!isChattingOrHasHistory ? { minHeight: "260vh" } : undefined}
             >
               <div
                 className={
                   !isChattingOrHasHistory
-                    ? "sticky top-0 h-[calc(100vh-3.5rem)] w-full overflow-hidden perspective-stage flex items-center justify-center select-none"
+                    ? "relative h-full w-full overflow-hidden perspective-stage flex items-center justify-center select-none"
                     : "space-y-8 w-full"
                 }
+                onPointerDown={!isChattingOrHasHistory ? handleStagePointerDown : undefined}
+                onPointerMove={!isChattingOrHasHistory ? handleStagePointerMove : undefined}
+                onPointerUp={!isChattingOrHasHistory ? handleStagePointerEnd : undefined}
+                onPointerCancel={!isChattingOrHasHistory ? handleStagePointerEnd : undefined}
               >
                 {/* 阶段 1：首屏绝对主角 Hero Section (AI 对话中心) */}
                 <section
