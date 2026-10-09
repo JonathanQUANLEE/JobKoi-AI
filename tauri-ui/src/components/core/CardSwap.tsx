@@ -3,6 +3,7 @@ import React, {
   cloneElement,
   forwardRef,
   isValidElement,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useMemo,
@@ -26,6 +27,7 @@ Card.displayName = "Card";
 
 export interface CardSwapHandle {
   swap: () => void;
+  swapPrev: () => void;
   bringToFront: (index: number) => void;
 }
 
@@ -123,14 +125,24 @@ export const CardSwap = forwardRef<CardSwapHandle, CardSwapProps>(
     const intervalRef = useRef<number | undefined>();
     const container = useRef<HTMLDivElement>(null);
 
-    const swap = () => {
-      if (order.current.length < 2) return;
+    const isSwappingRef = useRef(false);
+
+    const swap = useCallback(() => {
+      if (order.current.length < 2 || isSwappingRef.current) return;
+      isSwappingRef.current = true;
 
       const [front, ...rest] = order.current;
       const elFront = refs[front]?.current;
-      if (!elFront) return;
+      if (!elFront) {
+        isSwappingRef.current = false;
+        return;
+      }
 
-      const tl = gsap.timeline();
+      const tl = gsap.timeline({
+        onComplete: () => {
+          isSwappingRef.current = false;
+        },
+      });
       tlRef.current = tl;
 
       // 像从书架/抽屉抽出一样向下展开滑出
@@ -189,7 +201,66 @@ export const CardSwap = forwardRef<CardSwapHandle, CardSwapProps>(
         order.current = [...rest, front];
         onFrontChange?.(rest[0]);
       });
-    };
+    }, [config, refs, cardDistance, verticalDistance, onFrontChange]);
+
+    const swapPrev = useCallback(() => {
+      if (order.current.length < 2 || isSwappingRef.current) return;
+      isSwappingRef.current = true;
+
+      const lastIdx = order.current[order.current.length - 1];
+      const rest = order.current.slice(0, -1);
+      const elBack = refs[lastIdx]?.current;
+      if (!elBack) {
+        isSwappingRef.current = false;
+        return;
+      }
+
+      const tl = gsap.timeline({
+        onComplete: () => {
+          isSwappingRef.current = false;
+        },
+      });
+      tlRef.current = tl;
+
+      const frontSlot = makeSlot(0, cardDistance, verticalDistance, refs.length);
+      tl.set(elBack, { zIndex: frontSlot.zIndex + 2 });
+      tl.to(elBack, {
+        x: frontSlot.x,
+        y: frontSlot.y + 360,
+        z: frontSlot.z + 60,
+        duration: config.durDrop * 0.5,
+        ease: "power2.out",
+      });
+      tl.to(elBack, {
+        y: frontSlot.y,
+        z: frontSlot.z,
+        duration: config.durReturn * 0.6,
+        ease: config.ease,
+      });
+
+      rest.forEach((idx, i) => {
+        const el = refs[idx]?.current;
+        if (!el) return;
+        const slot = makeSlot(i + 1, cardDistance, verticalDistance, refs.length);
+        tl.to(
+          el,
+          {
+            x: slot.x,
+            y: slot.y,
+            z: slot.z,
+            zIndex: slot.zIndex,
+            duration: config.durMove * 0.6,
+            ease: config.ease,
+          },
+          0
+        );
+      });
+
+      tl.call(() => {
+        order.current = [lastIdx, ...rest];
+        onFrontChange?.(lastIdx);
+      });
+    }, [config, refs, cardDistance, verticalDistance, onFrontChange]);
 
     const bringToFront = (targetIndex: number) => {
       if (order.current[0] === targetIndex) return;
@@ -223,8 +294,47 @@ export const CardSwap = forwardRef<CardSwapHandle, CardSwapProps>(
 
     useImperativeHandle(ref, () => ({
       swap,
+      swapPrev,
       bringToFront,
     }));
+
+    // 鼠标滚轮监听：滚轮上下滚动时连续切换卡片
+    useEffect(() => {
+      const node = container.current;
+      if (!node) return;
+
+      let lastWheelTime = 0;
+      const handleWheel = (e: WheelEvent) => {
+        const target = e.target as HTMLElement | null;
+        const scrollable = target?.closest(".allow-inner-scroll") as HTMLElement | null;
+        if (scrollable) {
+          if (
+            (e.deltaY > 0 && scrollable.scrollTop + scrollable.clientHeight < scrollable.scrollHeight - 6) ||
+            (e.deltaY < 0 && scrollable.scrollTop > 6)
+          ) {
+            return;
+          }
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const now = performance.now();
+        if (now - lastWheelTime < 280) return;
+        lastWheelTime = now;
+
+        if (e.deltaY > 0) {
+          swap();
+        } else if (e.deltaY < 0) {
+          swapPrev();
+        }
+      };
+
+      node.addEventListener("wheel", handleWheel, { passive: false });
+      return () => {
+        node.removeEventListener("wheel", handleWheel);
+      };
+    }, [swap, swapPrev]);
 
     useEffect(() => {
       const total = refs.length;
