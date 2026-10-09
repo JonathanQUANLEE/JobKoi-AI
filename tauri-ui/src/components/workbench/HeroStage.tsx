@@ -12,7 +12,7 @@ import {
 import type { AgentChatMessage } from "../../lib/ipc";
 import type { RuleForm } from "../../lib/profileForm";
 import type { Lang } from "../../lib/i18n";
-import ThreeDTextReveal from "../core/ThreeDTextReveal";
+import { TextEffect } from "../core/text-effect";
 import { summarizeAgentProfile } from "../../lib/agentPreview";
 import { MagicCard } from "../core/MagicBento";
 import {
@@ -65,6 +65,31 @@ export default function HeroStage({
     return () => clearInterval(timer);
   }, []);
 
+  // Hero 标题逐行阶梯动效循环状态 (第1行 -> 第2行 -> 第3行 依序显现并停留 10 秒循环)
+  const [heroAnimCycle, setHeroAnimCycle] = useState(0);
+  const [heroAnimFading, setHeroAnimFading] = useState(false);
+
+  useEffect(() => {
+    const STAY_MS = 10000;
+    const ANIM_TOTAL_MS = 5300;
+    const FADE_OUT_MS = 450;
+    const CYCLE_MS = ANIM_TOTAL_MS + STAY_MS + FADE_OUT_MS;
+
+    const fadeTimer = setTimeout(() => {
+      setHeroAnimFading(true);
+    }, CYCLE_MS - FADE_OUT_MS);
+
+    const resetTimer = setTimeout(() => {
+      setHeroAnimFading(false);
+      setHeroAnimCycle((c) => c + 1);
+    }, CYCLE_MS);
+
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(resetTimer);
+    };
+  }, [heroAnimCycle]);
+
   function handleNextRecBatch() {
     setIsRotatingRec(true);
     setTimeout(() => {
@@ -99,44 +124,57 @@ export default function HeroStage({
           aria-hidden="true"
         />
 
-        {/* React Bits 3D Text Reveal 空间圆柱动效 */}
-        <div className="w-full">
-          <ThreeDTextReveal
-            items={
-              lang === "en"
-                ? [
-                    "Tell AI your situation, craft your custom profile",
-                    "Intelligent resume parsing for targeted roles",
-                    "Automated precision cruise matching preferences",
-                  ]
-                : [
-                    "向 AI 顾问说出你的情况，定制专属求职画像",
-                    "智能识别简历资料库，精准提炼目标岗位",
-                    "全自动化巡航投递，严格匹配求职策略",
-                  ]
-            }
-            fontSize="clamp(1.75rem, 3.8vw, 2.75rem)"
-            fontWeight={800}
-            gap={26}
-            perspective={1100}
-            radiusOffset={0.45}
-            autoCycle={true}
-            cycleInterval={4800}
-            className="mb-1"
-          />
+        {/* 主标题与副标题 (逐行渐显动效流) */}
+        <div
+          className={`w-full transition-opacity duration-500 ease-out ${
+            heroAnimFading ? "opacity-0" : "opacity-100"
+          }`}
+        >
+          {/* 第 1 行: 主标题 */}
+          <h1 className="text-balance text-[2rem] font-bold leading-tight tracking-tight text-stone-100 sm:text-[2.75rem] sm:leading-[1.15]">
+            <TextEffect
+              key={`hero-l1-${heroAnimCycle}`}
+              preset="fade-in-blur"
+              speedReveal={1.1}
+              speedSegment={0.3}
+              delay={0}
+              as="span"
+              className="inline-block"
+            >
+              {lang === "en"
+                ? "Tell AI your situation, craft your custom profile"
+                : "向 AI 顾问说出你的情况，定制专属求职画像"}
+            </TextEffect>
+          </h1>
 
-          {/* 副标题 */}
-          <div className="mt-2.5 max-w-2xl mx-auto text-balance text-[14px] leading-relaxed text-stone-400 sm:text-[15.5px] space-y-1">
-            <p className="m-0">
+          {/* 第 2 行 & 第 3 行: 副标题 */}
+          <div className="mt-3.5 max-w-2xl mx-auto text-balance text-[14px] leading-relaxed text-stone-400 sm:text-[15.5px] space-y-1">
+            <TextEffect
+              key={`hero-l2-${heroAnimCycle}`}
+              preset="fade-in-blur"
+              speedReveal={1.1}
+              speedSegment={0.3}
+              delay={1.7}
+              as="p"
+              className="m-0"
+            >
               {lang === "en"
                 ? "Tell me your graduation year, skills, target cities or expected salary."
                 : "告诉我你的毕业年份、专业技能、意向城市或期望薪资。"}
-            </p>
-            <p className="m-0 text-stone-500">
+            </TextEffect>
+            <TextEffect
+              key={`hero-l3-${heroAnimCycle}`}
+              preset="fade-in-blur"
+              speedReveal={1.1}
+              speedSegment={0.3}
+              delay={3.5}
+              as="p"
+              className="m-0"
+            >
               {lang === "en"
                 ? "AI advisor will chat with you to tailor precision job preferences and settings."
                 : "AI 顾问将与你深度交流，自动生成量身定制的求职偏好与就绪策略。"}
-            </p>
+            </TextEffect>
           </div>
         </div>
 
