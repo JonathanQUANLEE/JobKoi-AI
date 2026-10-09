@@ -25,41 +25,22 @@ import AnalyticsPanel from "../components/AnalyticsPanel";
 import HeroStage from "../components/workbench/HeroStage";
 import ProfileBentoCard from "../components/workbench/ProfileBentoCard";
 import { useWorkbenchWheel } from "../hooks/useWorkbenchWheel";
+import { useProfileFormState } from "../hooks/useProfileFormState";
 import SettingsDrawer, { type DrawerTab } from "../components/SettingsDrawer";
 import SettingsModal, { type SettingsTab } from "../components/SettingsModal";
 import Sidebar, { type NavItem } from "../components/Sidebar";
-import {
-  buildProfileData,
-  toggleCsvValue,
-  type FilterPolicy,
-  type MatchMode,
-  type Mode,
-  type RuleForm,
-  type Scope,
-} from "../lib/profileForm";
-import { eventLogLine, formatEventForDisplay } from "../lib/eventDisplay";
+import { eventLogLine } from "../lib/eventDisplay";
 import { latestPayloadForJob } from "../lib/runView";
 import { useRunStore, useT } from "../store";
 
 import {
-  DEFAULT_PROFILE_NAME,
-  DEFAULT_GREETING,
-  DEFAULT_RULE,
-  PLATFORM_SHORTCUTS,
   extractFallbackProfile,
-  joinKeywords,
-  asRecord,
-  asString,
-  asBool,
-  asMode,
-  asScope,
-  asMatchMode,
-  latestPayload,
   latestJob,
   summarizeEvents,
   formatJobLine,
-  toRepoRelativePath,
   formatLocalTime,
+  asRecord,
+  asString,
 } from "../lib/dashboardHelpers";
 
 export default function Dashboard() {
@@ -86,28 +67,6 @@ export default function Dashboard() {
   const pushAgentMessage = useRunStore((s) => s.pushAgentMessage);
 
   const [selectedPlatform, setSelectedPlatform] = useState<string>("boss");
-  const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
-  const [profileName, setProfileName] = useState(DEFAULT_PROFILE_NAME);
-  const [mode, setMode] = useState<Mode>("auto");
-  const [usrName, setUsrName] = useState("");
-  const [label, setLabel] = useState("后端开发实习");
-  const [startUrl, setStartUrl] = useState("");
-  const [greeting, setGreeting] = useState(DEFAULT_GREETING);
-  const [greetingPath, setGreetingPath] = useState("./greetings/default.txt");
-  const [rule, setRule] = useState<RuleForm>(DEFAULT_RULE);
-  const [cityValues, setCityValues] = useState("");
-  const [educationValues, setEducationValues] = useState("");
-  const [bossActiveValues, setBossActiveValues] = useState("");
-  const [filterPolicy, setFilterPolicy] = useState<FilterPolicy>("warning");
-  const [delayMin, setDelayMin] = useState("10");
-  const [delayMax, setDelayMax] = useState("60");
-  const [maxSent, setMaxSent] = useState("50");
-  const [dailyLimit, setDailyLimit] = useState("80");
-  const [dryRun, setDryRun] = useState(true);
-  const [stopOnCaptcha, setStopOnCaptcha] = useState(true);
-  const [sendResumeAfterGreeting, setSendResumeAfterGreeting] = useState(false);
-  const [autoResumeOnReply, setAutoResumeOnReply] = useState(false);
-  const [aiGreeting, setAiGreeting] = useState(false);
   const [replyNotice, setReplyNotice] = useState<{ unread: number; chatUrl: string } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -115,6 +74,63 @@ export default function Dashboard() {
   const [activeNav, setActiveNav] = useState<NavItem>("workbench");
   const [drawerTab, setDrawerTab] = useState<DrawerTab>("rules");
   const [defaultResumeName, setDefaultResumeName] = useState<string>("我的求职简历.docx");
+
+  const {
+    profiles,
+    setProfiles,
+    profileName,
+    setProfileName,
+    mode,
+    setMode,
+    usrName,
+    setUsrName,
+    label,
+    setLabel,
+    startUrl,
+    setStartUrl,
+    greeting,
+    setGreeting,
+    greetingPath,
+    setGreetingPath,
+    rule,
+    setRule,
+    cityValues,
+    setCityValues,
+    educationValues,
+    setEducationValues,
+    bossActiveValues,
+    setBossActiveValues,
+    filterPolicy,
+    setFilterPolicy,
+    delayMin,
+    setDelayMin,
+    delayMax,
+    setDelayMax,
+    maxSent,
+    setMaxSent,
+    dailyLimit,
+    setDailyLimit,
+    dryRun,
+    setDryRun,
+    stopOnCaptcha,
+    setStopOnCaptcha,
+    sendResumeAfterGreeting,
+    setSendResumeAfterGreeting,
+    autoResumeOnReply,
+    setAutoResumeOnReply,
+    aiGreeting,
+    setAiGreeting,
+    refreshProfiles,
+    loadProfile,
+    hydrateFromProfile,
+    currentProfileData,
+    saveConfig,
+    validateBeforeRun,
+  } = useProfileFormState({
+    t,
+    setMessage,
+    setBusy,
+  });
 
   // 同步当前默认简历名称，供工作台策略卡片实时展示
   useEffect(() => {
@@ -267,13 +283,6 @@ export default function Dashboard() {
   }
 
   useEffect(() => {
-    refreshProfiles(profileName);
-    ipc.getGreeting()
-      .then(({ path, text }) => {
-        setGreetingPath(toRepoRelativePath(path));
-        if (text) setGreeting(text);
-      })
-      .catch((err) => setMessage(t("message.greetingReadFailed", { error: String(err) })));
     ipc.getRunState()
       .then(({ running, review, stats, current_job, latest_skip, latest_sent, page, page_filters }) => {
         setRunning(running);
@@ -288,7 +297,7 @@ export default function Dashboard() {
         });
       })
       .catch(() => {});
-  }, [setRunning]);
+  }, [setRunning, setReviewPending, restoreRunState]);
 
 
   // F3：BOSS 新回复轮询（60s，仅空闲时）
@@ -328,115 +337,6 @@ export default function Dashboard() {
       : t("status.starting")
     : t("status.idle");
 
-  async function refreshProfiles(preferredName?: string) {
-    try {
-      const result = await ipc.listProfiles();
-      setProfiles(result.profiles);
-      const nextName =
-        preferredName && result.profiles.some((item) => item.name === preferredName)
-          ? preferredName
-          : result.profiles.some((item) => item.name === DEFAULT_PROFILE_NAME)
-            ? DEFAULT_PROFILE_NAME
-            : result.profiles[0]?.name;
-      if (nextName) {
-        setProfileName(nextName);
-        await loadProfile(nextName);
-      }
-    } catch (err) {
-      setMessage(t("message.profileReadFailed", { error: String(err) }));
-    }
-  }
-
-  async function loadProfile(name: string) {
-    try {
-      const profile = await ipc.getProfile(name);
-      hydrateFromProfile(profile);
-    } catch (err) {
-      setMessage(t("message.profileLoadFailed", { error: String(err) }));
-    }
-  }
-
-  function hydrateFromProfile(profile: LoadedProfile) {
-    const data = profile.data;
-    const search = asRecord(data.search);
-    const filters = asRecord(asRecord(data.filters).title);
-    const required = asRecord(filters.required);
-    const any = asRecord(filters.any);
-    const exclude = asRecord(filters.exclude);
-    const send = asRecord(data.send);
-    const pageFilters = asRecord(data.page_filters);
-
-    setLabel(asString(search.query, label));
-    setStartUrl(asString(search.start_url, startUrl));
-    setMode(asMode(send.mode, mode));
-    setGreetingPath(asString(send.greeting_file, greetingPath));
-    setDelayMin(asString(send.delay_min, delayMin));
-    setDelayMax(asString(send.delay_max, delayMax));
-    setMaxSent(asString(send.max_sent, maxSent));
-    setDailyLimit(asString(send.daily_sent_limit, dailyLimit));
-    setStopOnCaptcha(asBool(send.stop_on_captcha, stopOnCaptcha));
-    setSendResumeAfterGreeting(asBool(send.send_resume_after_greeting, false));
-    setAutoResumeOnReply(asBool(send.auto_send_resume_on_reply, false));
-    setAiGreeting(asBool(send.ai_greeting, false));
-    setRule({
-      requiredKeywords: joinKeywords(required.keywords, rule.requiredKeywords),
-      anyKeywords: joinKeywords(any.keywords, rule.anyKeywords),
-      excludeKeywords: joinKeywords(exclude.keywords, rule.excludeKeywords),
-      scope: asScope(required.scope || any.scope || exclude.scope, rule.scope),
-      match: asMatchMode(required.match || any.match || exclude.match, rule.match),
-      caseSensitive: asBool(required.case_sensitive, rule.caseSensitive),
-    });
-    setFilterPolicy(pageFilters.strict === true ? "strict" : "warning");
-    setCityValues(joinKeywords(asRecord(pageFilters.city).values, cityValues));
-    setEducationValues(joinKeywords(asRecord(pageFilters.education).values, educationValues));
-    setBossActiveValues(joinKeywords(asRecord(pageFilters.boss_active).values, bossActiveValues));
-  }
-
-  function currentProfileData() {
-    return buildProfileData({
-      label,
-      startUrl,
-      rule,
-      cityValues,
-      educationValues,
-      bossActiveValues,
-      filterPolicy,
-      mode,
-      greetingPath,
-      delayMin,
-      delayMax,
-      maxSent,
-      dailyLimit,
-      stopOnCaptcha,
-      sendResumeAfterGreeting,
-      autoResumeOnReply,
-      aiGreeting,
-    });
-  }
-
-  async function saveConfig() {
-    setBusy(true);
-    setMessage(null);
-    try {
-      await ipc.saveGreeting(greeting.trim(), greetingPath.trim() || "./greetings/default.txt");
-      const savedName = profileName.trim() || DEFAULT_PROFILE_NAME;
-      await ipc.saveProfile(savedName, currentProfileData());
-      await refreshProfiles(savedName);
-      setMessage(t("message.saved"));
-    } catch (err) {
-      setMessage(t("message.saveFailed", { error: String(err) }));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function validateBeforeRun(): string | null {
-    if (!usrName.trim()) return t("validation.userName");
-    if (!profileName.trim()) return t("validation.profileName");
-    if ((mode === "review" || mode === "auto") && !greeting.trim()) return t("validation.greeting");
-    if (mode === "auto" && !rule.anyKeywords.trim()) return t("validation.anyKeywords");
-    return null;
-  }
 
   async function startRun() {
     const error = validateBeforeRun();

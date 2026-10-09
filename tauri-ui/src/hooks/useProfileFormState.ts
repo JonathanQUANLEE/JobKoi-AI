@@ -1,0 +1,310 @@
+import { useState, useEffect, useCallback, type Dispatch, type SetStateAction } from "react";
+import { ipc, type LoadedProfile, type ProfileSummary, type ProfileData } from "../lib/ipc";
+import {
+  buildProfileData,
+  type FilterPolicy,
+  type Mode,
+  type RuleForm,
+} from "../lib/profileForm";
+import {
+  DEFAULT_PROFILE_NAME,
+  DEFAULT_GREETING,
+  DEFAULT_RULE,
+  asRecord,
+  asString,
+  asBool,
+  asMode,
+  asScope,
+  asMatchMode,
+  joinKeywords,
+  toRepoRelativePath,
+} from "../lib/dashboardHelpers";
+
+interface UseProfileFormStateOptions {
+  t: (key: string, vars?: Record<string, string | number>) => string;
+  setMessage: (msg: string | null) => void;
+  setBusy: (busy: boolean) => void;
+}
+
+export interface UseProfileFormStateReturn {
+  profiles: ProfileSummary[];
+  setProfiles: Dispatch<SetStateAction<ProfileSummary[]>>;
+  profileName: string;
+  setProfileName: Dispatch<SetStateAction<string>>;
+  mode: Mode;
+  setMode: Dispatch<SetStateAction<Mode>>;
+  usrName: string;
+  setUsrName: Dispatch<SetStateAction<string>>;
+  label: string;
+  setLabel: Dispatch<SetStateAction<string>>;
+  startUrl: string;
+  setStartUrl: Dispatch<SetStateAction<string>>;
+  greeting: string;
+  setGreeting: Dispatch<SetStateAction<string>>;
+  greetingPath: string;
+  setGreetingPath: Dispatch<SetStateAction<string>>;
+  rule: RuleForm;
+  setRule: Dispatch<SetStateAction<RuleForm>>;
+  cityValues: string;
+  setCityValues: Dispatch<SetStateAction<string>>;
+  educationValues: string;
+  setEducationValues: Dispatch<SetStateAction<string>>;
+  bossActiveValues: string;
+  setBossActiveValues: Dispatch<SetStateAction<string>>;
+  filterPolicy: FilterPolicy;
+  setFilterPolicy: Dispatch<SetStateAction<FilterPolicy>>;
+  delayMin: string;
+  setDelayMin: Dispatch<SetStateAction<string>>;
+  delayMax: string;
+  setDelayMax: Dispatch<SetStateAction<string>>;
+  maxSent: string;
+  setMaxSent: Dispatch<SetStateAction<string>>;
+  dailyLimit: string;
+  setDailyLimit: Dispatch<SetStateAction<string>>;
+  dryRun: boolean;
+  setDryRun: Dispatch<SetStateAction<boolean>>;
+  stopOnCaptcha: boolean;
+  setStopOnCaptcha: Dispatch<SetStateAction<boolean>>;
+  sendResumeAfterGreeting: boolean;
+  setSendResumeAfterGreeting: Dispatch<SetStateAction<boolean>>;
+  autoResumeOnReply: boolean;
+  setAutoResumeOnReply: Dispatch<SetStateAction<boolean>>;
+  aiGreeting: boolean;
+  setAiGreeting: Dispatch<SetStateAction<boolean>>;
+
+  refreshProfiles: (preferredName?: string) => Promise<void>;
+  loadProfile: (name: string) => Promise<void>;
+  hydrateFromProfile: (profile: LoadedProfile) => void;
+  currentProfileData: () => ProfileData;
+  saveConfig: () => Promise<void>;
+  validateBeforeRun: () => string | null;
+}
+
+export function useProfileFormState({
+  t,
+  setMessage,
+  setBusy,
+}: UseProfileFormStateOptions): UseProfileFormStateReturn {
+  const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
+  const [profileName, setProfileName] = useState(DEFAULT_PROFILE_NAME);
+  const [mode, setMode] = useState<Mode>("auto");
+  const [usrName, setUsrName] = useState("");
+  const [label, setLabel] = useState("后端开发实习");
+  const [startUrl, setStartUrl] = useState("");
+  const [greeting, setGreeting] = useState(DEFAULT_GREETING);
+  const [greetingPath, setGreetingPath] = useState("./greetings/default.txt");
+  const [rule, setRule] = useState<RuleForm>(DEFAULT_RULE);
+  const [cityValues, setCityValues] = useState("");
+  const [educationValues, setEducationValues] = useState("");
+  const [bossActiveValues, setBossActiveValues] = useState("");
+  const [filterPolicy, setFilterPolicy] = useState<FilterPolicy>("warning");
+  const [delayMin, setDelayMin] = useState("10");
+  const [delayMax, setDelayMax] = useState("60");
+  const [maxSent, setMaxSent] = useState("50");
+  const [dailyLimit, setDailyLimit] = useState("80");
+  const [dryRun, setDryRun] = useState(true);
+  const [stopOnCaptcha, setStopOnCaptcha] = useState(true);
+  const [sendResumeAfterGreeting, setSendResumeAfterGreeting] = useState(false);
+  const [autoResumeOnReply, setAutoResumeOnReply] = useState(false);
+  const [aiGreeting, setAiGreeting] = useState(false);
+
+  const hydrateFromProfile = useCallback((profile: LoadedProfile) => {
+    const data = profile.data;
+    const search = asRecord(data.search);
+    const filters = asRecord(asRecord(data.filters).title);
+    const required = asRecord(filters.required);
+    const any = asRecord(filters.any);
+    const exclude = asRecord(filters.exclude);
+    const send = asRecord(data.send);
+    const pageFilters = asRecord(data.page_filters);
+
+    setLabel((prev) => asString(search.query, prev));
+    setStartUrl((prev) => asString(search.start_url, prev));
+    setMode((prev) => asMode(send.mode, prev));
+    setGreetingPath((prev) => asString(send.greeting_file, prev));
+    setDelayMin((prev) => asString(send.delay_min, prev));
+    setDelayMax((prev) => asString(send.delay_max, prev));
+    setMaxSent((prev) => asString(send.max_sent, prev));
+    setDailyLimit((prev) => asString(send.daily_sent_limit, prev));
+    setStopOnCaptcha((prev) => asBool(send.stop_on_captcha, prev));
+    setSendResumeAfterGreeting(asBool(send.send_resume_after_greeting, false));
+    setAutoResumeOnReply(asBool(send.auto_send_resume_on_reply, false));
+    setAiGreeting(asBool(send.ai_greeting, false));
+    setRule((prev) => ({
+      requiredKeywords: joinKeywords(required.keywords, prev.requiredKeywords),
+      anyKeywords: joinKeywords(any.keywords, prev.anyKeywords),
+      excludeKeywords: joinKeywords(exclude.keywords, prev.excludeKeywords),
+      scope: asScope(required.scope || any.scope || exclude.scope, prev.scope),
+      match: asMatchMode(required.match || any.match || exclude.match, prev.match),
+      caseSensitive: asBool(required.case_sensitive, prev.caseSensitive),
+    }));
+    setFilterPolicy(pageFilters.strict === true ? "strict" : "warning");
+    setCityValues((prev) => joinKeywords(asRecord(pageFilters.city).values, prev));
+    setEducationValues((prev) => joinKeywords(asRecord(pageFilters.education).values, prev));
+    setBossActiveValues((prev) => joinKeywords(asRecord(pageFilters.boss_active).values, prev));
+  }, []);
+
+  const loadProfile = useCallback(
+    async (name: string) => {
+      try {
+        const profile = await ipc.getProfile(name);
+        hydrateFromProfile(profile);
+      } catch (err) {
+        setMessage(t("message.profileLoadFailed", { error: String(err) }));
+      }
+    },
+    [hydrateFromProfile, setMessage, t],
+  );
+
+  const refreshProfiles = useCallback(
+    async (preferredName?: string) => {
+      try {
+        const result = await ipc.listProfiles();
+        setProfiles(result.profiles);
+        const nextName =
+          preferredName && result.profiles.some((item) => item.name === preferredName)
+            ? preferredName
+            : result.profiles.some((item) => item.name === DEFAULT_PROFILE_NAME)
+              ? DEFAULT_PROFILE_NAME
+              : result.profiles[0]?.name;
+        if (nextName) {
+          setProfileName(nextName);
+          await loadProfile(nextName);
+        }
+      } catch (err) {
+        setMessage(t("message.profileReadFailed", { error: String(err) }));
+      }
+    },
+    [loadProfile, setMessage, t],
+  );
+
+  const currentProfileData = useCallback((): ProfileData => {
+    return buildProfileData({
+      label,
+      startUrl,
+      rule,
+      cityValues,
+      educationValues,
+      bossActiveValues,
+      filterPolicy,
+      mode,
+      greetingPath,
+      delayMin,
+      delayMax,
+      maxSent,
+      dailyLimit,
+      stopOnCaptcha,
+      sendResumeAfterGreeting,
+      autoResumeOnReply,
+      aiGreeting,
+    });
+  }, [
+    label,
+    startUrl,
+    rule,
+    cityValues,
+    educationValues,
+    bossActiveValues,
+    filterPolicy,
+    mode,
+    greetingPath,
+    delayMin,
+    delayMax,
+    maxSent,
+    dailyLimit,
+    stopOnCaptcha,
+    sendResumeAfterGreeting,
+    autoResumeOnReply,
+    aiGreeting,
+  ]);
+
+  const saveConfig = useCallback(async () => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      await ipc.saveGreeting(greeting.trim(), greetingPath.trim() || "./greetings/default.txt");
+      const savedName = profileName.trim() || DEFAULT_PROFILE_NAME;
+      await ipc.saveProfile(savedName, currentProfileData());
+      await refreshProfiles(savedName);
+      setMessage(t("message.saved"));
+    } catch (err) {
+      setMessage(t("message.saveFailed", { error: String(err) }));
+    } finally {
+      setBusy(false);
+    }
+  }, [greeting, greetingPath, profileName, currentProfileData, refreshProfiles, setMessage, setBusy, t]);
+
+  const validateBeforeRun = useCallback((): string | null => {
+    if (!usrName.trim()) return t("validation.userName");
+    if (!profileName.trim()) return t("validation.profileName");
+    if ((mode === "review" || mode === "auto") && !greeting.trim()) return t("validation.greeting");
+    if (mode === "auto" && !rule.anyKeywords.trim()) return t("validation.anyKeywords");
+    return null;
+  }, [usrName, profileName, mode, greeting, rule.anyKeywords, t]);
+
+  // 初始化加载配置文件与招呼语
+  useEffect(() => {
+    refreshProfiles(DEFAULT_PROFILE_NAME);
+    ipc
+      .getGreeting()
+      .then(({ path, text }) => {
+        setGreetingPath(toRepoRelativePath(path));
+        if (text) setGreeting(text);
+      })
+      .catch((err) => setMessage(t("message.greetingReadFailed", { error: String(err) })));
+  }, [refreshProfiles, setMessage, t]);
+
+  return {
+    profiles,
+    setProfiles,
+    profileName,
+    setProfileName,
+    mode,
+    setMode,
+    usrName,
+    setUsrName,
+    label,
+    setLabel,
+    startUrl,
+    setStartUrl,
+    greeting,
+    setGreeting,
+    greetingPath,
+    setGreetingPath,
+    rule,
+    setRule,
+    cityValues,
+    setCityValues,
+    educationValues,
+    setEducationValues,
+    bossActiveValues,
+    setBossActiveValues,
+    filterPolicy,
+    setFilterPolicy,
+    delayMin,
+    setDelayMin,
+    delayMax,
+    setDelayMax,
+    maxSent,
+    setMaxSent,
+    dailyLimit,
+    setDailyLimit,
+    dryRun,
+    setDryRun,
+    stopOnCaptcha,
+    setStopOnCaptcha,
+    sendResumeAfterGreeting,
+    setSendResumeAfterGreeting,
+    autoResumeOnReply,
+    setAutoResumeOnReply,
+    aiGreeting,
+    setAiGreeting,
+
+    refreshProfiles,
+    loadProfile,
+    hydrateFromProfile,
+    currentProfileData,
+    saveConfig,
+    validateBeforeRun,
+  };
+}
