@@ -346,19 +346,26 @@ export default function Sidebar({
             <img
               src="/favicon.png"
               alt="Avatar"
-              className="h-7 w-7 rounded-lg object-cover border border-pink-400/30"
+              className="h-8 w-8 rounded-lg object-cover border border-pink-400/30 shrink-0 shadow-sm"
             />
             <div className="min-w-0 text-left">
-              <div className="font-semibold text-xs text-[var(--ink)] truncate">
+              <div className="font-semibold text-xs text-[var(--ink)] truncate leading-tight">
                 {lang === "en" ? "Job Hunter" : "求职锦鲤"}
               </div>
-              <div className="text-[10px] text-stone-400 flex items-center gap-1">
-                <span className={`h-1.5 w-1.5 rounded-full ${running ? "bg-emerald-400 animate-pulse" : "bg-stone-500"}`} />
-                {running ? (lang === "en" ? "Cruising" : "巡航中") : (lang === "en" ? "Ready" : "就绪")}
+              <div className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-950/70 px-2 py-0.5 shadow-sm">
+                <span className="relative flex size-1.5 shrink-0">
+                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex size-1.5 rounded-full bg-emerald-400 shadow-[0_0_5px_#10b981]" />
+                </span>
+                <span className="text-[10px] font-medium text-emerald-300 leading-none truncate tracking-tight">
+                  {running
+                    ? (lang === "en" ? "AI Cruising" : "AI 巡航中")
+                    : (lang === "en" ? "AI Advisor Online" : "AI 顾问在线")}
+                </span>
               </div>
             </div>
           </div>
-          <div className="text-stone-400 hover:text-stone-200 p-1">
+          <div className="text-stone-400 hover:text-stone-200 p-1 shrink-0">
             <MoreVertical className="h-4 w-4" />
           </div>
         </button>
