@@ -416,6 +416,44 @@ async def set_default_resume(body: _SetDefaultResumeBody) -> dict:
     return _set_default(body.name)
 
 
+class _GetResumeContentBody(_CamelModel):
+    name: str
+
+
+@commands.command()
+async def get_resume_content(body: _GetResumeContentBody) -> dict:
+    """读取指定简历文件内容（返回 base64 及提取文本供前端即时预览）。"""
+    from boss_zhipin.gui.resume_io import get_resume_content as _get_content
+
+    return _get_content(body.name)
+
+
+class _SaveResumeFileBody(_CamelModel):
+    name: str
+    content_b64: str
+
+
+@commands.command()
+async def save_resume_file(body: _SaveResumeFileBody) -> dict:
+    """保存/上传简历文件到 resume/ 目录。"""
+    from boss_zhipin.gui.resume_io import save_resume_file as _save_file
+
+    return _save_file(body.name, body.content_b64)
+
+
+class _DeleteResumeFileBody(_CamelModel):
+    name: str
+
+
+@commands.command()
+async def delete_resume_file(body: _DeleteResumeFileBody) -> dict:
+    """删除指定的简历文件。"""
+    from boss_zhipin.gui.resume_io import delete_resume_file as _delete_file
+
+    return _delete_file(body.name)
+
+
+
 # ---------- 工具执行层（F4：agent 声明意图，这里执行） ----------
 # 隔离红线：agent 包只产出 action 意图；真正动手（读日志/读页面）在这里，
 # 保证「LLM 永不直接触发投递」——prepare_run 也不在此执行，只由前端渲染

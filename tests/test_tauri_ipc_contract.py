@@ -37,6 +37,9 @@ def test_tauri_ipc_commands_match_gui_v02_contract():
         # F1 简历管理
         "list_resumes",
         "set_default_resume",
+        "get_resume_content",
+        "save_resume_file",
+        "delete_resume_file",
         # F4 工具执行层
         "agent_execute_action",
         # F3 新回复检测

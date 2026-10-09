@@ -145,6 +145,16 @@ export type ResumeListResult = {
   resumes: ResumeItem[];
 };
 
+export type ResumeContentResult = {
+  status: "ok" | "error";
+  name: string;
+  ext: string;
+  mime: string;
+  size: number;
+  data_url: string;
+  text?: string;
+};
+
 // ---------- F3：BOSS 新回复检测 ----------
 
 export type ReplyCheckResult = {
@@ -212,4 +222,13 @@ export const ipc = {
   listResumes: () => pyInvoke<ResumeListResult>("list_resumes", {}),
   setDefaultResume: (name: string) =>
     pyInvoke<{ status: string; name: string }>("set_default_resume", { name }),
+  getResumeContent: (name: string) =>
+    pyInvoke<ResumeContentResult>("get_resume_content", { name }),
+  saveResumeFile: (name: string, contentB64: string) =>
+    pyInvoke<{ status: string; name: string; size: number; is_default: boolean }>(
+      "save_resume_file",
+      { name, contentB64 },
+    ),
+  deleteResumeFile: (name: string) =>
+    pyInvoke<{ status: string; name: string }>("delete_resume_file", { name }),
 };

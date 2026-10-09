@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parent.parent.parent.parent
 DEFAULT_RESUME_DIR = ROOT / "resume"
 
-RESUME_EXTENSIONS = frozenset({".pdf", ".doc", ".docx", ".png", ".jpg", ".jpeg"})
+RESUME_EXTENSIONS = frozenset({".pdf", ".doc", ".docx", ".png", ".jpg", ".jpeg", ".webp"})
 DEFAULT_MARKER_FILENAME = "default.txt"
 
 
@@ -93,6 +93,112 @@ def get_default_resume_name(resume_dir: Path) -> str:
         return ""
 
 
+def save_resume_file(name: str, content_b64: str, resume_dir: Path | None = None) -> dict:
+    """保存或上传简历文件（接收 Base64 编码数据）。"""
+    import base64
+
+    base = _ensure_dir(resume_dir)
+    clean = _validate_resume_name(name)
+    target = base / clean
+
+    # 去除可能包含的 data URI 前缀 (如 data:application/pdf;base64,xxxx)
+    raw_b64 = content_b64.split(",", 1)[1] if "," in content_b64 else content_b64
+    raw_bytes = base64.b64decode(raw_b64)
+    target.write_bytes(raw_bytes)
+    stat = target.stat()
+
+    # 如果当前没有默认简历，自动将首份上传的简历设为默认
+    current_default = get_default_resume_name(base)
+    if not current_default or not (base / current_default).is_file():
+        set_default_resume(clean, base)
+
+    return {
+        "status": "saved",
+        "name": clean,
+        "size": stat.st_size,
+        "mtime": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
+        "is_default": get_default_resume_name(base) == clean,
+    }
+
+
+def delete_resume_file(name: str, resume_dir: Path | None = None) -> dict:
+    """删除指定的简历文件。若为默认简历，同步清理默认标记。"""
+    base = _ensure_dir(resume_dir)
+    clean = _validate_resume_name(name)
+    target = base / clean
+    if target.is_file():
+        target.unlink()
+
+    default_name = get_default_resume_name(base)
+    if default_name == clean:
+        marker = base / DEFAULT_MARKER_FILENAME
+        if marker.is_file():
+            marker.unlink()
+
+    return {"status": "deleted", "name": clean}
+
+
+def get_resume_content(name: str, resume_dir: Path | None = None) -> dict:
+    """读取指定简历文件内容，返回 Base64 Data URL 及提取文本（针对 Word 等格式）。"""
+    import base64
+
+    base = _ensure_dir(resume_dir)
+    clean = _validate_resume_name(name)
+    target = base / clean
+    if not target.is_file():
+        raise ValueError(f"简历文件不存在: {clean}")
+
+    raw = target.read_bytes()
+    suffix = target.suffix.lower()
+
+    mime_map = {
+        ".pdf": "application/pdf",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".doc": "application/msword",
+    }
+    mime = mime_map.get(suffix, "application/octet-stream")
+    b64 = base64.b64encode(raw).decode("ascii")
+
+    text = ""
+    if suffix == ".docx":
+        text = _extract_docx_text(target)
+
+    return {
+        "status": "ok",
+        "name": clean,
+        "ext": suffix,
+        "mime": mime,
+        "size": len(raw),
+        "data_url": f"data:{mime};base64,{b64}",
+        "text": text,
+    }
+
+
+def _extract_docx_text(path: Path) -> str:
+    """从 docx 解压并提取正文段落纯文本。零第三方依赖。"""
+    import zipfile
+    import xml.etree.ElementTree as ET
+
+    try:
+        with zipfile.ZipFile(path) as z:
+            xml_content = z.read("word/document.xml")
+            tree = ET.fromstring(xml_content)
+            ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+            paragraphs = []
+            for p in tree.iterfind(".//w:p", ns):
+                texts = [node.text for node in p.iterfind(".//w:t", ns) if node.text]
+                if texts:
+                    paragraphs.append("".join(texts))
+            return "\n\n".join(paragraphs)
+    except Exception as e:
+        log.warning("提取 docx 失败: %s", e)
+        return ""
+
+
 def _ensure_dir(resume_dir: Path | None) -> Path:
     base = resume_dir or DEFAULT_RESUME_DIR
     base.mkdir(parents=True, exist_ok=True)
@@ -110,3 +216,4 @@ def _validate_resume_name(name: str) -> str:
     if path.suffix.lower() not in RESUME_EXTENSIONS:
         raise ValueError(f"不支持的简历类型: {path.suffix or '(无扩展名)'}")
     return clean
+
