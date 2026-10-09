@@ -122,7 +122,7 @@ export default function ProfilePanel({
             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-[var(--grid)] hover:border-stone-700 bg-[#1c1917] hover:bg-[#25201d] text-xs font-medium text-stone-300 hover:text-white transition-all cursor-pointer"
           >
             <ArrowLeft className="size-3.5 text-stone-400" />
-            <span>{isEn ? "Back to Chat" : "返回工作台继续对话"}</span>
+            <span>{isEn ? "Back to Workbench" : "返回工作台"}</span>
           </button>
           <button
             type="button"
@@ -137,22 +137,13 @@ export default function ProfilePanel({
       </div>
 
       {/* 提示便签：极简友好说明 */}
-      <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/5 p-3.5 text-xs text-amber-200/95">
-        <div className="flex items-center gap-2.5">
-          <Sparkles className="size-4 text-amber-400 shrink-0" />
-          <span>
-            {isEn
-              ? "Values below were extracted from your conversation. You can tweak them directly, or chat further with the AI anytime."
-              : "以下信息已根据您与 AI 顾问的对话自动提炼。如果不准确，可直接在下方修改，或返回工作台继续交流。"}
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={onBackToWorkbench}
-          className="shrink-0 text-amber-400 hover:text-amber-300 underline font-semibold cursor-pointer"
-        >
-          {isEn ? "Continue Chatting →" : "与 AI 继续聊聊 →"}
-        </button>
+      <div className="flex items-center gap-2.5 rounded-2xl border border-amber-500/25 bg-amber-500/5 p-3.5 text-xs text-amber-200/95">
+        <Sparkles className="size-4 text-amber-400 shrink-0" />
+        <span>
+          {isEn
+            ? "Values below are auto-extracted from your conversation with the AI advisor. You can freely fine-tune them here."
+            : "以下画像信息已根据与 AI 顾问的对话自动提炼生成，您可在此随时手动修改与微调。"}
+        </span>
       </div>
 
       {/* 主配置网格 */}
@@ -435,14 +426,14 @@ export default function ProfilePanel({
 
       {/* 底部确认行动栏 */}
       <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl border border-[var(--grid)] bg-[#141210] shadow-md">
-        <button
-          type="button"
-          onClick={onBackToWorkbench}
-          className="flex items-center gap-2 text-xs font-medium text-stone-400 hover:text-white transition-all cursor-pointer"
-        >
-          <RotateCcw className="size-3.5" />
-          <span>{isEn ? "Back to Workbench to continue AI chat" : "返回巡航工作台，让大模型继续对话完善"}</span>
-        </button>
+        <div className="flex items-center gap-2 text-xs text-stone-400">
+          <ShieldCheck className="size-4 text-emerald-400" />
+          <span>
+            {isEn
+              ? "All preferences are saved securely on your device for job matching"
+              : "所有微调设置将实时加密存储在本地，作为自动巡航与打招呼依据"}
+          </span>
+        </div>
 
         <div className="flex items-center gap-3">
           <button
@@ -453,13 +444,6 @@ export default function ProfilePanel({
           >
             {savedSuccess ? <Check className="size-4" /> : <Save className="size-4" />}
             <span>{savedSuccess ? (isEn ? "Saved!" : "已保存全部设置！") : (isEn ? "Save Profile" : "保存画像配置")}</span>
-          </button>
-          <button
-            type="button"
-            onClick={onBackToWorkbench}
-            className="px-4 py-2 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-xs font-bold text-amber-300 transition-all cursor-pointer"
-          >
-            {isEn ? "Go to Workbench →" : "返回工作台启动巡航 →"}
           </button>
         </div>
       </div>
