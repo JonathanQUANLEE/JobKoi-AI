@@ -6,11 +6,11 @@ import AgentPanel from "../components/AgentPanel";
 import DeliveryAnalyticsView from "../components/analytics/DeliveryAnalyticsView";
 import DashboardHeader from "../components/DashboardHeader";
 import WorkbenchView from "../views/WorkbenchView";
-import SettingsDrawer, { type DrawerTab } from "../components/SettingsDrawer";
-import SettingsModal, { type SettingsTab } from "../components/SettingsModal";
-import MistSettingsModal, { type MistModalType } from "../components/settings/MistSettingsModal";
+import { type DrawerTab } from "../components/SettingsDrawer";
+import { type SettingsTab } from "../components/SettingsModal";
+import { type MistModalType } from "../components/settings/MistSettingsModal";
 import Sidebar, { type NavItem } from "../components/Sidebar";
-import GlobalUsagiPet from "../components/pet/GlobalUsagiPet";
+import DashboardModalLayer from "../components/dashboard/DashboardModalLayer";
 import { useWorkbenchWheel } from "../hooks/useWorkbenchWheel";
 import { useProfileFormState } from "../hooks/useProfileFormState";
 import { useJobBotRuntime } from "../hooks/useJobBotRuntime";
@@ -35,7 +35,9 @@ export default function Dashboard() {
   const [activeNav, setActiveNav] = useState<NavItem>("workbench");
   const [drawerTab, setDrawerTab] = useState<DrawerTab>("rules");
   const [mistModalType, setMistModalType] = useState<MistModalType>(null);
-  const [defaultResumeName, setDefaultResumeName] = useState<string>("我的求职简历.docx");
+  const [defaultResumeName, setDefaultResumeName] = useState<string>(
+    "我的求职简历.docx"
+  );
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [settingsModalTab, setSettingsModalTab] = useState<SettingsTab>("general");
   const [expandRipple, setExpandRipple] = useState(false);
@@ -351,113 +353,24 @@ export default function Dashboard() {
         </main>
       </div>
 
-      {/* 侧边滑出高级设置抽屉 */}
-      <SettingsDrawer
-        isOpen={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        initialTab={drawerTab}
+      {/* 弹窗与悬浮层外壳 */}
+      <DashboardModalLayer
+        drawerOpen={drawerOpen}
+        setDrawerOpen={setDrawerOpen}
+        drawerTab={drawerTab}
         lang={lang}
-        profiles={profileForm.profiles}
-        profileName={profileForm.profileName}
-        setProfileName={profileForm.setProfileName}
-        onLoadProfile={profileForm.loadProfile}
-        onSaveConfig={profileForm.saveConfig}
+        setLang={setLang}
+        profileForm={profileForm}
         busy={busy}
-        usrName={profileForm.usrName}
-        setUsrName={profileForm.setUsrName}
-        label={profileForm.label}
-        setLabel={profileForm.setLabel}
-        startUrl={profileForm.startUrl}
-        setStartUrl={profileForm.setStartUrl}
-        rule={profileForm.rule}
-        setRule={profileForm.setRule}
-        cityValues={profileForm.cityValues}
-        setCityValues={profileForm.setCityValues}
-        educationValues={profileForm.educationValues}
-        setEducationValues={profileForm.setEducationValues}
-        bossActiveValues={profileForm.bossActiveValues}
-        setBossActiveValues={profileForm.setBossActiveValues}
-        filterPolicy={profileForm.filterPolicy}
-        setFilterPolicy={profileForm.setFilterPolicy}
-        greetingPath={profileForm.greetingPath}
-        setGreetingPath={profileForm.setGreetingPath}
-        greeting={profileForm.greeting}
-        setGreeting={profileForm.setGreeting}
-        delayMin={profileForm.delayMin}
-        setDelayMin={profileForm.setDelayMin}
-        delayMax={profileForm.delayMax}
-        setDelayMax={profileForm.setDelayMax}
-        maxSent={profileForm.maxSent}
-        setMaxSent={profileForm.setMaxSent}
-        dailyLimit={profileForm.dailyLimit}
-        setDailyLimit={profileForm.setDailyLimit}
-        dryRun={profileForm.dryRun}
-        setDryRun={profileForm.setDryRun}
-        stopOnCaptcha={profileForm.stopOnCaptcha}
-        setStopOnCaptcha={profileForm.setStopOnCaptcha}
-        sendResumeAfterGreeting={profileForm.sendResumeAfterGreeting}
-        setSendResumeAfterGreeting={profileForm.setSendResumeAfterGreeting}
-        autoResumeOnReply={profileForm.autoResumeOnReply}
-        setAutoResumeOnReply={profileForm.setAutoResumeOnReply}
-        aiGreeting={profileForm.aiGreeting}
-        setAiGreeting={profileForm.setAiGreeting}
-      />
-
-      {/* WorkBuddy 风格系统设置弹窗 */}
-      <SettingsModal
-        isOpen={settingsModalOpen}
-        onClose={() => setSettingsModalOpen(false)}
-        initialTab={settingsModalTab}
-        lang={lang}
-        onSetLang={setLang}
-        usrName={profileForm.usrName}
-        setUsrName={profileForm.setUsrName}
-        label={profileForm.label}
+        settingsModalOpen={settingsModalOpen}
+        setSettingsModalOpen={setSettingsModalOpen}
+        settingsModalTab={settingsModalTab}
+        setSettingsModalTab={setSettingsModalTab}
         defaultResumeName={defaultResumeName}
-        onGoToResumes={() => {
-          setSettingsModalOpen(false);
-          setActiveNav("resumes");
-        }}
-        onSaveConfig={profileForm.saveConfig}
-        busy={busy}
-      />
-
-      {/* 4 大独立居中局部雾化悬浮设置弹窗（过滤规则、投递安全、打招呼模板、AI模型配置） */}
-      <MistSettingsModal
-        type={mistModalType}
-        onClose={() => setMistModalType(null)}
-        currentProfileData={profileForm.currentProfileData}
-        onSaveProfileData={(data) => {
-          profileForm.hydrateFromProfile({
-            name: profileForm.profileName,
-            path: "",
-            data,
-          });
-        }}
-        rule={profileForm.rule}
-        setRule={profileForm.setRule}
-        dailyLimit={profileForm.dailyLimit}
-        setDailyLimit={profileForm.setDailyLimit}
-        delayMin={profileForm.delayMin}
-        setDelayMin={profileForm.setDelayMin}
-        delayMax={profileForm.delayMax}
-        setDelayMax={profileForm.setDelayMax}
-        dryRun={profileForm.dryRun}
-        setDryRun={profileForm.setDryRun}
-        greeting={profileForm.greeting}
-        setGreeting={profileForm.setGreeting}
-        onSaveConfig={profileForm.saveConfig}
-      />
-
-      {/* 乌萨奇全窗口自由停靠浮动特助 (方案 A：可在软件任何位置随意拖拽、松手定格) */}
-      <GlobalUsagiPet
-        running={botRuntime.running}
-        onStartRun={botRuntime.startRun}
-        onOpenSettingsModal={(tab) => {
-          setSettingsModalTab((tab as SettingsTab) || "general");
-          setSettingsModalOpen(true);
-        }}
-        lang={lang}
+        setActiveNav={setActiveNav}
+        mistModalType={mistModalType}
+        setMistModalType={setMistModalType}
+        botRuntime={botRuntime}
         sidebarCollapsed={sidebarCollapsed}
       />
     </div>
