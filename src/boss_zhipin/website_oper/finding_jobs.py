@@ -403,13 +403,30 @@ async def _safe_evaluate(js: str, timeout: float = 10) -> dict:
     自带 ``asyncio.wait_for`` 兜底 + JSON 解析容错 —— 永远不抛、永远返回 dict
     （失败时空 dict）。
     """
+    if _tab is None:
+        return {}
+
     js_head = js.strip()[:80].replace("\n", " ")
     try:
         raw = await asyncio.wait_for(_tab.evaluate(js), timeout=timeout)
     except asyncio.TimeoutError:
         log.warning("evaluate 超过 %ss 没返回（JS: %s...）", timeout, js_head)
         return {}
+    except (ConnectionRefusedError, ConnectionResetError, BrokenPipeError) as e:
+        log.info("Chrome 浏览器已关闭或连接断开（%s: %s），重置浏览器会话", type(e).__name__, e)
+        await shutdown()
+        return {}
     except Exception as e:
+        err_msg = str(e)
+        if (
+            "1225" in err_msg
+            or "ConnectionRefused" in err_msg
+            or "target closed" in err_msg.lower()
+            or "connection closed" in err_msg.lower()
+        ):
+            log.info("Chrome 浏览器连接已断开（%s: %s），重置浏览器会话", type(e).__name__, e)
+            await shutdown()
+            return {}
         log.warning("evaluate 抛 %s: %s（JS: %s...）", type(e).__name__, e, js_head)
         return {}
     if isinstance(raw, tuple):
