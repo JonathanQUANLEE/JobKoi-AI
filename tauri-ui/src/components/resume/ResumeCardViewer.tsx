@@ -137,24 +137,21 @@ export default function ResumeCardViewer({
             <span>AI 深度精修</span>
           </button>
 
-          {/* 3. 设为默认 / 当前默认 */}
-          {!item.is_default ? (
-            <button
-              type="button"
-              onClick={() => onSetDefault(item.name)}
-              disabled={busy}
-              className="flex items-center gap-1 text-xs py-1.5 px-2.5 rounded-xl border border-stone-800 hover:border-amber-500/40 text-stone-400 hover:text-stone-200 cursor-pointer transition-all"
-              title="设为投递时优先使用的默认文件"
-            >
-              <Star className="size-3.5 text-stone-400" />
-              <span>设默认</span>
-            </button>
-          ) : (
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-xl">
-              <Star className="size-3 fill-amber-400 text-amber-400" />
-              <span>默认</span>
-            </span>
-          )}
+          {/* 3. 设为默认 / 取消默认 */}
+          <button
+            type="button"
+            onClick={() => onSetDefault(item.is_default ? "" : item.name)}
+            disabled={busy}
+            className={`flex items-center gap-1 text-xs py-1.5 px-2.5 rounded-xl transition-all cursor-pointer ${
+              item.is_default
+                ? "font-semibold text-amber-400 bg-amber-500/15 border border-amber-500/40 hover:bg-amber-500/25 shadow-sm shadow-amber-500/10"
+                : "border border-stone-800 hover:border-amber-500/40 text-stone-400 hover:text-stone-200"
+            }`}
+            title={item.is_default ? "点击取消默认简历" : "设为投递时优先使用的默认文件"}
+          >
+            <Star className={`size-3.5 ${item.is_default ? "fill-amber-400 text-amber-400" : "text-stone-400"}`} />
+            <span>{item.is_default ? "★ 默认 (点击取消)" : "设默认"}</span>
+          </button>
 
           {/* 4. 按住删除按钮 (React Bits 液态波纹进度长按确认，防误触物理安全销毁) */}
           <HoldButton
@@ -227,8 +224,13 @@ export default function ResumeCardViewer({
 
             <div className="w-full h-full flex items-center justify-center overflow-auto p-2">
               <img
-                src={blobUrl || content?.data_url}
+                src={content?.data_url || blobUrl}
                 alt={item.name}
+                onError={(e) => {
+                  if (blobUrl && e.currentTarget.src !== blobUrl) {
+                    e.currentTarget.src = blobUrl;
+                  }
+                }}
                 style={{ transform: `scale(${imgZoom})`, transformOrigin: "center center" }}
                 className="max-w-full max-h-full object-contain rounded-xl shadow-2xl border border-stone-800/80 transition-transform duration-150 select-none pointer-events-auto"
               />

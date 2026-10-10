@@ -108,6 +108,18 @@ type RunState = {
   setLLMConfig: (config: LLMConfig | null) => void;
   setLLMSettingsOpen: (open: boolean) => void;
 
+  // ---------- 巡航工作台 AI 顾问意向对话持久状态 ----------
+  heroChatting: boolean;
+  chatStartTime: number | null;
+  chatPhaseText: string;
+  heroChatMessages: AgentChatMessage[];
+  heroProfileResult: Record<string, unknown> | null;
+  setHeroChatting: (chatting: boolean) => void;
+  setChatStartTime: (time: number | null) => void;
+  setChatPhaseText: (text: string) => void;
+  setHeroChatMessages: (msgs: AgentChatMessage[] | ((prev: AgentChatMessage[]) => AgentChatMessage[])) => void;
+  setHeroProfileResult: (res: Record<string, unknown> | null) => void;
+
   setRunning: (running: boolean) => void;
   pushEvent: (ev: ProgressEvent) => void;
   pushLog: (line: string) => void;
@@ -232,6 +244,21 @@ export const useRunStore = create<RunState>((set) => ({
   setAgentProfilePreview: (agentProfilePreview) => set({ agentProfilePreview }),
   setLLMConfig: (llmConfig) => set({ llmConfig }),
   setLLMSettingsOpen: (llmSettingsOpen) => set({ llmSettingsOpen }),
+
+  heroChatting: false,
+  chatStartTime: null,
+  chatPhaseText: "正在深度思考并提炼专属求职画像...",
+  heroChatMessages: [],
+  heroProfileResult: null,
+
+  setHeroChatting: (heroChatting) => set({ heroChatting }),
+  setChatStartTime: (chatStartTime) => set({ chatStartTime }),
+  setChatPhaseText: (chatPhaseText) => set({ chatPhaseText }),
+  setHeroChatMessages: (msgs) =>
+    set((s) => ({
+      heroChatMessages: typeof msgs === "function" ? msgs(s.heroChatMessages) : msgs,
+    })),
+  setHeroProfileResult: (heroProfileResult) => set({ heroProfileResult }),
 
   setRunning: (running) => set({ running }),
   pushEvent: (ev) =>

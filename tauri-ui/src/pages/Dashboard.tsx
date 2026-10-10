@@ -126,8 +126,8 @@ export default function Dashboard() {
     ipc
       .listResumes()
       .then((res) => {
-        const def = res.resumes.find((r) => r.is_default) || res.resumes[0];
-        if (def) setDefaultResumeName(def.name);
+        const def = res.resumes.find((r) => r.is_default);
+        setDefaultResumeName(def ? def.name : "");
       })
       .catch(() => {});
   }, [activeNav]);

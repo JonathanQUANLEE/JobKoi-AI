@@ -1,8 +1,9 @@
-import { useState, useCallback, useEffect, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, type Dispatch, type SetStateAction } from "react";
 import { ipc, type AgentChatMessage, type ProfileData } from "../lib/ipc";
 import { summarizeAgentProfile } from "../lib/agentPreview";
 import { extractFallbackProfile } from "../lib/dashboardHelpers";
 import type { RuleForm } from "../lib/profileForm";
+import { useRunStore } from "../store";
 
 interface UseHeroChatOptions {
   currentProfileData: () => ProfileData;
@@ -18,9 +19,9 @@ export interface UseHeroChatReturn {
   chatStartTime: number | null;
   chatPhaseText: string;
   heroChatMessages: AgentChatMessage[];
-  setHeroChatMessages: Dispatch<SetStateAction<AgentChatMessage[]>>;
+  setHeroChatMessages: (msgs: AgentChatMessage[] | ((prev: AgentChatMessage[]) => AgentChatMessage[])) => void;
   heroProfileResult: Record<string, unknown> | null;
-  setHeroProfileResult: Dispatch<SetStateAction<Record<string, unknown> | null>>;
+  setHeroProfileResult: (res: Record<string, unknown> | null) => void;
   isChattingOrHasHistory: boolean;
   handleHeroChatSubmit: (text: string) => Promise<void>;
   resetHeroChat: () => void;
@@ -49,11 +50,16 @@ export function useHeroChat({
   pushAgentMessage,
   setMessage,
 }: UseHeroChatOptions): UseHeroChatReturn {
-  const [heroChatting, setHeroChatting] = useState(false);
-  const [chatStartTime, setChatStartTime] = useState<number | null>(null);
-  const [chatPhaseText, setChatPhaseText] = useState("正在深度思考并提炼专属求职画像...");
-  const [heroChatMessages, setHeroChatMessages] = useState<AgentChatMessage[]>([]);
-  const [heroProfileResult, setHeroProfileResult] = useState<Record<string, unknown> | null>(null);
+  const heroChatting = useRunStore((s) => s.heroChatting);
+  const setHeroChatting = useRunStore((s) => s.setHeroChatting);
+  const chatStartTime = useRunStore((s) => s.chatStartTime);
+  const setChatStartTime = useRunStore((s) => s.setChatStartTime);
+  const chatPhaseText = useRunStore((s) => s.chatPhaseText);
+  const setChatPhaseText = useRunStore((s) => s.setChatPhaseText);
+  const heroChatMessages = useRunStore((s) => s.heroChatMessages);
+  const setHeroChatMessages = useRunStore((s) => s.setHeroChatMessages);
+  const heroProfileResult = useRunStore((s) => s.heroProfileResult);
+  const setHeroProfileResult = useRunStore((s) => s.setHeroProfileResult);
 
   // 定时刷新思考阶段文案，给用户清晰明确的进度预期
   useEffect(() => {
@@ -62,7 +68,7 @@ export function useHeroChat({
       setChatPhaseText(computePhaseText(chatStartTime));
     }, 800);
     return () => clearInterval(interval);
-  }, [heroChatting, chatStartTime]);
+  }, [heroChatting, chatStartTime, setChatPhaseText]);
 
   const isChattingOrHasHistory = heroChatMessages.length > 0 || heroChatting;
 
@@ -70,7 +76,9 @@ export function useHeroChat({
     setHeroChatMessages([]);
     setHeroProfileResult(null);
     setChatStartTime(null);
-  }, []);
+    setHeroChatting(false);
+    setChatPhaseText("正在深度思考并提炼专属求职画像...");
+  }, [setHeroChatMessages, setHeroProfileResult, setChatStartTime, setHeroChatting, setChatPhaseText]);
 
   const handleHeroChatSubmit = useCallback(
     async (text: string) => {
@@ -90,9 +98,9 @@ export function useHeroChat({
 
       try {
         const currentForm = currentProfileData();
-        // 18 秒超时自动熔断保护：避免云端 LLM 排队挂起导致用户无限期卡在“工作中”
+        // 12 秒超时自动熔断保护：避免云端 LLM 排队挂起导致用户无限期卡在“工作中”
         const timeoutPromise = new Promise<{ status: "timeout" }>((resolve) =>
-          setTimeout(() => resolve({ status: "timeout" }), 18000)
+          setTimeout(() => resolve({ status: "timeout" }), 12000)
         );
         const resPromise = ipc.agentChat(trimmed, heroChatMessages.slice(-8), currentForm);
 
