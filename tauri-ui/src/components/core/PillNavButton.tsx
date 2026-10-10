@@ -135,7 +135,7 @@ export const PillNavButton: FC<PillNavButtonProps> = ({
     bubbleColor ||
     (isMonochrome
       ? variant === "primary"
-        ? "#000000" // 核心黑白反差：白色药丸按钮，内部展开纯黑液体气泡！
+        ? "#ffffff" // 用户需求反转：日常黑底白字，悬停时展开纯白液体气泡！
         : variant === "danger-menu"
         ? "rgba(239, 68, 68, 0.18)"
         : variant === "menu"
@@ -155,7 +155,7 @@ export const PillNavButton: FC<PillNavButtonProps> = ({
 
   const baseVariantStyles = isMonochrome
     ? variant === "primary"
-      ? "w-full justify-center rounded-xl bg-white px-3 py-2.5 text-xs font-black text-black shadow-lg shadow-white/10 active:scale-[0.98] transition-all disabled:opacity-50 overflow-hidden"
+      ? "w-full justify-center rounded-xl bg-black border border-white/20 hover:border-white/50 px-3 py-2.5 text-xs font-bold text-white shadow-lg shadow-black/40 active:scale-[0.98] transition-all disabled:opacity-50 overflow-hidden cursor-pointer"
       : variant === "menu"
       ? "w-full justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-300 hover:text-white transition-colors"
       : variant === "danger-menu"
@@ -194,13 +194,13 @@ export const PillNavButton: FC<PillNavButtonProps> = ({
       />
 
       {/* 按钮内容排版 */}
-      <div className="pill-btn-content">
+      <div className={`pill-btn-content ${variant === "primary" ? "justify-center" : "justify-between"}`}>
         <div className="pill-btn-stack">
           {/* 正常默认标签 */}
           <span
             ref={normalLabelRef}
             className={`pill-btn-label-normal ${
-              isMonochrome && variant === "primary" ? "text-black font-black" : ""
+              isMonochrome && variant === "primary" ? "text-white font-bold" : ""
             }`}
           >
             {icon && <span className="shrink-0">{icon}</span>}
@@ -213,7 +213,7 @@ export const PillNavButton: FC<PillNavButtonProps> = ({
             className={`pill-btn-label-hovered ${
               isMonochrome
                 ? variant === "primary"
-                  ? "text-white font-black"
+                  ? "text-black font-black"
                   : variant === "danger-menu"
                   ? "text-red-400 font-semibold"
                   : variant === "menu"

@@ -30,7 +30,7 @@ export function getInitialTheme(): AppTheme {
       return saved;
     }
   } catch {}
-  return "classic";
+  return "monochrome";
 }
 
 export function applyThemeToDOM(theme: AppTheme) {
