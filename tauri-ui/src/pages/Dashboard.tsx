@@ -225,6 +225,8 @@ export default function Dashboard() {
               isChattingOrHasHistory={heroChat.isChattingOrHasHistory}
               heroChatMessages={heroChat.heroChatMessages}
               heroChatting={heroChat.heroChatting}
+              chatStartTime={heroChat.chatStartTime}
+              chatPhaseText={heroChat.chatPhaseText}
               heroProfileResult={heroChat.heroProfileResult}
               onChatSubmit={heroChat.handleHeroChatSubmit}
               onResetChat={heroChat.resetHeroChat}

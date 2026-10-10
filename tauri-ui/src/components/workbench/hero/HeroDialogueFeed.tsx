@@ -19,6 +19,8 @@ interface HeroDialogueFeedProps {
   dialogueScrollRef: RefObject<HTMLDivElement>;
   heroChatMessages: AgentChatMessage[];
   heroChatting: boolean;
+  chatStartTime?: number | null;
+  chatPhaseText?: string;
   heroProfileResult: Record<string, unknown> | null;
   heroProfilePreview: AgentPreviewSummary | null;
   onResetChat: () => void;
@@ -36,6 +38,8 @@ export default function HeroDialogueFeed({
   dialogueScrollRef,
   heroChatMessages,
   heroChatting,
+  chatStartTime,
+  chatPhaseText,
   heroProfileResult,
   heroProfilePreview,
   onResetChat,
@@ -144,9 +148,10 @@ export default function HeroDialogueFeed({
                   glow={true}
                   glowColor="#f59e0b"
                   showTimer={true}
+                  startTime={chatStartTime || undefined}
                 />
                 <span className="text-xs text-stone-400 font-medium">
-                  {lang === "en" ? "Deep analyzing background & requirements..." : "正在深度思考并提炼专属求职画像..."}
+                  {chatPhaseText || (lang === "en" ? "Deep analyzing background & requirements..." : "正在深度思考并提炼专属求职画像...")}
                 </span>
               </div>
             </div>

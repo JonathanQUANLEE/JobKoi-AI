@@ -233,6 +233,20 @@ export default function ProfilePanel({
                   );
                 })}
               </div>
+              {(() => {
+                const count = cityValues ? cityValues.split(",").map((c) => c.trim()).filter(Boolean).length : 0;
+                if (count <= 4) return null;
+                return (
+                  <div className="mt-2.5 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-300">
+                    <span className="font-bold">⚡</span>
+                    <span>
+                      {isEn
+                        ? `Configured ${count} cities: Platforms like BOSS limit selection to 4 at once. Smart rotation enabled (swapping in batches of 4).`
+                        : `已选 ${count} 个城市：BOSS 直聘等平台单次最多勾选 4 个，系统已自动启用智能切批轮询（每轮 4 个轮流替换投递）。`}
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
 
             <div>

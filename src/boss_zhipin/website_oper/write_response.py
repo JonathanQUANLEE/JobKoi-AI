@@ -1259,12 +1259,18 @@ async def send_job_descriptions_to_chat(
         window_index += 1
 
     async def reload_feed_and_restart() -> bool:
-        """列表到底后整页刷新推荐流，从头再扫。返回是否刷新成功。"""
+        """列表到底后整页刷新推荐流或轮换下一批意向城市。返回是否刷新成功。"""
         nonlocal window_index, consecutive_misses, consecutive_duplicates
         nonlocal barren_reloads
-        reloaded = await finding_jobs.reload_current_page()
-        if not reloaded:
-            return False
+        # 若用户配置了超过 4 个意向城市，列表到底后优先轮流替换为下一批城市
+        rotated = await finding_jobs.rotate_next_city_batch(
+            _page_filters_for_click(page_filters),
+            emit_event=lambda payload: _emit_progress("page_filter", **payload),
+        )
+        if not rotated:
+            reloaded = await finding_jobs.reload_current_page()
+            if not reloaded:
+                return False
         barren_reloads += 1
         window_index = 1
         consecutive_misses = 0

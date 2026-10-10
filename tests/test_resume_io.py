@@ -77,11 +77,10 @@ def test_save_and_get_resume_content(tmp_path):
     raw_data = b"%PDF-1.4 test pdf content"
     b64_str = base64.b64encode(raw_data).decode("ascii")
 
-    # 保存
     saved = save_resume_file("测试简历.pdf", f"data:application/pdf;base64,{b64_str}", tmp_path)
     assert saved["status"] == "saved"
     assert saved["name"] == "测试简历.pdf"
-    assert saved["is_default"] is True  # 首个文件自动设为默认
+    assert saved["is_default"] is False  # 上传文件不自动设为默认，等待用户显式选择
 
     # 读取内容
     content = get_resume_content("测试简历.pdf", tmp_path)

@@ -90,6 +90,7 @@ export interface LatticeLoaderProps {
   glowColor?: string;
   showTimer?: boolean;
   elapsed?: number;
+  startTime?: number;
   className?: string;
   style?: CSSProperties;
 }
@@ -114,6 +115,7 @@ export default function LatticeLoader({
   glowColor = '',
   showTimer = true,
   elapsed,
+  startTime,
   className = '',
   style
 }: LatticeLoaderProps) {
@@ -141,11 +143,19 @@ export default function LatticeLoader({
       return undefined;
     }
     if (status !== 'working') return undefined;
-    const startedAt = performance.now();
-    paint(0);
-    const id = setInterval(() => paint(Math.floor((performance.now() - startedAt) / 100)), 100);
+
+    const calcDs = () => {
+      if (startTime != null) {
+        return Math.floor(Math.max(0, Date.now() - startTime) / 100);
+      }
+      return Math.floor((performance.now() - localStartedAt) / 100);
+    };
+
+    const localStartedAt = performance.now();
+    paint(calcDs());
+    const id = setInterval(() => paint(calcDs()), 100);
     return () => clearInterval(id);
-  }, [status, elapsed]);
+  }, [status, elapsed, startTime]);
 
   useEffect(() => {
     if (status === 'working') {

@@ -24,6 +24,8 @@ interface WorkbenchViewProps {
   isChattingOrHasHistory: boolean;
   heroChatMessages: AgentChatMessage[];
   heroChatting: boolean;
+  chatStartTime?: number | null;
+  chatPhaseText?: string;
   heroProfileResult: Record<string, unknown> | null;
   onChatSubmit: (text: string) => void;
   onResetChat: () => void;
@@ -72,6 +74,8 @@ export default function WorkbenchView({
   isChattingOrHasHistory,
   heroChatMessages,
   heroChatting,
+  chatStartTime,
+  chatPhaseText,
   heroProfileResult,
   onChatSubmit,
   onResetChat,
@@ -117,6 +121,8 @@ export default function WorkbenchView({
           isChattingOrHasHistory={isChattingOrHasHistory}
           heroChatMessages={heroChatMessages}
           heroChatting={heroChatting}
+          chatStartTime={chatStartTime}
+          chatPhaseText={chatPhaseText}
           heroProfileResult={heroProfileResult}
           onChatSubmit={onChatSubmit}
           onResetChat={onResetChat}
