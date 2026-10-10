@@ -140,7 +140,10 @@ export default function Dashboard() {
           if (tab) setDrawerTab(tab);
           setDrawerOpen(true);
         }}
-        onOpenSettingsModal={() => setSettingsModalOpen(true)}
+        onOpenSettingsModal={(tab) => {
+          setSettingsModalTab(tab || "general");
+          setSettingsModalOpen(true);
+        }}
         onOpenBrowser={botRuntime.openManualBrowser}
         onResetBrowser={botRuntime.resetChrome}
         lang={lang}
@@ -163,7 +166,10 @@ export default function Dashboard() {
           running={botRuntime.running}
           statusText={botRuntime.statusText}
           lang={lang}
-          onOpenSettingsModal={() => setSettingsModalOpen(true)}
+          onOpenSettingsModal={(tab) => {
+            setSettingsModalTab(tab || "general");
+            setSettingsModalOpen(true);
+          }}
         />
 
         {/* 主内容区域 */}

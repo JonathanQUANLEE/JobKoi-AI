@@ -1,4 +1,4 @@
-import { useState, useRef, type FC } from "react";
+import { useState, useEffect, useRef, type FC } from "react";
 import { Clock, Moon, Sparkles } from "lucide-react";
 import PetSprite from "./PetSprite";
 import PetSpeechBubble from "./PetSpeechBubble";
@@ -9,7 +9,7 @@ import { useRunStore } from "../../store";
 interface SidebarPetProps {
   running: boolean;
   onStartRun?: () => void;
-  onOpenSettingsModal?: () => void;
+  onOpenSettingsModal?: (tab?: any) => void;
 }
 
 export const SidebarPet: FC<SidebarPetProps> = ({
@@ -19,7 +19,23 @@ export const SidebarPet: FC<SidebarPetProps> = ({
 }) => {
   const isMonochrome = useRunStore((s) => s.theme === "monochrome");
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleConfig, setScheduleConfig] = useState(loadScheduleConfig);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const handleUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent<any>;
+      if (customEvent.detail) {
+        setScheduleConfig(customEvent.detail);
+      } else {
+        setScheduleConfig(loadScheduleConfig());
+      }
+    };
+    window.addEventListener("jobhunter_pet_schedule_updated", handleUpdate);
+    return () => {
+      window.removeEventListener("jobhunter_pet_schedule_updated", handleUpdate);
+    };
+  }, []);
 
   const {
     action,
@@ -36,8 +52,6 @@ export const SidebarPet: FC<SidebarPetProps> = ({
     handleContainerMouseLeave,
     setSpeechVisible,
   } = usePetController({ running, onStartRun });
-
-  const scheduleConfig = loadScheduleConfig();
 
   // 鼠标悬停进入微板块呼出逻辑
   const handleMouseEnter = () => {

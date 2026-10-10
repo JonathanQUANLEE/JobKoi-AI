@@ -247,6 +247,7 @@ export function usePetController({ running, onStartRun }: UsePetControllerOption
       }
     };
 
+    checkCruiseSchedule(); // 挂载时立即核验一次当前时间
     cruiseScheduleCheckerRef.current = setInterval(checkCruiseSchedule, 30000); // 每 30 秒核验一次
     return () => {
       if (cruiseScheduleCheckerRef.current) clearInterval(cruiseScheduleCheckerRef.current);

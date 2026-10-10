@@ -30,6 +30,16 @@ export default function ScheduleTab({ isMonochrome, busy = false }: ScheduleTabP
 
   useEffect(() => {
     setConfig(loadScheduleConfig());
+    const handleUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent<PetScheduleConfig>;
+      if (customEvent.detail) {
+        setConfig(customEvent.detail);
+      }
+    };
+    window.addEventListener("jobhunter_pet_schedule_updated", handleUpdate);
+    return () => {
+      window.removeEventListener("jobhunter_pet_schedule_updated", handleUpdate);
+    };
   }, []);
 
   const toggleDay = (day: number) => {

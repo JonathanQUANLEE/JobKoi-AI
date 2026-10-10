@@ -5,7 +5,7 @@ import { type PetScheduleConfig, DEFAULT_SCHEDULE_CONFIG } from "./types";
 interface PetSchedulePopoverProps {
   visible: boolean;
   onClose?: () => void;
-  onOpenSettingsModal?: () => void;
+  onOpenSettingsModal?: (tab?: any) => void;
   isMonochrome?: boolean;
   onScheduleChange?: (config: PetScheduleConfig) => void;
 }
@@ -25,6 +25,11 @@ export function loadScheduleConfig(): PetScheduleConfig {
 export function saveScheduleConfig(config: PetScheduleConfig) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("jobhunter_pet_schedule_updated", { detail: config })
+      );
+    }
   } catch {}
 }
 
@@ -35,6 +40,25 @@ export const PetSchedulePopover: FC<PetSchedulePopoverProps> = ({
   onScheduleChange,
 }) => {
   const [config, setConfig] = useState<PetScheduleConfig>(loadScheduleConfig);
+
+  useEffect(() => {
+    if (visible) {
+      setConfig(loadScheduleConfig());
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    const handleUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent<PetScheduleConfig>;
+      if (customEvent.detail) {
+        setConfig(customEvent.detail);
+      }
+    };
+    window.addEventListener("jobhunter_pet_schedule_updated", handleUpdate);
+    return () => {
+      window.removeEventListener("jobhunter_pet_schedule_updated", handleUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     saveScheduleConfig(config);
@@ -201,7 +225,7 @@ export const PetSchedulePopover: FC<PetSchedulePopoverProps> = ({
         <span className="text-[10px] text-stone-400">周重复/告警</span>
         <button
           type="button"
-          onClick={() => onOpenSettingsModal?.()}
+          onClick={() => onOpenSettingsModal?.("schedule")}
           className={`flex items-center gap-1 text-[11px] font-semibold transition-colors cursor-pointer ${
             isMonochrome
               ? "text-zinc-300 hover:text-white"
