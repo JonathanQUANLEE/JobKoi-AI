@@ -70,6 +70,21 @@ export default function ResumePanel({
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 专注阅读模式状态（点击正文预览框时锁定，仅供滚轮浏览正文；点击外部恢复抽屉切卡）
+  const [isReadingMode, setIsReadingMode] = useState(false);
+  const isMonochrome = useRunStore((s) => s.theme === "monochrome");
+
+  // 按下 Esc 键随时退出正文阅读锁定
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isReadingMode) {
+        setIsReadingMode(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isReadingMode]);
+
   // CardSwap 引用，支持联动控制
   const cardSwapRef = useRef<CardSwapHandle>(null);
 
@@ -282,8 +297,9 @@ export default function ResumePanel({
     }
   }
 
-  // 点击左侧紧凑列表项切换文件时，联动将 CardSwap 抽到最前
+  // 点击左侧紧凑列表项切换文件时，联动将 CardSwap 抽到最前，并重置阅读状态
   const handleItemSelect = (name: string, index: number) => {
+    setIsReadingMode(false);
     setSelectedName(name);
     cardSwapRef.current?.bringToFront(index);
   };
@@ -473,7 +489,12 @@ export default function ResumePanel({
 
         {/* ================= 右侧：核心主体 3D 书架抽屉 CardSwap 大舞台 ================= */}
         {/* 顶部完全无遮挡，充足净空高度，支持滚轮滚动连续切卡 */}
-        <div className="flex-1 min-w-0 w-full flex flex-col items-center justify-start relative overflow-visible">
+        <div
+          className="flex-1 min-w-0 w-full flex flex-col items-center justify-start relative overflow-visible"
+          onClick={() => {
+            if (isReadingMode) setIsReadingMode(false);
+          }}
+        >
           {/* 右侧舞台操作条 */}
           <div className="w-full flex items-center justify-between pb-3 px-1 text-xs text-stone-400">
             <div className="flex items-center gap-2">
@@ -481,22 +502,46 @@ export default function ResumePanel({
                 <Layers className="size-3.5 text-amber-400" />
                 <span>3D 书架抽屉层叠视图</span>
               </span>
-              <span className="text-[11px] text-stone-500 hidden sm:inline">
-                · 鼠标滚轮上下滚动或点击卡片即可持续轮换
-              </span>
+
+              {isReadingMode ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 text-[11px] font-semibold animate-in fade-in">
+                  <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>📜 阅读模式：滚轮浏览正文 · 点击外部恢复抽换</span>
+                </span>
+              ) : (
+                <span className="text-[11px] text-stone-500 hidden sm:inline">
+                  · 鼠标滚轮上下滚动或点击卡片即可持续轮换 · 点击正文进入阅读
+                </span>
+              )}
             </div>
 
-            {resumes.length > 1 && (
-              <button
-                type="button"
-                onClick={() => cardSwapRef.current?.swap()}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 hover:bg-amber-500/25 text-xs font-semibold shadow-sm transition-all cursor-pointer active:scale-95"
-                title="像拉抽屉一样切换下一张"
-              >
-                <RotateCw className="size-3.5 text-amber-400" />
-                <span>抽换下一份 (Swap)</span>
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {isReadingMode && (
+                <button
+                  type="button"
+                  onClick={() => setIsReadingMode(false)}
+                  className="px-2.5 py-1 rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-300 text-xs transition-colors cursor-pointer"
+                  title="退出正文阅读模式，恢复滚轮抽卡"
+                >
+                  退出阅读模式
+                </button>
+              )}
+
+              {resumes.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsReadingMode(false);
+                    cardSwapRef.current?.swap();
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 hover:bg-amber-500/25 text-xs font-semibold shadow-sm transition-all cursor-pointer active:scale-95"
+                  title="像拉抽屉一样切换下一张"
+                >
+                  <RotateCw className="size-3.5 text-amber-400" />
+                  <span>抽换下一份 (Swap)</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {resumes.length === 0 ? (
@@ -515,13 +560,15 @@ export default function ResumePanel({
               <CardSwap
                 ref={cardSwapRef}
                 width="100%"
-                height={620}
+                height={640}
                 cardDistance={32}
                 verticalDistance={26}
                 skewAmount={1.8}
                 autoPlay={false}
                 pauseOnHover={true}
+                isReadingMode={isReadingMode}
                 onFrontChange={(frontIdx) => {
+                  setIsReadingMode(false);
                   const frontItem = resumes[frontIdx];
                   if (frontItem) {
                     setSelectedName(frontItem.name);
@@ -539,7 +586,7 @@ export default function ResumePanel({
                   return (
                     <Card
                       key={item.name}
-                      className="w-full max-w-4xl h-[610px] rounded-3xl border border-amber-500/25 bg-[#171513] shadow-2xl flex flex-col overflow-hidden select-none"
+                      className="w-full max-w-5xl xl:max-w-6xl h-[630px] rounded-3xl border border-amber-500/25 bg-[#171513] shadow-2xl flex flex-col overflow-hidden select-none"
                     >
                       {/* 卡片顶栏：文件核心元信息 + 原版直开 + 提炼画像 + 默认与删除 */}
                       <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-stone-800/80 bg-stone-900/60 shrink-0">
@@ -718,7 +765,20 @@ export default function ResumePanel({
                               </button>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto rounded-xl border border-stone-800 bg-[#161412] p-5 leading-relaxed text-stone-200 select-text allow-inner-scroll">
+                            <div
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsReadingMode(true);
+                              }}
+                              className={`flex-1 overflow-y-auto rounded-xl border p-5 leading-relaxed text-stone-200 select-text allow-inner-scroll reading-content-zone transition-all ${
+                                isReadingMode
+                                  ? isMonochrome
+                                    ? "border-white/50 ring-2 ring-white/15 bg-[#09090b] shadow-inner"
+                                    : "border-amber-500/60 ring-2 ring-amber-500/20 bg-[#161412] shadow-inner"
+                                  : "border-stone-800 bg-[#161412]/80 hover:border-stone-700 cursor-text"
+                              }`}
+                              title={isReadingMode ? "正在专注阅读中：滚轮上下浏览正文（点击外部恢复抽换卡片）" : "点击即可聚焦进入正文专注阅读模式"}
+                            >
                               {content?.text ? (
                                 <pre className="whitespace-pre-wrap font-sans text-xs leading-6 text-stone-300">
                                   {content.text}
@@ -746,10 +806,14 @@ export default function ResumePanel({
                       </div>
 
                       {/* 卡片底栏交互提示 */}
-                      <div className="px-5 py-2 bg-stone-900/80 border-t border-stone-800 text-[11px] text-stone-400 flex items-center justify-between shrink-0">
+                      <div className="px-5 py-2.5 bg-stone-900/80 border-t border-stone-800 text-[11px] text-stone-400 flex items-center justify-between shrink-0">
                         <span className="flex items-center gap-1.5">
                           <Layers className="size-3 text-amber-400" />
-                          <span>3D 书架抽屉层叠 · 滚轮滚动、拖动或点击卡片均可抽拉切换</span>
+                          <span>
+                            {isReadingMode
+                              ? "📜 正文阅读中 · 滚轮/双指平滑滚动 · 点击空白或右上角恢复抽屉轮换"
+                              : "3D 书架抽屉层叠 · 滚轮滚动、拖动或点击卡片均可抽拉切换 · 点击正文阅读"}
+                          </span>
                         </span>
                         <span className="text-stone-500 font-mono text-[10px]">
                           {item.is_default ? "★ 默认投递简历" : "备用投递资料"}

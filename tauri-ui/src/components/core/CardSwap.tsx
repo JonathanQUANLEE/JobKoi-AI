@@ -41,6 +41,7 @@ export interface CardSwapProps {
   pauseOnHover?: boolean;
   onCardClick?: (index: number) => void;
   onFrontChange?: (index: number) => void;
+  isReadingMode?: boolean;
   skewAmount?: number;
   easing?: "elastic" | "smooth";
   children: ReactNode;
@@ -84,6 +85,7 @@ export const CardSwap = forwardRef<CardSwapHandle, CardSwapProps>(
       pauseOnHover = true,
       onCardClick,
       onFrontChange,
+      isReadingMode = false,
       skewAmount = 2.5,
       easing = "elastic",
       children,
@@ -298,30 +300,41 @@ export const CardSwap = forwardRef<CardSwapHandle, CardSwapProps>(
       bringToFront,
     }));
 
-    // 鼠标滚轮监听：滚轮上下滚动时连续切换卡片
+    // 鼠标滚轮监听：滚轮上下滚动时连续切换卡片（带防惯性抖动与阅读模式隔离）
     useEffect(() => {
       const node = container.current;
       if (!node) return;
 
       let lastWheelTime = 0;
+
       const handleWheel = (e: WheelEvent) => {
         const target = e.target as HTMLElement | null;
-        const scrollable = target?.closest(".allow-inner-scroll") as HTMLElement | null;
+        const scrollable = target?.closest(".allow-inner-scroll, .reading-content-zone") as HTMLElement | null;
+
+        // 如果用户在正文阅读模式下，滚轮 100% 留给正文阅读滑动，严禁触发切卡
+        if (isReadingMode && scrollable) {
+          return;
+        }
+
+        // 非阅读模式下，若指针正好处于内部可滚动元素上：
         if (scrollable) {
-          if (
-            (e.deltaY > 0 && scrollable.scrollTop + scrollable.clientHeight < scrollable.scrollHeight - 6) ||
-            (e.deltaY < 0 && scrollable.scrollTop > 6)
-          ) {
+          const atTop = scrollable.scrollTop <= 4;
+          const atBottom = scrollable.scrollTop + scrollable.clientHeight >= scrollable.scrollHeight - 4;
+          // 若内部还能沿滚动方向继续滚动，则优先内部文档原生滚动
+          if ((e.deltaY > 0 && !atBottom) || (e.deltaY < 0 && !atTop)) {
             return;
           }
         }
 
-        e.preventDefault();
-        e.stopPropagation();
+        // 触控板微小动量与手势噪声过滤（小于 10 的微小触控偏移不切卡）
+        if (Math.abs(e.deltaY) < 10) return;
 
         const now = performance.now();
-        if (now - lastWheelTime < 280) return;
+        if (now - lastWheelTime < 300) return;
         lastWheelTime = now;
+
+        e.preventDefault();
+        e.stopPropagation();
 
         if (e.deltaY > 0) {
           swap();
@@ -334,7 +347,7 @@ export const CardSwap = forwardRef<CardSwapHandle, CardSwapProps>(
       return () => {
         node.removeEventListener("wheel", handleWheel);
       };
-    }, [swap, swapPrev]);
+    }, [swap, swapPrev, isReadingMode]);
 
     useEffect(() => {
       const total = refs.length;
@@ -396,8 +409,16 @@ export const CardSwap = forwardRef<CardSwapHandle, CardSwapProps>(
             },
             onClick: (e: React.MouseEvent) => {
               (child.props as { onClick?: (e: React.MouseEvent) => void }).onClick?.(e);
+              const target = e.target as HTMLElement | null;
+
+              // 如果用户点击的是正文阅读区、操作按钮、输入框或链接，严禁触发外层切卡
+              if (target?.closest(".reading-content-zone, .allow-inner-scroll, button, a, input, textarea")) {
+                onCardClick?.(i);
+                return;
+              }
+
               if (order.current[0] === i) {
-                // 点击顶层卡片 -> 抽屉滑出切换到下一张
+                // 点击顶层卡片外部轮廓 -> 抽换到下一张
                 swap();
               } else {
                 // 点击后方卡片 -> 直接抽到最前
