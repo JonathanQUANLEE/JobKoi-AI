@@ -28,8 +28,24 @@ class PlatformManager:
         return self._platforms.get(platform_id)
 
     def list_platforms(self) -> list[dict[str, Any]]:
-        """列出所有支持的平台及其当前登录态信息。"""
-        return [p.get_info().to_dict() for p in self._platforms.values()]
+        """列出所有支持的平台及其当前登录态与今日投递统计。"""
+        from boss_zhipin.gui.stats_io import query_stats
+
+        logs_dir = self.root_dir / "logs" if self.root_dir else None
+        try:
+            stats = query_stats(logs_dir)
+        except Exception:
+            stats = {}
+
+        result: list[dict[str, Any]] = []
+        for p in self._platforms.values():
+            info = p.get_info().to_dict()
+            p_stat = stats.get(p.platform_id, {})
+            info["today_sent"] = int(p_stat.get("today", 0))
+            info["total_sent"] = int(p_stat.get("total", 0))
+            info["remaining"] = int(p_stat.get("remaining", info.get("daily_limit", 150)))
+            result.append(info)
+        return result
 
     async def open_login(self, platform_id: str) -> dict[str, Any]:
         """打开指定平台的扫码登录/手动筛选窗口。"""

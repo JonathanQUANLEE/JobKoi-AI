@@ -7,9 +7,11 @@ import {
   Circle,
   X,
   ShieldCheck,
+  Send,
 } from "lucide-react";
 import { ipc, type PlatformItem } from "../lib/ipc";
 import type { Lang } from "../lib/i18n";
+import { useRunStore } from "../store";
 import { MagicCard } from "./core/MagicBento";
 
 const PLATFORM_GLOW_MAP: Record<string, string> = {
@@ -37,6 +39,11 @@ export default function PlatformHub({
   const [platforms, setPlatforms] = useState<PlatformItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  const events = useRunStore((s) => s.events);
+  const sessionSentCount = events.filter(
+    (e) => e.kind === "letter_sent" && (e.payload?.status === "sent" || e.payload?.status === "dry_run")
+  ).length;
 
   const loadPlatforms = useCallback(async () => {
     try {
@@ -155,6 +162,11 @@ export default function PlatformHub({
         {platforms.map((p) => {
           const isSelected = selectedPlatform === p.id;
           const cardGlow = PLATFORM_GLOW_MAP[p.id] || "245, 158, 11";
+          const baseTodaySent = p.today_sent ?? 0;
+          const liveTodaySent = isSelected ? Math.max(baseTodaySent, baseTodaySent + sessionSentCount) : baseTodaySent;
+          const limit = p.daily_limit || 150;
+          const percentage = Math.min(100, Math.round((liveTodaySent / limit) * 100));
+          const remaining = Math.max(0, limit - liveTodaySent);
           return (
             <MagicCard
               key={p.id}
@@ -210,23 +222,47 @@ export default function PlatformHub({
                   {p.tagline}
                 </p>
 
-                {/* 高亮限额与功能标签栏 */}
-                <div className="flex flex-wrap items-center gap-2 mb-4">
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-950/90 border border-stone-800/90 text-stone-200 shadow-inner">
-                    <span className="text-[11px] text-stone-400 font-medium">
-                      {lang === "en" ? "Daily Limit:" : "每日投递上限:"}
+                {/* 实时投递统计与进度条（断电/重启自动恢复，实时正向反馈） */}
+                <div className="space-y-2 mb-3.5 bg-stone-950/80 rounded-xl p-3 border border-stone-800/90 shadow-inner">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-stone-300 flex items-center gap-1.5 font-medium">
+                      <Send className="size-3.5 text-amber-400" />
+                      <span>{lang === "en" ? "Today Delivered:" : "今日已投递:"}</span>
                     </span>
-                    <span className="text-sm font-bold font-mono text-amber-300 tracking-tight">
-                      {p.daily_limit}
-                    </span>
-                    <span className="text-[11px] text-stone-400">
-                      {lang === "en" ? "/day" : "次/日"}
+                    <span className="font-mono text-sm font-bold text-amber-300">
+                      {liveTodaySent} <span className="text-stone-500 text-[11px] font-normal">/ {limit} 份</span>
                     </span>
                   </div>
-                  <span className="text-[11px] px-2.5 py-1.5 rounded-xl bg-stone-950/60 text-stone-400 border border-stone-800/80 flex items-center gap-1 font-medium">
+
+                  {/* 发光彩色进度条 */}
+                  <div className="h-1.5 w-full rounded-full bg-stone-850 overflow-hidden relative">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${percentage}%`,
+                        backgroundColor: p.theme_color || "#00bebd",
+                        boxShadow: `0 0 8px ${p.theme_color || "#00bebd"}`,
+                      }}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] text-stone-400 pt-0.5">
+                    <span>{p.is_supported ? `已达 ${percentage}% · 剩 ${remaining} 份` : "筹备中"}</span>
+                    <span className="text-emerald-400 font-medium">● 异常断电本地留存</span>
+                  </div>
+                </div>
+
+                {/* 安全与累计标签栏 */}
+                <div className="flex flex-wrap items-center gap-2 mb-4">
+                  <span className="text-[11px] px-2.5 py-1 rounded-xl bg-stone-950/60 text-stone-400 border border-stone-800/80 flex items-center gap-1 font-medium">
                     <ShieldCheck className="size-3.5 text-emerald-400" />
                     <span>{lang === "en" ? "Safe & Direct" : "免密安全直连"}</span>
                   </span>
+                  {p.total_sent != null && p.total_sent > 0 && (
+                    <span className="text-[11px] px-2.5 py-1 rounded-xl bg-stone-950/40 text-stone-400 border border-stone-800/60 font-mono">
+                      累计投递 {p.total_sent} 份
+                    </span>
+                  )}
                 </div>
               </div>
 
