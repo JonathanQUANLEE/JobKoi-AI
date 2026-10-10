@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import { LANGS, type Lang } from "../lib/i18n";
 import { useRunStore } from "../store";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { FilterIcon, ShieldCheckIcon, Comment01Icon, CpuIcon } from "@hugeicons/core-free-icons";
 import PillNavButton from "./core/PillNavButton";
 import NotificationDock from "./NotificationDock";
 import DepthText from "./core/DepthText";
@@ -323,7 +325,7 @@ export default function Sidebar({
                   setMenuOpen(false);
                   onOpenSettings("rules");
                 }}
-                icon={<SlidersHorizontal className="h-3.5 w-3.5 text-stone-400 shrink-0" />}
+                icon={<HugeiconsIcon icon={FilterIcon} size={15} className="text-stone-400 shrink-0" />}
                 label={lang === "en" ? "Job Filter Rules" : "过滤规则设置"}
               />
 
@@ -333,7 +335,7 @@ export default function Sidebar({
                   setMenuOpen(false);
                   onOpenSettings("policy");
                 }}
-                icon={<ShieldCheck className="h-3.5 w-3.5 text-stone-400 shrink-0" />}
+                icon={<HugeiconsIcon icon={ShieldCheckIcon} size={15} className="text-stone-400 shrink-0" />}
                 label={lang === "en" ? "Delivery Settings" : "投递设置与安全"}
               />
 
@@ -343,7 +345,7 @@ export default function Sidebar({
                   setMenuOpen(false);
                   onOpenSettings("greeting");
                 }}
-                icon={<MessageSquareQuote className="h-3.5 w-3.5 text-stone-400 shrink-0" />}
+                icon={<HugeiconsIcon icon={Comment01Icon} size={15} className="text-stone-400 shrink-0" />}
                 label={lang === "en" ? "Greeting Templates" : "打招呼模板"}
               />
 
@@ -353,7 +355,7 @@ export default function Sidebar({
                   setMenuOpen(false);
                   onOpenSettings("model");
                 }}
-                icon={<Bot className="h-3.5 w-3.5 text-stone-400 shrink-0" />}
+                icon={<HugeiconsIcon icon={CpuIcon} size={15} className="text-stone-400 shrink-0" />}
                 label={lang === "en" ? "AI Model Config" : "AI 模型配置"}
               />
 
