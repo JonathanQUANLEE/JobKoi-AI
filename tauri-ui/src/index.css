@@ -641,8 +641,8 @@
   color: #e4e4e7 !important;
 }
 
-/* 20 秒通知倒计时光带缓动动画 */
-@keyframes countdown-20s {
+/* 8 秒通知倒计时光带缓动动画 */
+@keyframes countdown-8s {
   0% {
     width: 100%;
   }
@@ -651,7 +651,8 @@
   }
 }
 
-.animate-countdown-20s {
-  animation: countdown-20s 20s linear forwards;
+.animate-countdown-8s {
+  animation: countdown-8s 8s linear forwards;
 }
+
 
