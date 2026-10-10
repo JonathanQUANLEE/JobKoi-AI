@@ -27,6 +27,8 @@ export default function Dashboard() {
   const setLang = useRunStore((s) => s.setLang);
   const pushAgentMessage = useRunStore((s) => s.pushAgentMessage);
   const setPendingResumePolish = useRunStore((s) => s.setPendingResumePolish);
+  const limitNotice = useRunStore((s) => s.limitNotice);
+  const setLimitNotice = useRunStore((s) => s.setLimitNotice);
 
   const [selectedPlatform, setSelectedPlatform] = useState<string>("boss");
   const [message, setMessage] = useState<string | null>(null);
@@ -207,6 +209,25 @@ export default function Dashboard() {
                 {t("reply.openChat")}
               </button>
               <button className="btn-ghost" onClick={() => botRuntime.setReplyNotice(null)}>
+                {t("reply.dismiss")}
+              </button>
+            </div>
+          )}
+
+          {/* 常驻限额停机横幅：本地安全限额 / 平台限额提示，持续显示直到下一轮运行 */}
+          {limitNotice && (
+            <div className="flex items-center gap-3 border border-amber-500/50 bg-amber-500/10 px-4 py-3 rounded-xl shadow-md">
+              <span className="min-w-0 flex-1 break-words text-sm text-amber-300">
+                {limitNotice.message}
+              </span>
+              <button
+                className="btn-primary"
+                onClick={() => setActiveNav("analytics")}
+                disabled={busy}
+              >
+                {t("limit.openRecords")}
+              </button>
+              <button className="btn-ghost" onClick={() => setLimitNotice(null)}>
                 {t("reply.dismiss")}
               </button>
             </div>

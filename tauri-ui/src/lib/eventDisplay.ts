@@ -81,6 +81,22 @@ export function formatEventForDisplay(
       );
     case "feed_exhausted":
       return view(time, "列表已结束", `已处理到第 ${text(payload.total) || "-"} 个岗位`, payload, "info");
+    case "limit_reached":
+      return view(
+        time,
+        "安全额度停机",
+        message || `今日已投 ${text(payload.current)}/${text(payload.limit)}，已停止`,
+        payload,
+        "warning",
+      );
+    case "platform_limit_reached":
+      return view(
+        time,
+        "平台限额停机",
+        message || `平台提示今日投递已达上限（${text(payload.matched_text)}）`,
+        payload,
+        "warning",
+      );
     case "loop_ended":
       return view(time, "运行结束", `结束原因：${text(payload.reason) || "-"}`, payload, "info");
     case "error":

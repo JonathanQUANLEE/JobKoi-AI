@@ -31,6 +31,8 @@ EventKind = Literal[
     "review_cleared",  # GUI 审核卡片可清空，payload: {index, decision}
     "letter_sent",  # 招呼语处理完成，payload: {index, status, letter_len, match_explanation?, match_details?}
     "feed_exhausted",  # 推荐 feed 跑到底（连续 N 次拿不到 JD），payload: {total}
+    "limit_reached",  # 本地安全限额停机，payload: {reason, limit, current, message}
+    "platform_limit_reached",  # 平台页面弹出限额提示（投递动作后检出），payload: {platform, matched_text}
     "loop_ended",  # runner 包的整段结束，payload: {reason: "completed"|"cancelled"|"error"}
     "error",  # 任何阶段抛了未捕获异常，payload: {stage, message}
 ]

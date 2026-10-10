@@ -147,6 +147,19 @@ async def _check_captcha(tab: uc.Tab) -> bool:
     return any(k in txt for k in ("安全验证", "滑块", "拖动", "验证码", "请完成验证", "行为验证"))
 
 
+async def check_limit_alert(tab: uc.Tab) -> bool:
+    """检测页面是否弹出「今日投递次数已达上限」提示（平台限额）。"""
+    from boss_zhipin.platforms.platform_limits import match_limit_alert
+
+    try:
+        txt = await tab.evaluate("(document.body && document.body.innerText || '')")
+    except Exception:  # noqa: BLE001
+        return False
+    if not isinstance(txt, str):
+        return False
+    return match_limit_alert("job51", txt) is not None
+
+
 NEXT_PAGE_JS = r"""
 (() => {
   const btn = document.querySelector('button.btn-next');

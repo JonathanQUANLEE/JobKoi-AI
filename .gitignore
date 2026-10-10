@@ -115,5 +115,8 @@ tauri-ui/.ds-compiled.css
 /resume/*.jpeg
 /resume/*.webp
 
+# GUI 表单保存的本机画像（含个人城市/岗位偏好，不进公开仓库）
+/profiles/gui-default.yml
+
 # 默认简历标记（含个人文件名）
 /resume/default.txt

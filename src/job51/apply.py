@@ -192,8 +192,11 @@ async def run(keywords: list[str], daily_limit: int, tab=None) -> int:
                 if not result.get("clicked"):
                     continue
 
-                # 点投递后可能弹确认框
+                # 点投递后可能弹确认框；同时检查平台今日限额提示（动作点检测）
                 await asyncio.sleep(2)
+                if await driver.check_limit_alert(tab):
+                    _log(f"[job51] 🛑 平台提示今日投递次数已达上限，安全停止本轮（已投 {sent_today} 个）")
+                    return sent_this_run
                 await _dismiss_confirm_dialog(tab)
                 await asyncio.sleep(1)
 

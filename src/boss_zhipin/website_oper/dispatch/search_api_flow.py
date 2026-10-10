@@ -9,6 +9,7 @@ from typing import Any
 
 from boss_zhipin.audit import validate_letter
 from boss_zhipin.config.filter_rules import match_posting
+from boss_zhipin.platforms.platform_limits import PlatformLimitReached
 
 log = logging.getLogger(__name__)
 
@@ -57,8 +58,9 @@ async def _extract_detail_jd() -> str:
 
 
 async def _send_greeting_on_detail_page(greeting: str) -> str:
-    """在详情页点击“立即沟通”。"""
+    """在详情页点击“立即沟通”。点击后扫描平台限额提示，命中返回 'platform_limit'。"""
     from boss_zhipin.website_oper import finding_jobs
+    from boss_zhipin.website_oper.core.limit_guard import check_platform_limit
 
     button_text = (
         await finding_jobs.get_text_by_css("a.btn-startchat", timeout=3) or ""
@@ -68,6 +70,11 @@ async def _send_greeting_on_detail_page(greeting: str) -> str:
     contact_xpath = "//a[contains(@class, 'btn-startchat')]"
     if not await finding_jobs.click_by_xpath(contact_xpath, timeout=10):
         return "no_button"
+    await asyncio.sleep(1)
+    try:
+        await check_platform_limit()
+    except PlatformLimitReached:
+        return "platform_limit"
     await finding_jobs.click_stay_on_page_if_present(timeout=3)
     await finding_jobs.dismiss_greeting_dialog(timeout=3)
     if finding_jobs.send_resume_after_greeting_enabled():
@@ -221,6 +228,11 @@ async def _process_single_api_job(
         log.warning("发送异常（%s）：%s", job.title, e)
         status = "failed"
 
+    if status == "platform_limit":
+        # 平台弹出限额提示：全局停机信号，不做 skip 记账，直接上传给调度层。
+        log.info("检出平台限额提示，终止本轮投递")
+        return status, sent_count, daily_sent_count
+
     if status == "sent":
         sent_count += 1
         daily_sent_count += 1
@@ -364,6 +376,15 @@ async def _run_search_api_flow(
                 delay_max=delay_max,
             )
             if status == "captcha":
+                return
+            if status == "platform_limit":
+                write_response._emit_progress(
+                    "platform_limit_reached",
+                    platform="boss",
+                    matched_text="(详情页动作后检出)",
+                    message="平台提示已达今日投递上限，已安全停止。"
+                    "今天的实际投递数量可在「投递明细记录」中查看。",
+                )
                 return
 
         log.info(

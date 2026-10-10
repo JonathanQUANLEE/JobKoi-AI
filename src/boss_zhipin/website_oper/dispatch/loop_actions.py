@@ -20,22 +20,34 @@ async def send_response_and_go_back(response: str) -> None:
 
 
 async def click_contact_and_send_response(response: str) -> None:
-    """点击“立即沟通”，并兼容 BOSS 直接发送招呼语后的确认弹窗。"""
-    from boss_zhipin.website_oper import finding_jobs, write_response
+    """点击“立即沟通”，并兼容 BOSS 直接发送招呼语后的确认弹窗。
+
+    点击之后立即扫描页面平台限额提示（动作点检测）：命中会抛
+    ``PlatformLimitReached``，由主循环统一停机统计。
+    """
+    from boss_zhipin.website_oper import finding_jobs
+    from boss_zhipin.website_oper.core.limit_guard import check_platform_limit
+    from boss_zhipin.website_oper import write_response
 
     contact_xpath = "//a[contains(@class, 'op-btn-chat')]"
     if not await finding_jobs.click_by_xpath(contact_xpath, timeout=10):
         raise RuntimeError("立即沟通按钮未找到")
 
+    await write_response.asyncio.sleep(1)
+    await check_platform_limit()
+
     if await finding_jobs.click_stay_on_page_if_present():
         log.info("BOSS 已确认发送招呼语，并已留在岗位页")
+        await check_platform_limit()
         return
 
     await finding_jobs.dismiss_greeting_dialog(timeout=5)
+    await check_platform_limit()
 
     if not await finding_jobs.wait_for_css("#chat-input", timeout=50):
         raise RuntimeError("chat input (#chat-input) 未找到")
     await write_response.send_response_and_go_back(response)
+    await check_platform_limit()
 
 
 async def compose_greeting(job_description: str, fixed_greeting: str) -> tuple[str, str]:

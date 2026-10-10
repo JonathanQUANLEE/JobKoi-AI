@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 
+from boss_zhipin.platforms.platform_limits import PlatformLimitReached
 from boss_zhipin.website_oper.dispatch.job_evaluator import evaluate_job_match
 from boss_zhipin.website_oper.dispatch.loop_actions import (
     click_contact_and_send_response,
@@ -409,6 +410,18 @@ async def send_job_descriptions_to_chat(
             await write_response.asyncio.sleep(3)
             advance_position()
 
+        except PlatformLimitReached as e:
+            # 平台在页面上弹出了限额提示（动作点检测命中）——立即安全停机，
+            # 本地 sent 账本已按实际投递逐条记账，前端可据日志统计今天投了多少。
+            log.warning("检测到平台限额提示，安全停机: %s", e)
+            write_response._emit_progress(
+                "platform_limit_reached",
+                platform=e.platform,
+                matched_text=e.matched_text,
+                message=f"平台提示已达今日投递上限（{e.matched_text}），已安全停止。"
+                "今天的实际投递数量可在「投递明细记录」中查看。",
+            )
+            break
         except Exception as e:
             log.exception("主循环抛异常: %s", e)
             write_response._emit_progress(

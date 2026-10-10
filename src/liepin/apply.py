@@ -172,6 +172,10 @@ async def run(keywords: list[str], daily_limit: int, greeting: str) -> int:
                 _log("[liepin] 🛑 触发风控验证码，立即停止本轮（避免封号）")
                 _append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "captcha"})
                 return sent_this_run
+            if result == "limit":
+                _log("[liepin] 🛑 平台提示今日打招呼次数已达上限，安全停止本轮（已投 %s 个）", sent_today)
+                _append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "platform_limit"})
+                return sent_this_run
             if result == "sent":
                 sent_ids.add(job_id)
                 if company:
