@@ -92,24 +92,26 @@ async def diagnose_and_polish(
 
     # 4. 组装 LLM 深度诊断与改写 Prompt
     system_prompt = (
-        "你是一名顶级技术猎头、前大厂技术总监兼权威简历诊断专家。\n"
-        "你的任务是为候选人提供极其专业、犀利且具备立竿见影效果的简历诊断与 STAR 改写方案。\n"
+        "你是一名顶级技术猎头兼大厂架构师级别的简历诊断专家。\n"
+        "你的任务是为候选人提供专业、犀利且具备立竿见影效果的简历诊断与 STAR / Google X-Y-Z 改写。\n"
+        "【输出原则】文字精炼高信噪比，直击要害，字数控制在 600~800 字内快速输出，杜绝冗长车轱辘话。\n"
         "请结合以下已启用的技能包规范（Skills）进行精修：\n\n"
         f"{skill_instructions}\n"
     )
 
     user_content = (
-        f"【候选人当前简历内容】\n{cleaned_text[:4000]}\n\n"
-        + (f"【期望投递的目标岗位/方向】\n{target_role}\n\n" if target_role else "")
-        + (f"【候选人补充的修改期望】\n{user_prompt}\n\n" if user_prompt else "")
-        + f"【本地 ATS 算法检测指标】\n- 综合质量分: {ats_result.overall_score}/100\n"
-        f"- 量化点数量: {ats_result.metrics_count} 处\n"
-        f"- 强动词覆盖: {ats_result.strong_verbs_count} 个，弱动词: {ats_result.weak_verbs_count} 个\n\n"
-        "请按以下结构输出深度精修报告（支持 Markdown 排版）：\n"
-        "1. 🎯 诊断总评与竞争力概述（直击痛点与优势）\n"
-        "2. ⚠️ 核心硬伤预警（指明缺少量化数据、逻辑断层或技术栈未展开之处）\n"
-        "3. ✨ 重点经历 STAR + X-Y-Z 对比改写示范（必须提供【改写前】vs【改写后】的详实对比，直接补充符合行业逻辑的高信噪比细节与量化指标）\n"
-        "4. 💡 针对目标岗位的补充建议与面试高频追问预测"
+        f"【候选人简历内容】\n{cleaned_text[:2200]}\n\n"
+        + (f"【期望目标岗位】\n{target_role}\n\n" if target_role else "")
+        + (f"【修改期望】\n{user_prompt}\n\n" if user_prompt else "")
+        + f"【本地 ATS 算法指标】综合分: {ats_result.overall_score}/100, 量化点: {ats_result.metrics_count} 处, 强动词: {ats_result.strong_verbs_count} 个, 弱动词: {ats_result.weak_verbs_count} 个\n\n"
+        "请直接按以下清晰结构输出精修报告（Markdown 格式）：\n"
+        "### 🎯 核心硬伤与关键突破点（2-3条短评，指出缺口）\n"
+        "### ✨ STAR + Google X-Y-Z 对比改写示范\n"
+        "**【改写前】**：<指出原句弱动词与缺乏量化之处>\n"
+        "**【改写后】**：<应用 STAR 闭环与 X-Y-Z 量化，提供震撼力强的高阶 Bullet Points>\n"
+        "### 💡 面试官核心关注点与应对策略（2点建议）\n"
+        "### 📋 一键复制精修 Bullet Points\n"
+        "> 提供 2~3 条可直接粘进简历的完美经历描述（动词加粗，数据醒目）。"
     )
 
     config = read_config()

@@ -307,9 +307,9 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TAB 4: AI 顾问意向 Copilot */}
+          {/* TAB 4: 简历精修与诊断 Studio (Agent 2) / 意向画像 (Agent 1) */}
           {activeNav === "copilot" && (
-            <div className="max-w-4xl mx-auto space-y-5">
+            <div className="w-full max-w-7xl mx-auto pb-6">
               <AgentPanel
                 getCurrentForm={profileForm.currentProfileData}
                 onApply={(data) =>
