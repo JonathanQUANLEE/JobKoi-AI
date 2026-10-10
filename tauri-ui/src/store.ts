@@ -4,17 +4,21 @@ import { create } from "zustand";
 import { useCallback } from "react";
 import type { AgentChatMessage, LLMConfig, ProgressEvent } from "./lib/ipc";
 import { type Lang, detectLang, translate } from "./lib/i18n";
+import { auditDb } from "./lib/auditDb";
 
 const MAX_EVENTS = 500;
 const MAX_LOGS = 1000;
 const MAX_AGENT_MESSAGES = 200;
+const MAX_ACTIVE_NOTIFICATIONS = 5;
 
 export type NotificationItem = {
-  id: number;
+  id: string;
   type: "success" | "error" | "info" | "warning";
   text: string;
   source?: string;
   duration?: number;
+  timestamp: number;
+  timeFormatted: string;
 };
 
 export type AppTheme = "classic" | "monochrome" | "system";
@@ -67,10 +71,19 @@ type RunState = {
   restoredPage: Record<string, unknown> | null;
   restoredPageFilters: Record<string, unknown>[];
 
-  // 全局联动消息通知（替代页面顶部横条，统一定位在左侧边栏）
+  // 全局联动消息通知（统一定位在左侧边栏，支持 20s 自动消失、最多5条折叠堆叠与双击平铺）
+  notifications: NotificationItem[];
   notification: NotificationItem | null;
-  notify: (item: Omit<NotificationItem, "id">) => void;
+  notify: (item: {
+    type: "success" | "error" | "info" | "warning";
+    text: string;
+    source?: string;
+    duration?: number;
+    details?: string;
+  }) => void;
+  removeNotification: (id: string) => void;
   clearNotification: () => void;
+  clearAllNotifications: () => void;
 
   // 主题外观系统：支持经典琥珀与黑白高级感（Monochrome Luxe）
   theme: AppTheme;
@@ -129,18 +142,75 @@ export const useRunStore = create<RunState>((set) => ({
   llmConfig: null,
   llmSettingsOpen: false,
 
+  notifications: [],
   notification: null,
   notify: (item) => {
-    const id = Date.now();
-    const duration = item.duration ?? 4500;
-    set({ notification: { ...item, id } });
+    const timestamp = Date.now();
+    const id = `notif_${timestamp}_${Math.random().toString(36).slice(2, 6)}`;
+    const d = new Date(timestamp);
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    const timeFormatted = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    const duration = item.duration ?? 20000; // 默认 20 秒后自动消失
+
+    // 同步持久化记录到本地审计数据库
+    auditDb.addLog({
+      type: item.type,
+      text: item.text,
+      source: item.source,
+      details: item.details,
+    });
+
+    const newItem: NotificationItem = {
+      id,
+      type: item.type,
+      text: item.text,
+      source: item.source,
+      duration,
+      timestamp,
+      timeFormatted,
+    };
+
+    set((s) => {
+      // 保持最多 5 条活跃通知，新通知置于顶层
+      const nextList = [newItem, ...s.notifications.filter((n) => n.id !== id)].slice(
+        0,
+        MAX_ACTIVE_NOTIFICATIONS
+      );
+      return {
+        notifications: nextList,
+        notification: nextList[0] || null,
+      };
+    });
+
     if (duration > 0) {
       setTimeout(() => {
-        set((s) => (s.notification?.id === id ? { notification: null } : {}));
+        set((s) => {
+          const nextList = s.notifications.filter((n) => n.id !== id);
+          return {
+            notifications: nextList,
+            notification: nextList[0] || null,
+          };
+        });
       }, duration);
     }
   },
-  clearNotification: () => set({ notification: null }),
+  removeNotification: (id) =>
+    set((s) => {
+      const nextList = s.notifications.filter((n) => n.id !== id);
+      return {
+        notifications: nextList,
+        notification: nextList[0] || null,
+      };
+    }),
+  clearNotification: () =>
+    set((s) => {
+      const nextList = s.notifications.slice(1);
+      return {
+        notifications: nextList,
+        notification: nextList[0] || null,
+      };
+    }),
+  clearAllNotifications: () => set({ notifications: [], notification: null }),
 
   theme: getInitialTheme(),
   setTheme: (theme) => {
