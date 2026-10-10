@@ -29,6 +29,7 @@ interface ResumeCardViewerProps {
   onSetReadingMode: (val: boolean) => void;
   onOpenNative: (name: string) => void;
   onExtractProfile?: (name: string, text?: string) => void;
+  onReviewResume?: (name: string, text?: string) => void;
   onSetDefault: (name: string) => void;
   onDeleteConfirmed: (name: string) => void;
 }
@@ -46,6 +47,7 @@ export default function ResumeCardViewer({
   onSetReadingMode,
   onOpenNative,
   onExtractProfile,
+  onReviewResume,
   onSetDefault,
   onDeleteConfirmed,
 }: ResumeCardViewerProps) {
@@ -118,6 +120,21 @@ export default function ResumeCardViewer({
           >
             <Sparkles className="size-3.5" />
             <span>提炼画像</span>
+          </button>
+
+          {/* 3. 一键呼唤 Agent 2 简历精修与诊断 */}
+          <button
+            type="button"
+            onClick={() => {
+              if (onReviewResume) {
+                onReviewResume(item.name, content?.text);
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-purple-500/20 cursor-pointer active:scale-95 transition-all"
+            title="呼唤简历精修 Agent：ATS 算法深度诊断 + STAR / XYZ 改写"
+          >
+            <Sparkles className="size-3.5 text-amber-300" />
+            <span>AI 深度精修</span>
           </button>
 
           {/* 3. 设为默认 / 当前默认 */}

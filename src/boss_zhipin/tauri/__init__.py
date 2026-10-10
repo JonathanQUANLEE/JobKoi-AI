@@ -465,6 +465,39 @@ async def open_resume_native(body: _OpenResumeNativeBody) -> dict:
     return _open_native(body.name)
 
 
+class _DiagnoseResumeBody(_CamelModel):
+    resume_text: str
+    target_role: str = ""
+    active_skills: list[str] | None = None
+    user_prompt: str = ""
+
+
+@commands.command()
+async def diagnose_resume(body: _DiagnoseResumeBody) -> dict:
+    """Agent 2：针对简历文本进行启发式算法评分与 LLM 深度精修建议。"""
+    from boss_zhipin.agent import resume_polisher
+
+    return await resume_polisher.diagnose_and_polish(
+        resume_text=body.resume_text,
+        target_role=body.target_role,
+        active_skills=body.active_skills,
+        user_prompt=body.user_prompt,
+    )
+
+
+class _CalculateATSScoreBody(_CamelModel):
+    resume_text: str
+
+
+@commands.command()
+async def calculate_ats_score(body: _CalculateATSScoreBody) -> dict:
+    """纯本地快速计算 ATS 启发式算法评分指标。"""
+    from boss_zhipin.algorithms.ats_scorer import ATSScorer
+
+    res = ATSScorer.score(body.resume_text)
+    return res.to_dict()
+
+
 
 # ---------- 工具执行层（F4：agent 声明意图，这里执行） ----------
 # 隔离红线：agent 包只产出 action 意图；真正动手（读日志/读页面）在这里，

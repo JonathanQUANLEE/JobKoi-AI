@@ -26,11 +26,13 @@ import ResumeHeightHandle from "./resume/ResumeHeightHandle";
 
 interface ResumePanelProps {
   onExtractProfile?: (resumeName: string, text?: string) => void;
+  onReviewResume?: (resumeName: string, text?: string) => void;
   onGoToProfile?: () => void;
 }
 
 export default function ResumePanel({
   onExtractProfile,
+  onReviewResume,
 }: ResumePanelProps) {
   const isMonochrome = useRunStore((s) => s.theme === "monochrome");
 
@@ -134,6 +136,7 @@ export default function ResumePanel({
       onSetReadingMode={setIsReadingMode}
       onOpenNative={handleOpenNative}
       onExtractProfile={onExtractProfile}
+      onReviewResume={onReviewResume}
       onSetDefault={handleSetDefault}
       onDeleteConfirmed={handleDeleteConfirmed}
     />

@@ -186,6 +186,40 @@ export type PlatformListResult = {
   platforms: PlatformItem[];
 };
 
+export interface ATSScoreData {
+  overall_score: number;
+  dimensions: {
+    quantification: number;
+    action_verbs: number;
+    star_logic: number;
+    technical_depth: number;
+    readability: number;
+  };
+  metrics_count: number;
+  strong_verbs_count: number;
+  weak_verbs_count: number;
+  word_count: number;
+  highlights: string[];
+  issues: string[];
+}
+
+export interface SemanticMatchData {
+  score: number;
+  matched_skills: string[];
+  missing_skills: string[];
+  similarity_ratio: number;
+}
+
+export interface ResumeDiagnoseResult {
+  status: "ok" | "error";
+  message?: string;
+  ats_score?: ATSScoreData;
+  semantic_match?: SemanticMatchData;
+  polish_advice?: string;
+  active_skills?: string[];
+  is_offline_fallback?: boolean;
+}
+
 export const ipc = {
   listPlatforms: () => pyInvoke<PlatformListResult>("list_platforms", {}),
   openPlatformLogin: (platformId: string) =>
@@ -236,6 +270,20 @@ export const ipc = {
     pyInvoke<{ status: string; name: string }>("delete_resume_file", { name }),
   openResumeNative: (name: string) =>
     pyInvoke<{ status: string; name: string; path: string }>("open_resume_native", { name }),
+  diagnoseResume: (
+    resumeText: string,
+    targetRole?: string,
+    activeSkills?: string[],
+    userPrompt?: string,
+  ) =>
+    pyInvoke<ResumeDiagnoseResult>("diagnose_resume", {
+      resumeText,
+      targetRole: targetRole ?? "",
+      activeSkills: activeSkills ?? ["star", "xyz", "ats", "verbs"],
+      userPrompt: userPrompt ?? "",
+    }),
+  calculateATSScore: (resumeText: string) =>
+    pyInvoke<ATSScoreData>("calculate_ats_score", { resumeText }),
   windowMinimize: () => pyInvoke<{ status: string }>("window_minimize", {}),
   windowToggleMaximize: () => pyInvoke<{ status: string }>("window_toggle_maximize", {}),
   windowClose: () => pyInvoke<{ status: string }>("window_close", {}),

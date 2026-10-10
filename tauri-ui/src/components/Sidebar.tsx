@@ -222,8 +222,10 @@ export default function Sidebar({
         <NavItemButton
           active={activeNav === "copilot"}
           onClick={() => onSelectNav("copilot")}
-          icon={<Bot className="h-4 w-4 shrink-0" />}
-          label={lang === "en" ? "AI Copilot" : "AI 意向助理"}
+          icon={<Sparkles className="h-4 w-4 shrink-0 text-amber-400" />}
+          label={lang === "en" ? "Resume Polish" : "简历精修"}
+          badge={lang === "en" ? "Skills" : "AI 诊断"}
+          badgeColor="bg-purple-500/15 text-purple-300 border border-purple-500/30"
         />
 
         <NavItemButton

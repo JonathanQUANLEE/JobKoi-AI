@@ -99,6 +99,9 @@ type RunState = {
   llmConfig: LLMConfig | null;
   llmSettingsOpen: boolean;
 
+  pendingResumePolish: { name: string; text?: string } | null;
+  setPendingResumePolish: (item: { name: string; text?: string } | null) => void;
+
   pushAgentMessage: (message: AgentChatMessage) => void;
   setAgentPending: (pending: boolean) => void;
   setAgentProfilePreview: (profile: Record<string, unknown> | null) => void;
@@ -135,6 +138,9 @@ export const useRunStore = create<RunState>((set) => ({
   restoredPageFilters: [],
 
   lang: detectLang(),
+
+  pendingResumePolish: null,
+  setPendingResumePolish: (pendingResumePolish) => set({ pendingResumePolish }),
 
   agentMessages: [],
   agentPending: false,
