@@ -17,6 +17,7 @@ python-dotenv / PyYAML / nodriver）；一个 POST JSON 的调用用 stdlib
 
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import os
@@ -91,6 +92,17 @@ def chat_completion(
         raise LLMRetryableError("network", f"网络错误: {reason}") from e
     except TimeoutError as e:
         raise LLMRetryableError("timeout", f"请求超时（{timeout}s）") from e
+    except (
+        http.client.IncompleteRead,
+        http.client.RemoteDisconnected,
+        ConnectionResetError,
+        BrokenPipeError,
+    ) as e:
+        # 响应读一半被掐断 / 连接被对端重置：免费模型端点排队断流的高发现象。
+        # 归类为可重试（新连接重发通常能成），而不是让裸异常穿透到 GUI。
+        raise LLMRetryableError(
+            "network", f"连接中断: {type(e).__name__}: {e}"
+        ) from e
 
     try:
         data = json.loads(body)

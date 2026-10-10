@@ -31,9 +31,30 @@ from boss_zhipin.tauri import (  # noqa: E402
 
 
 def structural_smoke() -> int:
-    """不带 key 的行为验证：错误走返回值、配置脱敏、空消息兜底。"""
+    """不带 key 的行为验证：错误走返回值、配置脱敏、空消息兜底。
+
+    若用户已在 GUI 配好真实模型（agent_config.json 存在），先把它备份挪走、
+    跑完再原样恢复——结构冒烟永远走"未配置"路径，既不发真请求、也绝不
+    覆盖用户真实 api_key。
+    """
     print("== 结构冒烟（无需 API key）==")
 
+    config_path = Path("agent_config.json")
+    backup_path = Path("agent_config.json.smoke-backup")
+    had_config = config_path.exists()
+    if had_config:
+        config_path.rename(backup_path)
+    try:
+        return _structural_smoke_steps()
+    finally:
+        # 清掉冒烟过程写的临时配置，再恢复用户的真实配置（含 api_key）。
+        if config_path.exists():
+            config_path.unlink()
+        if backup_path.exists():
+            backup_path.rename(config_path)
+
+
+def _structural_smoke_steps() -> int:
     result = asyncio.run(agent_chat(_AgentChatBody(message="帮我投深圳的AI Agent实习")))
     print(f"1) 未配置模型 -> status={result['status']} code={result['code']}")
     assert result["status"] == "error" and result["code"] == "not_configured"
