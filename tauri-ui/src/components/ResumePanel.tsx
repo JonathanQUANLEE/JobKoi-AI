@@ -13,6 +13,7 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { useRunStore } from "../store";
+import type { ResumeItem } from "../lib/ipc";
 import { isImageExt, formatSize } from "../lib/resumeUtils";
 import { useResumeVault } from "../hooks/useResumeVault";
 import { useResumeHeightResize } from "../hooks/useResumeHeightResize";
