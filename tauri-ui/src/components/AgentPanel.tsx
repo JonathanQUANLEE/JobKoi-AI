@@ -27,6 +27,8 @@ import { useRunStore, useT } from "../store";
 import { MagicCard } from "./core/MagicBento";
 import LatticeLoader from "./core/LatticeLoader";
 import { HaloDropzone, DropzoneUploadFileList, fileKey, type QueuedFile } from "./core/HaloDropzone";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { CpuIcon, SparklesIcon as HugeSparklesIcon } from "@hugeicons/core-free-icons";
 
 type Props = {
   getCurrentForm: () => Record<string, unknown>;
@@ -427,7 +429,7 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
   const modeLabel = typeof modeKey === "string" ? t(`mode.${modeKey}.title`) : "-";
 
   return (
-    <MagicCard className="panel w-full !p-4 sm:!p-6 !max-w-none" glowColor="245, 158, 11" enableTilt={false}>
+    <MagicCard className="panel w-full flex-1 flex flex-col min-h-[calc(100vh-100px)] !p-5 sm:!p-6 !max-w-none shadow-2xl" glowColor="245, 158, 11" enableTilt={false}>
       {/* 顶部状态栏：可爱机器人头像 + 统一「简历精修」标题 + 模式切换 */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 mb-4 border-b border-stone-800/80">
         <div className="flex items-center gap-3">
@@ -585,11 +587,11 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
 
               {/* 文本输入框 */}
               <textarea
-                rows={8}
+                rows={12}
                 value={resumeText}
                 onChange={(e) => setResumeText(e.target.value)}
                 placeholder="在此粘贴完整简历或具体某段项目经历（例如：熟练掌握Java与Spring Boot，主导电商用户中心重构，日活10万，优化SQL使耗时降低40%）..."
-                className="w-full resize-y rounded-xl bg-stone-950/80 border border-stone-800/80 p-3 text-xs leading-relaxed text-stone-200 placeholder:text-stone-600 outline-none focus:border-amber-500/50 transition-all font-mono"
+                className="w-full resize-y min-h-[260px] rounded-xl bg-stone-950/80 border border-stone-800/80 p-3.5 text-xs leading-relaxed text-stone-200 placeholder:text-stone-600 outline-none focus:border-amber-500/50 transition-all font-mono"
               />
 
               {/* 目标岗位与侧重输入 */}
@@ -991,6 +993,109 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
                 </div>
               </div>
             )}
+
+            {/* 状态 D: 初始算法与技能赋能透视大屏（彻底消灭黑屏空白） */}
+            {!diagnosing && !diagnoseResult && (
+              <div className="rounded-2xl border border-stone-800/80 bg-stone-900/50 p-5 space-y-4 shadow-lg">
+                <div className="flex items-center justify-between pb-3.5 border-b border-stone-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="size-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                      <HugeiconsIcon icon={CpuIcon} size={18} className="text-amber-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-bold text-stone-200">ATS 算法机筛诊断与经历精修舱</h3>
+                      <p className="text-[11px] text-stone-400">已就绪 4 组工业级改写技能包，等待输入或拖入简历体验</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                    算法引擎待命
+                  </span>
+                </div>
+
+                {/* 4 大技能包说明卡片网格 */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                  <div className="p-3 rounded-xl bg-stone-950/60 border border-stone-800/80 space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-amber-300 text-xs">
+                      <span className="size-1.5 rounded-full bg-amber-400" />
+                      <span>STAR 闭环法则</span>
+                    </div>
+                    <p className="text-[11px] text-stone-400 leading-relaxed">
+                      严格拆解 情境(S) + 任务(T) + 行动(A) + 成果(R)，根除“只写干了什么，不写怎么做和成果”的逻辑硬伤。
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-stone-950/60 border border-stone-800/80 space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-blue-300 text-xs">
+                      <span className="size-1.5 rounded-full bg-blue-400" />
+                      <span>Google X-Y-Z 量化公式</span>
+                    </div>
+                    <p className="text-[11px] text-stone-400 leading-relaxed">
+                      “通过做 [Z]，达成 [X] 成果，以 [Y] 指标精准衡量”，将模糊表述转化为高可信度数字化成效。
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-stone-950/60 border border-stone-800/80 space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-emerald-300 text-xs">
+                      <span className="size-1.5 rounded-full bg-emerald-400" />
+                      <span>ATS 关键词穿透</span>
+                    </div>
+                    <p className="text-[11px] text-stone-400 leading-relaxed">
+                      对齐目标岗位的高频招聘技能库与系统架构词汇，有效穿透大厂机筛解析门槛。
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-stone-950/60 border border-stone-800/80 space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-purple-300 text-xs">
+                      <span className="size-1.5 rounded-full bg-purple-400" />
+                      <span>强动词能量升级</span>
+                    </div>
+                    <p className="text-[11px] text-stone-400 leading-relaxed">
+                      淘汰“负责/参与/协助”等被动乏力词汇，自动升级为“主导/重构/攻坚/优化”等高主动性动词。
+                    </p>
+                  </div>
+                </div>
+
+                {/* 经典前后改写案例对比 */}
+                <div className="p-3.5 rounded-xl bg-stone-950/80 border border-stone-800/90 space-y-2">
+                  <div className="text-[11px] font-bold text-stone-300 flex items-center justify-between">
+                    <span>改写效果透视 (Before vs After)</span>
+                    <span className="text-[10px] text-stone-500 font-mono">STAR + X-Y-Z 融合示范</span>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    <div className="p-2.5 rounded-lg bg-rose-950/20 border border-rose-900/30 text-rose-300/80 leading-relaxed">
+                      <span className="font-bold text-rose-400 block mb-0.5">改写前（平庸且缺乏说服力）：</span>
+                      “负责公司电商系统的开发和日常维护，修改了一些 SQL 慢查询，系统运行良好。”
+                    </div>
+
+                    <div className="p-2.5 rounded-lg bg-emerald-950/20 border border-emerald-900/30 text-emerald-300/90 leading-relaxed">
+                      <span className="font-bold text-emerald-400 block mb-0.5">改写后（注入技能包后）：</span>
+                      “<strong className="text-white">主导</strong>电商核心用户中心架构重构（Spring Boot + Redis），<strong className="text-white">深度调优 12 条高频核心 SQL 索引</strong>，将 P99 响应耗时<strong className="text-emerald-400">降低 42%</strong>，平稳承载日均 <strong className="text-emerald-400">10万+</strong> 高并发访问。”
+                    </div>
+                  </div>
+                </div>
+
+                {/* 操作引导 */}
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-amber-200">
+                  <div className="flex items-center gap-2">
+                    <HugeiconsIcon icon={HugeSparklesIcon} size={16} className="text-amber-400 shrink-0" />
+                    <span>在左侧粘贴简历经历文本，或点击「光晕上传」导入文件即可开始</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResumeText(
+                        "主导电商微服务用户中心开发，负责用户鉴权与积分系统。利用 Spring Boot 与 Redis 进行高并发缓存设计，优化慢 SQL 查询，保障大促期间系统平稳运行。"
+                      );
+                      setTargetRole("后端开发工程师");
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-semibold transition-all cursor-pointer shrink-0"
+                  >
+                    一键填入示例经历体验
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -999,16 +1104,16 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
       {/* 模式 B: 求职意向画像极简界面                                               */}
       {/* ========================================================================= */}
       {panelMode === "copilot" && (
-        <div className="space-y-3.5 max-w-4xl mx-auto">
-          {/* 对话区 */}
-          <div ref={listRef} className="h-60 overflow-y-auto space-y-3.5 pr-1.5 text-xs">
+        <div className="flex-1 flex flex-col w-full min-h-[calc(100vh-230px)] space-y-4">
+          {/* 对话区：自适应伸展铺满上半部空间 */}
+          <div ref={listRef} className="flex-1 min-h-[420px] overflow-y-auto space-y-4 pr-2 text-xs">
             {agentMessages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                <div className="size-10 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mb-2 border border-amber-500/20">
-                  <span className="text-xl">🤖</span>
+              <div className="flex flex-col items-center justify-center h-full min-h-[360px] text-center p-4">
+                <div className="size-16 rounded-3xl bg-amber-500/10 p-1 flex items-center justify-center mb-3 border border-amber-500/30 shadow-lg shadow-amber-500/10">
+                  <img src="/favicon.png" alt="AI 投递规划助手" className="size-full rounded-2xl object-cover" />
                 </div>
-                <p className="text-sm font-bold text-stone-100 mb-1">说出你的背景，AI 替你规划投递</p>
-                <p className="text-xs text-stone-400 max-w-sm leading-relaxed">
+                <p className="text-base font-bold text-stone-100 mb-1">说出你的背景，AI 替你规划投递</p>
+                <p className="text-xs text-stone-400 max-w-md leading-relaxed">
                   说出你的专业、意向城市与薪资期待，大模型自动提炼最优关键词与排查规则。
                 </p>
               </div>
@@ -1018,8 +1123,8 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
                 return (
                   <div key={index} className={`flex gap-2.5 ${isUser ? "justify-end" : "justify-start"}`}>
                     {!isUser && (
-                      <div className="size-7 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center text-xs shrink-0">
-                        <span className="text-xs">🤖</span>
+                      <div className="size-8 rounded-xl overflow-hidden border border-amber-500/30 shadow-sm shrink-0">
+                        <img src="/favicon.png" alt="AI" className="size-full object-cover" />
                       </div>
                     )}
                     <div
@@ -1032,8 +1137,8 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
                       <p className="whitespace-pre-wrap">{msg.content}</p>
                     </div>
                     {isUser && (
-                      <div className="size-7 rounded-xl bg-stone-800 border border-stone-700 text-stone-300 flex items-center justify-center text-xs shrink-0">
-                        <User className="h-3.5 w-3.5" />
+                      <div className="size-8 rounded-xl bg-stone-800 border border-stone-700 text-stone-300 flex items-center justify-center text-xs shrink-0">
+                        <User className="h-4 w-4" />
                       </div>
                     )}
                   </div>
@@ -1043,8 +1148,8 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
 
             {agentPending && (
               <div className="flex gap-2.5 items-center text-stone-400">
-                <div className="size-7 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center text-xs">
-                  <span className="text-xs">🤖</span>
+                <div className="size-8 rounded-xl overflow-hidden border border-amber-500/30 shadow-sm shrink-0">
+                  <img src="/favicon.png" alt="AI" className="size-full object-cover" />
                 </div>
                 <div className="bg-stone-900 border border-stone-800 rounded-2xl px-4 py-2 text-xs flex items-center gap-2">
                   <span className="size-2 rounded-full bg-amber-400 animate-ping" />

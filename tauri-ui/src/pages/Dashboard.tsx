@@ -187,6 +187,8 @@ export default function Dashboard() {
               ? "px-2 sm:px-4 lg:px-6 py-0 overflow-hidden"
               : activeNav === "resumes"
               ? "px-3 sm:px-5 py-3 space-y-4 overflow-y-auto"
+              : activeNav === "copilot"
+              ? "px-3 sm:px-5 py-3 flex flex-col overflow-y-auto"
               : "px-6 py-5 space-y-6 overflow-y-auto"
           }`}
         >
@@ -314,7 +316,7 @@ export default function Dashboard() {
 
           {/* TAB 4: 简历精修与诊断 Studio (Agent 2) / 意向画像 (Agent 1) */}
           {activeNav === "copilot" && (
-            <div className="w-full max-w-7xl mx-auto pb-6">
+            <div className="w-full flex-1 flex flex-col">
               <AgentPanel
                 getCurrentForm={profileForm.currentProfileData}
                 onApply={(data) =>

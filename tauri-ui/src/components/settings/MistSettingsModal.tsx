@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
 import {
-  X,
-  SlidersHorizontal,
-  ShieldCheck,
-  MessageSquareQuote,
-  Bot,
-  Check,
-  Sparkles,
-  HelpCircle,
-  AlertCircle,
-  CheckCircle2,
-} from "lucide-react";
+  FilterIcon,
+  ShieldCheckIcon,
+  Comment01Icon,
+  CpuIcon,
+  Cancel01Icon,
+  CheckmarkCircle01Icon,
+  InformationCircleIcon,
+  AlertCircleIcon,
+  SparklesIcon,
+} from "@hugeicons/core-free-icons";
 import { ipc, type LLMConfig } from "../../lib/ipc";
 import type { RuleForm } from "../../lib/profileForm";
 import { useRunStore } from "../../store";
@@ -221,10 +221,10 @@ export default function MistSettingsModal({
         {/* 顶部悬浮标题与极简退出按钮 */}
         <div className="flex items-center justify-between pb-4 border-b border-white/10">
           <div className="floating-title">
-            {type === "rules" && <SlidersHorizontal className="size-5 text-amber-400" />}
-            {type === "policy" && <ShieldCheck className="size-5 text-blue-400" />}
-            {type === "greeting" && <MessageSquareQuote className="size-5 text-emerald-400" />}
-            {type === "model" && <Bot className="size-5 text-purple-400" />}
+            {type === "rules" && <HugeiconsIcon icon={FilterIcon} size={22} className="text-amber-400 shrink-0" />}
+            {type === "policy" && <HugeiconsIcon icon={ShieldCheckIcon} size={22} className="text-blue-400 shrink-0" />}
+            {type === "greeting" && <HugeiconsIcon icon={Comment01Icon} size={22} className="text-emerald-400 shrink-0" />}
+            {type === "model" && <HugeiconsIcon icon={CpuIcon} size={22} className="text-purple-400 shrink-0" />}
 
             <div>
               <h2 className="text-lg font-bold tracking-tight text-white">
@@ -248,7 +248,7 @@ export default function MistSettingsModal({
             className="flex items-center justify-center size-8 rounded-full bg-white/5 hover:bg-white/15 text-stone-400 hover:text-white transition-all cursor-pointer"
             title="关闭 (Esc)"
           >
-            <X className="size-4" />
+            <HugeiconsIcon icon={Cancel01Icon} size={15} />
           </button>
         </div>
 
@@ -271,8 +271,11 @@ export default function MistSettingsModal({
               />
             </div>
 
-            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200/90 leading-relaxed">
-              💡 <strong>贴心提示</strong>：目标岗位、期望城市与薪资范围已经在【求职画像】中由 AI 顾问为你自动打理，这里只需填写你“最不想去的公司类型或讨厌的关键词”即可，无需重复配置复杂专业条件。
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200/90 leading-relaxed flex items-start gap-2.5">
+              <HugeiconsIcon icon={InformationCircleIcon} size={16} className="text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <strong>贴心提示</strong>：目标岗位、期望城市与薪资范围已经在【求职画像】中由 AI 顾问为你自动打理，这里只需填写你“最不想去的公司类型或讨厌的关键词”即可，无需重复配置复杂专业条件。
+              </div>
             </div>
 
             <div className="pt-2 flex justify-end gap-3">
@@ -297,9 +300,12 @@ export default function MistSettingsModal({
         {/* -------------------- 弹窗 2: 投递设置与安全 (通俗解释为什么需要防风控) -------------------- */}
         {type === "policy" && (
           <div className="py-4 space-y-5">
-            <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-200/90 leading-relaxed">
-              🛡️ <strong>为什么需要防风控保护？</strong><br />
-              各大招聘平台（BOSS直聘等）均部署有严格的机械人爬虫检测。本软件内置<strong>泊松过程拟人化等待与贝塞尔平滑轨迹</strong>，每次沟通间隔随机浮动，高度还原真实人类操作节奏，确保您的账号安全无忧。
+            <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-200/90 leading-relaxed flex items-start gap-2.5">
+              <HugeiconsIcon icon={ShieldCheckIcon} size={16} className="text-blue-400 shrink-0 mt-0.5" />
+              <div>
+                <strong>为什么需要防风控保护？</strong><br />
+                各大招聘平台（BOSS直聘等）均部署有严格的机械人爬虫检测。本软件内置<strong>泊松过程拟人化等待与贝塞尔平滑轨迹</strong>，每次沟通间隔随机浮动，高度还原真实人类操作节奏，确保您的账号安全无忧。
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -429,7 +435,7 @@ export default function MistSettingsModal({
                   }
                   className="p-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-left text-[11px] text-stone-300 transition-all cursor-pointer"
                 >
-                  <span className="font-bold text-emerald-400 block mb-0.5">🎓 诚恳求职模板 (应届/实习)</span>
+                  <span className="font-bold text-emerald-400 block mb-0.5">诚恳求职模板 (应届 / 实习)</span>
                   <p className="line-clamp-2 text-stone-400">突出向往与背景契合度，措辞谦逊专业...</p>
                 </button>
 
@@ -442,7 +448,7 @@ export default function MistSettingsModal({
                   }
                   className="p-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-left text-[11px] text-stone-300 transition-all cursor-pointer"
                 >
-                  <span className="font-bold text-amber-400 block mb-0.5">💼 经验实战模板 (社招/跳槽)</span>
+                  <span className="font-bold text-amber-400 block mb-0.5">经验实战模板 (社招 / 跳槽)</span>
                   <p className="line-clamp-2 text-stone-400">强调落地成果与技术积累，直奔主题...</p>
                 </button>
               </div>
@@ -470,9 +476,12 @@ export default function MistSettingsModal({
         {/* -------------------- 弹窗 4: AI 大模型配置 (删掉无用的预设配置) -------------------- */}
         {type === "model" && (
           <div className="py-4 space-y-4">
-            <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-purple-200/90 leading-relaxed">
-              ✨ <strong>推荐配置 (支持免费 OpenRouter 专属模型)</strong><br />
-              已为你预设免费高性价比模型 <code className="text-purple-300 font-mono">nvidia/nemotron-3.5-lightning:free</code>，支持 100万 超长上下文，每天可免费享受 50 次深度简历体检与改写！
+            <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-purple-200/90 leading-relaxed flex items-start gap-2.5">
+              <HugeiconsIcon icon={SparklesIcon} size={16} className="text-purple-400 shrink-0 mt-0.5" />
+              <div>
+                <strong>推荐配置 (支持免费 OpenRouter 专属模型)</strong><br />
+                已为你预设免费高性价比模型 <code className="text-purple-300 font-mono">nvidia/nemotron-3.5-lightning:free</code>，支持 100万 超长上下文，每天可免费享受 50 次深度简历体检与改写！
+              </div>
             </div>
 
             <div className="mist-setting-row">
@@ -523,9 +532,9 @@ export default function MistSettingsModal({
                 }`}
               >
                 {testResult.ok ? (
-                  <CheckCircle2 className="size-4 shrink-0 text-emerald-400" />
+                  <HugeiconsIcon icon={CheckmarkCircle01Icon} size={16} className="text-emerald-400 shrink-0" />
                 ) : (
-                  <AlertCircle className="size-4 shrink-0 text-rose-400" />
+                  <HugeiconsIcon icon={AlertCircleIcon} size={16} className="text-rose-400 shrink-0" />
                 )}
                 <span>{testResult.msg}</span>
               </div>
@@ -538,7 +547,7 @@ export default function MistSettingsModal({
                 disabled={testingModel}
                 className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-stone-200 text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5"
               >
-                <Sparkles className="size-3.5 text-purple-400" />
+                <HugeiconsIcon icon={SparklesIcon} size={14} className="text-purple-400" />
                 <span>{testingModel ? "正在测试连接..." : "测试连接状态"}</span>
               </button>
 
