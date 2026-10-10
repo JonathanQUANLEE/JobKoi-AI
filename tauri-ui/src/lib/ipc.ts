@@ -16,6 +16,7 @@ export type EventKind =
   | "review_cleared"
   | "letter_sent"
   | "feed_exhausted"
+  | "limit_reached"
   | "loop_ended"
   | "error";
 
@@ -220,12 +221,35 @@ export interface ResumeDiagnoseResult {
   is_offline_fallback?: boolean;
 }
 
+export interface DeliveryRecordItem {
+  platform: string;
+  platform_name: string;
+  title: string;
+  company: string;
+  location: string;
+  salary: string;
+  url: string;
+  time: string;
+  status: string;
+}
+
+export interface DeliveryHistoryResult {
+  records: DeliveryRecordItem[];
+}
+
 export const ipc = {
   listPlatforms: () => pyInvoke<PlatformListResult>("list_platforms", {}),
   openPlatformLogin: (platformId: string) =>
     pyInvoke<{ status: string; platform?: string; url?: string; message?: string }>(
       "open_platform_login",
       { platformId },
+    ),
+  getDeliveryHistory: (platform: string = "", limit: number = 100) =>
+    pyInvoke<DeliveryHistoryResult>("get_delivery_history", { platform, limit }),
+  resetTodayDelivery: (platform: string = "boss") =>
+    pyInvoke<{ status: string; archived_count: number; platform: string }>(
+      "reset_today_delivery",
+      { platform },
     ),
   startRun: (config: RunConfig, progressChannel: unknown, logChannel: unknown) =>
     pyInvoke<{ status: string }>("start_run", { config, progressChannel, logChannel }),

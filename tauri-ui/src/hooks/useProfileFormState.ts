@@ -235,12 +235,21 @@ export function useProfileFormState({
   }, [greeting, greetingPath, profileName, currentProfileData, refreshProfiles, setMessage, setBusy, t]);
 
   const validateBeforeRun = useCallback((): string | null => {
-    if (!usrName.trim()) return t("validation.userName");
+    // 智能兜底：姓名未填时默认求职者，不阻塞启动
+    if (!usrName.trim()) {
+      setUsrName("求职者");
+    }
+    // 智能兜底：打招呼为空时，自动使用平台高情商默认问候，绝不阻塞启动
+    if (!greeting.trim()) {
+      setGreeting("您好！我对贵公司的岗位非常感兴趣，希望能与您进一步沟通交流！");
+    }
     if (!profileName.trim()) return t("validation.profileName");
-    if ((mode === "review" || mode === "auto") && !greeting.trim()) return t("validation.greeting");
-    if (mode === "auto" && !rule.anyKeywords.trim()) return t("validation.anyKeywords");
+    // 如果无包含关键词，尝试回退使用当前标签或目标岗位
+    if (mode === "auto" && !rule.anyKeywords.trim() && !label.trim()) {
+      return t("validation.anyKeywords");
+    }
     return null;
-  }, [usrName, profileName, mode, greeting, rule.anyKeywords, t]);
+  }, [usrName, profileName, mode, greeting, rule.anyKeywords, label, setUsrName, setGreeting, t]);
 
   // 初始化加载配置文件与招呼语
   useEffect(() => {

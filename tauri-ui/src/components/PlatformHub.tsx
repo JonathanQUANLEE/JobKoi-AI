@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { Globe, RefreshCw, X } from "lucide-react";
+import { Globe, RefreshCw, X, FileText, CheckSquare } from "lucide-react";
 import { ipc, type PlatformItem } from "../lib/ipc";
 import type { Lang } from "../lib/i18n";
 import { useRunStore } from "../store";
 import { MagicCard } from "./core/MagicBento";
 import PlatformCard from "./platform/PlatformCard";
+import DeliveryHistoryModal from "./analytics/DeliveryHistoryModal";
 
 const PLATFORM_GLOW_MAP: Record<string, string> = {
   boss: "0, 190, 189", // BOSS 直聘 翡翠青
@@ -32,12 +33,45 @@ export default function PlatformHub({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  // 选中的多平台投递列表（支持 BOSS + 猎聘等同时勾选）
+  const [enabledPlatforms, setEnabledPlatforms] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem("jobhunter_enabled_platforms");
+      return saved ? JSON.parse(saved) : ["boss"];
+    } catch {
+      return ["boss"];
+    }
+  });
+
+  // 投递明细历史记录弹窗
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [historyPlatform, setHistoryPlatform] = useState("");
+
   const events = useRunStore((s) => s.events);
   const sessionSentCount = events.filter(
     (e) =>
       e.kind === "letter_sent" &&
       (e.payload?.status === "sent" || e.payload?.status === "dry_run")
   ).length;
+
+  const handleToggleEnabled = (id: string) => {
+    setEnabledPlatforms((prev) => {
+      const next = prev.includes(id)
+        ? prev.length > 1
+          ? prev.filter((p) => p !== id)
+          : prev
+        : [...prev, id];
+      try {
+        localStorage.setItem("jobhunter_enabled_platforms", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const handleOpenRecords = (pId: string = "") => {
+    setHistoryPlatform(pId);
+    setHistoryModalOpen(true);
+  };
 
   const loadPlatforms = useCallback(async () => {
     try {
@@ -114,81 +148,118 @@ export default function PlatformHub({
     }
   }
 
+  const enabledNames = platforms
+    .filter((p) => enabledPlatforms.includes(p.id))
+    .map((p) => p.name);
+
   return (
-    <MagicCard
-      className={`panel mb-6 p-5 sm:p-6 lg:p-7 ${className}`}
-      style={style}
-      glowColor="245, 158, 11"
-      enableTilt={false}
-      enableStars={false}
-      enableBorderGlow={true}
-    >
-      {/* 头部：专业 SaaS 矩阵 */}
-      <div className="flex items-center justify-between pb-4 mb-5 border-b border-stone-800">
-        <div className="flex items-center gap-3.5">
-          <div className="size-9 sm:size-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center font-bold text-sm shadow-sm">
-            <Globe className="h-5 w-5 text-amber-400" />
+    <>
+      <MagicCard
+        className={`panel mb-6 p-5 sm:p-6 lg:p-7 ${className}`}
+        style={style}
+        glowColor="245, 158, 11"
+        enableTilt={false}
+        enableStars={false}
+        enableBorderGlow={true}
+      >
+        {/* 头部：专业 SaaS 矩阵 */}
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-4 mb-5 border-b border-stone-800">
+          <div className="flex items-center gap-3.5">
+            <div className="size-9 sm:size-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center font-bold text-sm shadow-sm">
+              <Globe className="h-5 w-5 text-amber-400" />
+            </div>
+            <div>
+              <h2 className="text-base sm:text-lg font-bold text-stone-100 tracking-tight flex items-center gap-2.5">
+                <span>{lang === "en" ? "Job Platforms Center" : "招聘平台中心"}</span>
+                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
+                  4 大主流直聘
+                </span>
+                {enabledPlatforms.length > 0 && (
+                  <span className="hidden sm:inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold">
+                    <CheckSquare className="size-3 text-emerald-400" />
+                    <span>已勾选 {enabledPlatforms.length} 个巡航平台 ({enabledNames.join(" + ")})</span>
+                  </span>
+                )}
+              </h2>
+              <p className="text-xs text-stone-400 mt-0.5">
+                {lang === "en"
+                  ? "Unified delivery hub. Choose your target platforms and start automated cruising."
+                  : "全平台多合一聚合中心：勾选启用的投递平台（支持同时勾选多平台），点击左侧启动即可自动投递沟通。"}
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-base sm:text-lg font-bold text-stone-100 tracking-tight flex items-center gap-2.5">
-              <span>{lang === "en" ? "Job Platforms Center" : "招聘平台中心"}</span>
-              <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
-                4 大主流直聘
-              </span>
-            </h2>
-            <p className="text-xs text-stone-400 mt-0.5">
-              {lang === "en"
-                ? "Unified delivery hub. Choose your target platform and start smart cruising."
-                : "全平台多合一聚合中心：自由切换投递平台，自动继承通用投递画像与打招呼配置。"}
-            </p>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleOpenRecords("")}
+              className="flex items-center gap-1.5 text-xs text-amber-300 hover:text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 px-3 py-1.5 rounded-xl font-semibold cursor-pointer transition-all shadow-sm shadow-amber-500/10"
+              title="打开全平台投递历史明细抽屉"
+            >
+              <FileText className="size-3.5" />
+              <span>查看投递明细记录</span>
+            </button>
+            <button
+              type="button"
+              onClick={loadPlatforms}
+              disabled={busy}
+              className="flex items-center gap-1.5 text-xs text-stone-400 hover:text-stone-200 transition-colors px-3 py-1.5 rounded-xl border border-stone-850 hover:bg-stone-850 cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline">刷新状态</span>
+            </button>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={loadPlatforms}
-          disabled={busy}
-          className="flex items-center gap-1.5 text-xs text-stone-400 hover:text-stone-200 transition-colors px-3 py-1.5 rounded-xl border border-stone-850 hover:bg-stone-850 cursor-pointer disabled:opacity-50"
-        >
-          <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />
-          <span className="hidden sm:inline">刷新状态</span>
-        </button>
-      </div>
+        {/* 状态与通知条 */}
+        {message && (
+          <div className="mb-4 flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-300">
+            <span>{message}</span>
+            <button
+              type="button"
+              onClick={() => setMessage(null)}
+              className="text-stone-400 hover:text-stone-200 cursor-pointer"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+        )}
 
-      {/* 状态与通知条 */}
-      {message && (
-        <div className="mb-4 flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-300">
-          <span>{message}</span>
-          <button
-            type="button"
-            onClick={() => setMessage(null)}
-            className="text-stone-400 hover:text-stone-200"
-          >
-            <X className="size-3.5" />
-          </button>
+        {/* 平台卡片网格 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {platforms.map((p) => {
+            const isSelected = selectedPlatform === p.id;
+            const isEnabled = enabledPlatforms.includes(p.id);
+            const cardGlow = PLATFORM_GLOW_MAP[p.id] || "245, 158, 11";
+            return (
+              <PlatformCard
+                key={p.id}
+                platform={p}
+                isSelected={isSelected}
+                isEnabled={isEnabled}
+                onSelectPlatform={onSelectPlatform}
+                onToggleEnabled={handleToggleEnabled}
+                onViewRecords={handleOpenRecords}
+                sessionSentCount={sessionSentCount}
+                cardGlow={cardGlow}
+                lang={lang}
+                busy={busy}
+                onLogin={handleLogin}
+              />
+            );
+          })}
         </div>
-      )}
+      </MagicCard>
 
-      {/* 平台卡片网格 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        {platforms.map((p) => {
-          const isSelected = selectedPlatform === p.id;
-          const cardGlow = PLATFORM_GLOW_MAP[p.id] || "245, 158, 11";
-          return (
-            <PlatformCard
-              key={p.id}
-              platform={p}
-              isSelected={isSelected}
-              onSelectPlatform={onSelectPlatform}
-              sessionSentCount={sessionSentCount}
-              cardGlow={cardGlow}
-              lang={lang}
-              busy={busy}
-              onLogin={handleLogin}
-            />
-          );
-        })}
-      </div>
-    </MagicCard>
+      {/* 投递历史明细记录弹窗 */}
+      <DeliveryHistoryModal
+        isOpen={historyModalOpen}
+        onClose={() => {
+          setHistoryModalOpen(false);
+          loadPlatforms();
+        }}
+        initialPlatform={historyPlatform}
+      />
+    </>
   );
 }

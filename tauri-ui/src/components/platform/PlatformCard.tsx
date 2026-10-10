@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle2, Circle, ExternalLink, RefreshCw, Send, ShieldCheck } from "lucide-react";
+import { CheckSquare, Square, FileText, RefreshCw, Send, ShieldCheck, ExternalLink } from "lucide-react";
 import type { PlatformItem } from "../../lib/ipc";
 import type { Lang } from "../../lib/i18n";
 import { MagicCard } from "../core/MagicBento";
@@ -7,7 +7,10 @@ import { MagicCard } from "../core/MagicBento";
 interface PlatformCardProps {
   platform: PlatformItem;
   isSelected: boolean;
+  isEnabled: boolean;
   onSelectPlatform: (id: string) => void;
+  onToggleEnabled: (id: string) => void;
+  onViewRecords: (id: string) => void;
   sessionSentCount: number;
   cardGlow: string;
   lang?: Lang;
@@ -18,7 +21,10 @@ interface PlatformCardProps {
 export default function PlatformCard({
   platform: p,
   isSelected,
+  isEnabled,
   onSelectPlatform,
+  onToggleEnabled,
+  onViewRecords,
   sessionSentCount,
   cardGlow,
   lang = "zh",
@@ -39,9 +45,11 @@ export default function PlatformCard({
       enableStars={p.is_supported}
       clickEffect={p.is_supported}
       particleCount={8}
-      className={`group relative flex flex-col justify-between rounded-2xl border p-5 sm:p-6 select-none min-h-[230px] sm:min-h-[250px] transition-all ${
-        isSelected
-          ? "border-amber-500/70 bg-gradient-to-b from-stone-900 to-amber-950/20 shadow-lg shadow-amber-500/5 ring-1 ring-amber-500/30"
+      className={`group relative flex flex-col justify-between rounded-2xl border p-5 sm:p-6 select-none min-h-[250px] transition-all ${
+        isEnabled
+          ? "border-amber-500/70 bg-gradient-to-b from-stone-900 to-amber-950/25 shadow-lg shadow-amber-500/10 ring-1 ring-amber-500/40"
+          : isSelected
+          ? "border-stone-700 bg-stone-900/80 shadow-md"
           : p.is_supported
           ? "border-stone-800/90 bg-stone-900/50 hover:border-stone-700 hover:bg-stone-850 cursor-pointer"
           : "border-stone-850/60 bg-stone-950/30 opacity-45 cursor-not-allowed"
@@ -57,9 +65,16 @@ export default function PlatformCard({
             >
               {p.name.slice(0, 1)}
             </div>
-            <span className="font-bold text-base sm:text-lg text-stone-100 group-hover:text-white tracking-tight">
-              {p.name}
-            </span>
+            <div>
+              <span className="font-bold text-base sm:text-lg text-stone-100 group-hover:text-white tracking-tight block">
+                {p.name}
+              </span>
+              {isEnabled && (
+                <span className="inline-block text-[10px] text-amber-400 font-semibold tracking-wide">
+                  ● 已加入巡航队列
+                </span>
+              )}
+            </div>
           </div>
 
           {p.is_supported ? (
@@ -113,7 +128,17 @@ export default function PlatformCard({
             <span>
               {p.is_supported ? `已达 ${percentage}% · 剩 ${remaining} 份` : "筹备中"}
             </span>
-            <span className="text-emerald-400 font-medium">● 异常断电本地留存</span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewRecords(p.id);
+              }}
+              className="text-amber-400 hover:text-amber-300 hover:underline flex items-center gap-1 cursor-pointer font-medium"
+            >
+              <FileText className="size-3" />
+              <span>查看记录 ({p.total_sent ?? liveTodaySent})</span>
+            </button>
           </div>
         </div>
 
@@ -131,21 +156,31 @@ export default function PlatformCard({
         </div>
       </div>
 
-      {/* 卡片底栏：操作按钮 */}
+      {/* 卡片底栏：勾选选择项与操作按钮 */}
       <div className="pt-3.5 border-t border-stone-800/80 flex items-center justify-between">
-        <span className="text-xs sm:text-[13px] text-stone-400 flex items-center gap-1.5">
-          {isSelected ? (
-            <>
-              <CheckCircle2 className="h-3.5 w-3.5 text-amber-400" />
-              <span className="text-amber-400 font-semibold">当前主平台</span>
-            </>
-          ) : (
-            <>
-              <Circle className="h-3.5 w-3.5 text-stone-600" />
-              <span>点击选用</span>
-            </>
-          )}
-        </span>
+        {/* 多平台勾选选项 */}
+        {p.is_supported ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleEnabled(p.id);
+            }}
+            className="flex items-center gap-1.5 text-xs text-stone-300 hover:text-amber-300 transition-colors cursor-pointer"
+            title="勾选此平台以纳入自动巡航投递队伍"
+          >
+            {isEnabled ? (
+              <CheckSquare className="size-4 text-amber-400" />
+            ) : (
+              <Square className="size-4 text-stone-500" />
+            )}
+            <span className={isEnabled ? "text-amber-300 font-semibold" : "text-stone-400"}>
+              {isEnabled ? "已勾选开启投递" : "勾选投递此平台"}
+            </span>
+          </button>
+        ) : (
+          <span className="text-xs text-stone-600">暂未开放</span>
+        )}
 
         {p.is_supported && (
           <button
@@ -172,3 +207,4 @@ export default function PlatformCard({
     </MagicCard>
   );
 }
+

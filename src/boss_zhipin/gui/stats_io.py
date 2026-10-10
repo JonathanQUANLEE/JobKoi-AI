@@ -55,6 +55,8 @@ def query_stats(logs_dir: Path | None = None) -> dict[str, Any]:
         days: Counter[str] = Counter()
         recent: list[dict[str, str]] = []
         for record in records:
+            if record.get("archived_test"):
+                continue
             ts = _local_ts(record)
             days[ts[:10]] += 1
             job = record.get("job") or {}
@@ -111,6 +113,91 @@ def _load_sent(path: Path) -> list[dict]:
                 data = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if isinstance(data, dict) and data.get("sent"):
+            if isinstance(data, dict) and (data.get("sent") or data.get("archived_test")):
                 out.append(data)
     return out
+
+
+def get_delivery_records(
+    platform: str = "", limit: int = 100, logs_dir: Path | None = None
+) -> list[dict[str, Any]]:
+    """获取格式统一的详细投递记录，按时间倒序。支持按平台过滤。"""
+    base = logs_dir or DEFAULT_LOGS_DIR
+    records: list[dict[str, Any]] = []
+
+    target_platforms = (
+        [platform] if platform in PLATFORMS else list(PLATFORMS.keys())
+    )
+
+    for p_id in target_platforms:
+        label, filename, _ = PLATFORMS[p_id]
+        raw_list = _load_sent(base / filename)
+        for raw in raw_list:
+            job = raw.get("job") or {}
+            ts_str = _local_ts(raw)
+            title = str(raw.get("title") or job.get("title") or "")
+            company = str(raw.get("company") or job.get("company") or "")
+            location = str(raw.get("location") or job.get("location") or "")
+            salary = str(raw.get("salary") or job.get("salary") or "")
+            url = str(
+                raw.get("job_key")
+                or job.get("detail_url")
+                or raw.get("detail_url")
+                or ""
+            )
+            records.append(
+                {
+                    "platform": p_id,
+                    "platform_name": label,
+                    "title": title,
+                    "company": company,
+                    "location": location,
+                    "salary": salary,
+                    "url": url,
+                    "time": ts_str[:19].replace("T", " "),
+                    "status": "已归档(测试重置)"
+                    if raw.get("archived_test")
+                    else ("已沟通" if raw.get("sent") else "已跳过"),
+                }
+            )
+
+    # 按时间倒序排序
+    records.sort(key=lambda x: x["time"], reverse=True)
+    return records[:limit]
+
+
+def reset_today_delivery(
+    platform: str = "boss", logs_dir: Path | None = None
+) -> dict[str, Any]:
+    """将当天的投递记录安全备份归档，重置今日投递计数（供用户开发调试测试使用）。"""
+    base = logs_dir or DEFAULT_LOGS_DIR
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    archived_count = 0
+
+    target_platforms = [platform] if platform in PLATFORMS else list(PLATFORMS.keys())
+    for p_id in target_platforms:
+        _, filename, _ = PLATFORMS[p_id]
+        p_path = base / filename
+        if not p_path.exists():
+            continue
+        lines = p_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        retained: list[str] = []
+        for line in lines:
+            if not line.strip():
+                continue
+            try:
+                data = json.loads(line)
+                ts = _local_ts(data)
+                if ts.startswith(today_str) and not data.get("archived_test"):
+                    archived_count += 1
+                    data["archived_test"] = True
+                    data["archived_at"] = datetime.now().isoformat()
+                    retained.append(json.dumps(data, ensure_ascii=False))
+                else:
+                    retained.append(line)
+            except Exception:
+                retained.append(line)
+        p_path.write_text("\n".join(retained) + "\n", encoding="utf-8")
+
+    return {"status": "ok", "success": True, "archived_count": archived_count, "platform": platform}
+

@@ -5,7 +5,12 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from boss_zhipin.gui.stats_io import format_stats, query_stats
+from boss_zhipin.gui.stats_io import (
+    format_stats,
+    get_delivery_records,
+    query_stats,
+    reset_today_delivery,
+)
 
 
 def _write(path: Path, records: list[dict]) -> None:
@@ -89,3 +94,54 @@ def test_format_stats_renders_labels():
     assert "猎聘" in text
     assert "前程无忧" in text
     assert "今日 0 / 150" in text
+
+
+def test_get_delivery_records_and_reset_today(tmp_path):
+    today = datetime.now().strftime("%Y-%m-%d")
+    _write(
+        tmp_path / "sent_jobs.jsonl",
+        [
+            {
+                "sent": True,
+                "ts_local": f"{today} 14:00:00",
+                "job": {
+                    "title": "AI 架构师",
+                    "company": "科技公司A",
+                    "salary": "30-50K",
+                    "location": "北京",
+                    "url": "https://zhipin.com/job1",
+                },
+            },
+            {
+                "sent": True,
+                "ts_local": "2026-01-01 10:00:00",
+                "job": {
+                    "title": "历史岗位",
+                    "company": "历史公司B",
+                    "salary": "20-30K",
+                    "location": "上海",
+                },
+            },
+        ],
+    )
+
+    records = get_delivery_records(platform="boss", limit=10, logs_dir=tmp_path)
+    assert len(records) == 2
+    assert records[0]["title"] == "AI 架构师"
+    assert records[0]["platform"] == "boss"
+    assert records[0]["company"] == "科技公司A"
+
+    # 测试重置今日
+    result = reset_today_delivery(platform="boss", logs_dir=tmp_path)
+    assert result["success"] is True
+    assert result["archived_count"] == 1
+
+    # 重置后，今日统计归零，解除上限拦截
+    stats_after = query_stats(tmp_path)
+    assert stats_after["boss"]["today"] == 0
+
+    # 投递记录仍可查阅，状态标记为已归档
+    records_after = get_delivery_records(platform="boss", limit=10, logs_dir=tmp_path)
+    assert len(records_after) == 2
+    assert records_after[0]["status"] == "已归档(测试重置)"
+

@@ -574,6 +574,32 @@ async def open_platform_login(body: _PlatformLoginBody) -> dict[str, Any]:
     return await get_platform_manager().open_login(body.platform_id)
 
 
+class _GetDeliveryHistoryBody(_CamelModel):
+    platform: str = ""
+    limit: int = 100
+
+
+@commands.command()
+async def get_delivery_history(body: _GetDeliveryHistoryBody) -> dict[str, Any]:
+    """返回全平台/指定平台的投递明细记录列表（时间、岗位、公司、薪资、状态）。"""
+    from boss_zhipin.gui.stats_io import get_delivery_records
+
+    records = get_delivery_records(platform=body.platform, limit=body.limit)
+    return {"records": records}
+
+
+class _ResetTodayDeliveryBody(_CamelModel):
+    platform: str = "boss"
+
+
+@commands.command()
+async def reset_today_delivery(body: _ResetTodayDeliveryBody) -> dict[str, Any]:
+    """重置今日投递计数（归档今日数据，防止测试时被 150 限制卡住）。"""
+    from boss_zhipin.gui.stats_io import reset_today_delivery as _reset_today
+
+    return _reset_today(platform=body.platform)
+
+
 @commands.command()
 async def window_minimize(webview_window: WebviewWindow) -> dict[str, str]:
     """最小化主窗口。"""

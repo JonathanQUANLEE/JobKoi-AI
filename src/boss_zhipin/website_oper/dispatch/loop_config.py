@@ -127,7 +127,14 @@ def is_limit_reached(
         write_response._emit_progress("feed_exhausted", total=job_index - 1)
         return True
     if cfg.auto_send_daily_limit is not None and daily_sent_count >= cfg.auto_send_daily_limit:
-        log.info("今日已发送 %d 条，达到 BOSS_AUTO_SEND_DAILY_LIMIT 上限，结束", daily_sent_count)
+        log.warning("今日已发送 %d 条，达到 BOSS_AUTO_SEND_DAILY_LIMIT=%d 上限，触发安全停机保护", daily_sent_count, cfg.auto_send_daily_limit)
+        write_response._emit_progress(
+            "limit_reached",
+            reason="daily_limit",
+            limit=cfg.auto_send_daily_limit,
+            current=daily_sent_count,
+            message=f"今日投递已达安全上限（{daily_sent_count}/{cfg.auto_send_daily_limit} 份），为防止账号风控已触发安全停机。如需继续测试，请在设置中调大上限或重置今日计数。",
+        )
         write_response._emit_progress("feed_exhausted", total=job_index - 1)
         return True
     if cfg.scan_max_jobs is not None and job_index - start_job_index >= cfg.scan_max_jobs:
