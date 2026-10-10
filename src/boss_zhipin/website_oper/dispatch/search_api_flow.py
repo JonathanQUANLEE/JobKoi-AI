@@ -25,6 +25,28 @@ def _use_search_api_flow(url: str) -> bool:
     return "/web/geek/jobs" in (url or "")
 
 
+# 只依赖卡片自带字段（无需详情页 JD 全文）即可判定的作用域。
+# 这些范围允许"标题预过滤"：不匹配的岗位直接跳过，不开详情页。
+_PRESCREEN_OK_SCOPES = frozenset({"title", "company", "location", "boss"})
+
+
+def _can_prescreen_by_title(filters: dict[str, Any]) -> bool:
+    """筛选组全部只依赖卡片字段时返回 True（可先按卡片过滤再开详情页）。
+
+    只要任一组规则作用域涉及 description / title_description / all，
+    就必须打开详情页读 JD 才能判定 → 返回 False。
+    """
+    for groups in (filters or {}).values():
+        if not isinstance(groups, dict):
+            continue
+        for rule in (groups.get("required"), groups.get("any"), groups.get("exclude")):
+            if isinstance(rule, dict) and bool(rule.get("enabled", True)):
+                scope = str(rule.get("scope") or "title")
+                if scope not in _PRESCREEN_OK_SCOPES:
+                    return False
+    return True
+
+
 async def _open_job_detail_page(url: str, timeout: float = 30) -> bool:
     from boss_zhipin.website_oper import finding_jobs
 
@@ -137,6 +159,33 @@ async def _process_single_api_job(
             detail=job.company,
         )
         return "company_skipped", sent_count, daily_sent_count
+
+    # 标题预过滤（观感修复：别开着浏览器逐个点不相干岗位）——
+    # 规则全部只依赖卡片字段时，先用 API 卡片数据过滤一轮；不命中直接跳过，
+    # 不再打开详情页（详情页只留给"卡片信息已命中、需进一步核对 JD"的岗位）。
+    if _can_prescreen_by_title(filters):
+        probe_posting = write_response._to_filter_posting(job, "")
+        probe_match = match_posting(probe_posting, filters)
+        if not probe_match.matched:
+            write_response._log_skipped(
+                skipped_log_path,
+                job=job,
+                job_key=dedupe_key,
+                send_mode="auto",
+                reason="filtered_out",
+                details={
+                    "stage": "profile_filter",
+                    "reason": probe_match.reason,
+                    "job_title": job.title,
+                },
+            )
+            write_response._emit_progress(
+                "job_skipped",
+                title=job.title,
+                reason="filtered_out",
+                detail=probe_match.reason,
+            )
+            return "filtered", sent_count, daily_sent_count
 
     if not await _open_job_detail_page(job.detail_url):
         write_response._log_skipped(
