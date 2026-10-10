@@ -58,7 +58,12 @@ export function useHeroChat({
 
       try {
         const currentForm = currentProfileData();
-        const res = await ipc.agentChat(trimmed, heroChatMessages.slice(-8), currentForm);
+        const resPromise = ipc.agentChat(trimmed, heroChatMessages.slice(-8), currentForm);
+        // 保障思考过程有清晰完整的视觉展示时间（至少 1000ms），让用户能直观看到点阵转圈与秒表计时
+        const [res] = await Promise.all([
+          resPromise,
+          new Promise((resolve) => setTimeout(resolve, 1000)),
+        ]);
         if (res.status === "ok") {
           const reply = res.reply || "收到！已根据你的背景情况完成求职意向诊断与画像提炼。";
           const assistantMsg: AgentChatMessage = { role: "assistant", content: reply };
