@@ -1,15 +1,12 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, useCallback } from "react";
 import {
-  Bot,
   User,
-  SlidersHorizontal,
   ArrowUp,
   Target,
   Terminal,
   Sparkles,
   Check,
   Plus,
-  AlertCircle,
   FileText,
   UploadCloud,
   CheckCircle2,
@@ -17,25 +14,19 @@ import {
   Gauge,
   Zap,
   Award,
-  Search,
-  RefreshCw,
   X,
   FileCheck,
-  ChevronRight,
   TrendingUp,
   ShieldAlert,
   Send,
-  Layers,
-  Clock,
   CheckCircle,
-  AlertTriangle,
-  RotateCcw,
 } from "lucide-react";
 import { ipc, type AgentToolResult, type ATSScoreData, type ResumeDiagnoseResult } from "../lib/ipc";
 import { summarizeAgentProfile } from "../lib/agentPreview";
 import { useRunStore, useT } from "../store";
 import { MagicCard } from "./core/MagicBento";
 import LatticeLoader from "./core/LatticeLoader";
+import { HaloDropzone, DropzoneUploadFileList, fileKey, type QueuedFile } from "./core/HaloDropzone";
 
 type Props = {
   getCurrentForm: () => Record<string, unknown>;
@@ -102,10 +93,10 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
   const pendingResumePolish = useRunStore((s) => s.pendingResumePolish);
   const setPendingResumePolish = useRunStore((s) => s.setPendingResumePolish);
 
-  // 主模式切换：默认主打 Agent 2 (简历精修)，支持切换 Agent 1 (意向管家)
+  // 主模式切换：默认主打简历精修，支持临时切换意向管家
   const [panelMode, setPanelMode] = useState<"polish" | "copilot">("polish");
 
-  // ==================== Agent 2 (简历精修工作台) 状态 ====================
+  // ==================== 简历精修状态 ====================
   const [resumeText, setResumeText] = useState("");
   const [targetRole, setTargetRole] = useState("后端开发工程师");
   const [customPrompt, setCustomPrompt] = useState("");
@@ -113,11 +104,15 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
   const [loadedFileName, setLoadedFileName] = useState<string | null>(null);
   const [atsScore, setAtsScore] = useState<ATSScoreData | null>(null);
 
-  // 诊断与进度控制状态（彻底解决用户提出的进度透明度问题）
+  // HaloDropzone 动画上传队列
+  const [uploadQueue, setUploadQueue] = useState<QueuedFile[]>([]);
+  const [showHaloUpload, setShowHaloUpload] = useState(false);
+
+  // 诊断与进度控制状态
   const [diagnosing, setDiagnosing] = useState(false);
   const [progressPercent, setProgressPercent] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [estimatedSeconds, setEstimatedSeconds] = useState(15);
+  const [estimatedSeconds, setEstimatedSeconds] = useState(14);
   const [currentStageIndex, setCurrentStageIndex] = useState(0);
   const [diagnoseStatus, setDiagnoseStatus] = useState<"working" | "done" | "error">("working");
   const [diagnoseResult, setDiagnoseResult] = useState<ResumeDiagnoseResult | null>(null);
@@ -130,11 +125,10 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
   const [followUpInput, setFollowUpInput] = useState("");
   const [followUpPending, setFollowUpPending] = useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortControllerRef = useRef<boolean>(false);
 
-  // ==================== Agent 1 (意向管家) 状态 ====================
+  // ==================== 意向管家状态 ====================
   const [input, setInput] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [applied, setApplied] = useState(false);
@@ -179,7 +173,7 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
     return () => clearTimeout(timer);
   }, [resumeText]);
 
-  // 4. 诊断进度流水线心跳模拟（平滑进度条 + 动态估时 + 阶段步进）
+  // 4. 诊断进度流水线心跳
   useEffect(() => {
     if (!diagnosing) {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -196,23 +190,22 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
       const elapsed = Math.floor((Date.now() - startTime) / 1000);
       setElapsedSeconds(elapsed);
 
-      // 阶段与进度平滑递增
       if (elapsed <= 1) {
-        setCurrentStageIndex(0); // 本地 ATS 扫描
+        setCurrentStageIndex(0);
         setProgressPercent(28);
         setEstimatedSeconds(Math.max(1, 14 - elapsed));
       } else if (elapsed <= 3) {
-        setCurrentStageIndex(1); // 技能矩阵融合
+        setCurrentStageIndex(1);
         setProgressPercent(52);
         setEstimatedSeconds(Math.max(1, 14 - elapsed));
-      } else if (elapsed <= 9) {
-        setCurrentStageIndex(2); // 大模型深度润色中
-        setProgressPercent(Math.min(88, 52 + (elapsed - 3) * 6));
-        setEstimatedSeconds(Math.max(1, 14 - elapsed));
+      } else if (elapsed <= 10) {
+        setCurrentStageIndex(2);
+        setProgressPercent(Math.min(88, 52 + (elapsed - 3) * 5));
+        setEstimatedSeconds(Math.max(1, 15 - elapsed));
       } else {
-        setCurrentStageIndex(3); // 格式排版与卡片组装
-        setProgressPercent(Math.min(96, 88 + (elapsed - 9) * 1.5));
-        setEstimatedSeconds(2);
+        setCurrentStageIndex(3);
+        setProgressPercent(Math.min(96, 88 + (elapsed - 10) * 0.8));
+        setEstimatedSeconds(1);
       }
     }, 400);
 
@@ -228,37 +221,64 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
     );
   };
 
-  // 本地文件上传与读取
-  const handleLocalFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setLoadedFileName(file.name);
-    if (file.name.endsWith(".txt")) {
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        setResumeText(String(evt.target?.result || ""));
-      };
-      reader.readAsText(file);
-    } else {
-      setResumeText((prev) =>
-        prev
-          ? `${prev}\n\n[已载入附件：${file.name}（${(file.size / 1024).toFixed(1)} KB）]`
-          : `[已载入附件：${file.name}（${(file.size / 1024).toFixed(1)} KB）]\n请在此粘贴对应正文内容或重点经历段落以获取深度诊断。`
-      );
-    }
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
+  // 处理 HaloDropzone 上传
+  const handleHaloFiles = useCallback((files: File[]) => {
+    const stamp = Date.now();
+    const newItems: QueuedFile[] = files.map((file, i) => ({
+      id: `${fileKey(file)}-${stamp}-${i}`,
+      file,
+      progress: 20,
+      done: false,
+    }));
+    setUploadQueue(newItems);
+
+    const targetFile = files[0];
+    if (!targetFile) return;
+
+    setLoadedFileName(targetFile.name);
+
+    // 模拟平滑上传解析动画
+    let p = 25;
+    const interval = setInterval(() => {
+      p += 25;
+      if (p >= 100) {
+        clearInterval(interval);
+        setUploadQueue((prev) =>
+          prev.map((row) => ({ ...row, progress: 100, done: true }))
+        );
+
+        if (targetFile.name.endsWith(".txt")) {
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            setResumeText(String(evt.target?.result || ""));
+          };
+          reader.readAsText(targetFile);
+        } else {
+          setResumeText((prev) =>
+            prev
+              ? `${prev}\n\n[已载入附件：${targetFile.name}（${(targetFile.size / 1024).toFixed(1)} KB）]`
+              : `[已载入附件：${targetFile.name}（${(targetFile.size / 1024).toFixed(1)} KB）]\n请在此粘贴对应正文内容或重点经历段落以获取深度诊断。`
+          );
+        }
+        setShowHaloUpload(false);
+      } else {
+        setUploadQueue((prev) =>
+          prev.map((row) => ({ ...row, progress: p }))
+        );
+      }
+    }, 120);
+  }, []);
+
+  // 移除上传文件
+  const handleRemoveQueuedFile = useCallback((id: string) => {
+    setUploadQueue((prev) => prev.filter((r) => r.id !== id));
+  }, []);
 
   // 启动核心诊断流程
   const handleRunDiagnosis = async () => {
     const textToDiagnose = resumeText.trim();
     if (!textToDiagnose) {
       setMessage("请先在左侧输入或粘贴需要诊断精修的简历内容");
-      return;
-    }
-    if (!llmConfig?.configured) {
-      onOpenSettings?.("model");
-      setMessage("请先在右上角【模型设置】中配置 API Key（支持免费 OpenRouter 专属模型）");
       return;
     }
 
@@ -346,16 +366,10 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
     }
   };
 
-  // ==================== Agent 1 (意向管家) 处理 ====================
+  // ==================== 意向管家处理 ====================
   async function handleSendText(textToSend: string) {
     const trimmed = textToSend.trim();
     if (!trimmed || agentPending) return;
-
-    if (!llmConfig?.configured) {
-      if (onOpenSettings) onOpenSettings("model");
-      setMessage(t("agent.settings.needConfig"));
-      return;
-    }
 
     pushAgentMessage({ role: "user", content: trimmed });
     setInput("");
@@ -413,49 +427,44 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
   const modeLabel = typeof modeKey === "string" ? t(`mode.${modeKey}.title`) : "-";
 
   return (
-    <MagicCard className="panel w-full" glowColor="245, 158, 11" enableTilt={false}>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".pdf,.docx,.doc,.txt,.png,.jpg,.jpeg,.webp"
-        onChange={handleLocalFileUpload}
-        className="hidden"
-      />
-
-      {/* 顶部状态栏：双 Agent 切换胶囊 + 紧凑模型状态 */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-4 border-b border-stone-800/80">
+    <MagicCard className="panel w-full !p-4 sm:!p-6 !max-w-none" glowColor="245, 158, 11" enableTilt={false}>
+      {/* 顶部状态栏：可爱机器人头像 + 统一「简历精修」标题 + 模式切换 */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 mb-4 border-b border-stone-800/80">
         <div className="flex items-center gap-3">
-          <div className="size-8 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-sm shadow-sm">
-            {panelMode === "polish" ? <Sparkles className="size-4 text-amber-400" /> : <Bot className="size-4 text-amber-400" />}
+          {/* 精致 3D 机器人/锦鲤吉祥物头像（告别简陋 Web 图标） */}
+          <div className="relative size-10 shrink-0">
+            <img
+              src="/favicon.png"
+              alt="AI 简历精修助手"
+              className="size-10 rounded-2xl object-cover border border-amber-500/40 shadow-md shadow-amber-500/20"
+            />
+            <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-400 ring-2 ring-stone-900" />
           </div>
+
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-bold text-stone-100">
-                {panelMode === "polish" ? "简历精修与诊断 · Agent 2" : "求职意向画像 · Agent 1"}
+              <h2 className="text-base font-bold text-stone-100 tracking-tight">
+                {panelMode === "polish" ? "简历精修" : "求职意向画像"}
               </h2>
               <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
                 {panelMode === "polish" ? "ATS 算法 + STAR 技能" : "意向提炼"}
               </span>
-              <span
-                className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${
-                  llmConfig?.configured
-                    ? "bg-emerald-950/60 border-emerald-500/30 text-emerald-400"
-                    : "bg-stone-800 border-stone-700 text-stone-400"
-                }`}
-              >
-                {llmConfig?.configured ? "AI 模型已就绪" : "待配置 API"}
-              </span>
             </div>
+            <p className="text-[11px] text-stone-400 mt-0.5">
+              {panelMode === "polish"
+                ? "ATS 算法多维诊断 · STAR 闭环改写 · Google X-Y-Z 业绩量化"
+                : "对话提炼求职意向 · 自动生成过滤与投递画像"}
+            </p>
           </div>
         </div>
 
-        {/* 顶部右侧模式切换 */}
+        {/* 顶部右侧切换模式 */}
         <div className="flex items-center gap-2">
           <div className="inline-flex rounded-xl bg-stone-900/90 p-0.5 border border-stone-800">
             <button
               type="button"
               onClick={() => setPanelMode("polish")}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 panelMode === "polish" ? "bg-amber-500 text-stone-950 shadow-sm" : "text-stone-400 hover:text-stone-200"
               }`}
             >
@@ -465,29 +474,18 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
             <button
               type="button"
               onClick={() => setPanelMode("copilot")}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 panelMode === "copilot" ? "bg-amber-500 text-stone-950 shadow-sm" : "text-stone-400 hover:text-stone-200"
               }`}
             >
-              <Bot className="size-3.5" />
               <span>意向管家</span>
             </button>
           </div>
-
-          <button
-            type="button"
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-stone-800 bg-stone-900/60 hover:border-amber-500/40 text-xs text-stone-400 hover:text-stone-200 transition-all cursor-pointer"
-            onClick={() => onOpenSettings?.("model")}
-            title="配置 API Key"
-          >
-            <SlidersHorizontal className="size-3.5" />
-            <span className="hidden sm:inline">模型设置</span>
-          </button>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* 模式 A: 简历精修 Studio (左右双栏工作台布局)                                */}
+      {/* 模式 A: 简历精修 Studio (宽屏左右双栏工作台布局)                              */}
       {/* ========================================================================= */}
       {panelMode === "polish" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start w-full">
@@ -530,7 +528,7 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
               </div>
             </div>
 
-            {/* 2. 简历正文输入与附件载入 */}
+            {/* 2. 简历正文输入与附件载入 (集成 HaloDropzone 动画效果) */}
             <div className="rounded-2xl border border-stone-800/80 bg-stone-900/50 p-3.5 space-y-3">
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2 min-w-0">
@@ -547,12 +545,12 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-stone-800 hover:bg-stone-700 text-[11px] text-stone-300 transition-all cursor-pointer"
-                    title="上传本地简历文件或证书截图"
+                    onClick={() => setShowHaloUpload((prev) => !prev)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-stone-800 hover:bg-stone-700 text-[11px] text-stone-300 transition-all cursor-pointer border border-stone-700"
+                    title="展开/折叠光晕文件上传拖拽区"
                   >
-                    <UploadCloud className="size-3 text-stone-400" />
-                    <span>上传文件</span>
+                    <UploadCloud className="size-3.5 text-amber-400" />
+                    <span>{showHaloUpload ? "收起上传" : "光晕上传"}</span>
                   </button>
                   {resumeText && (
                     <button
@@ -570,9 +568,24 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
                 </div>
               </div>
 
+              {/* Halo Dropzone 动效上传区 (可折叠或直接拖入) */}
+              {showHaloUpload && (
+                <div className="space-y-2 animate-in fade-in zoom-in-95 duration-200">
+                  <HaloDropzone
+                    onFiles={handleHaloFiles}
+                    multiple={false}
+                    formatHint="支持 PDF、Word (.docx)、纯文本与证书图片，带微光渐变解析"
+                  />
+                  <DropzoneUploadFileList
+                    items={uploadQueue}
+                    onRemove={handleRemoveQueuedFile}
+                  />
+                </div>
+              )}
+
               {/* 文本输入框 */}
               <textarea
-                rows={7}
+                rows={8}
                 value={resumeText}
                 onChange={(e) => setResumeText(e.target.value)}
                 placeholder="在此粘贴完整简历或具体某段项目经历（例如：熟练掌握Java与Spring Boot，主导电商用户中心重构，日活10万，优化SQL使耗时降低40%）..."
@@ -613,10 +626,10 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
                   type="button"
                   onClick={handleRunDiagnosis}
                   disabled={diagnosing || !resumeText.trim()}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 text-xs font-bold shadow-md shadow-amber-500/20 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 text-xs font-bold shadow-md shadow-amber-500/20 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Zap className="size-3.5 fill-current" />
-                  <span>{diagnosing ? "正在诊断中..." : "开始 ATS 算法诊断与 AI 精修"}</span>
+                  <span>{diagnosing ? "正在加速诊断中..." : "开始 ATS 算法诊断与 AI 精修"}</span>
                 </button>
               </div>
             </div>
@@ -624,15 +637,14 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
 
           {/* -------------------- 右栏 (7 列)：诊断成果与算法透视台 -------------------- */}
           <div className="lg:col-span-7 space-y-4">
-            {/* 状态 A: 正在诊断中（解决卡顿与无进度感的问题） */}
+            {/* 状态 A: 正在诊断中（动态流水线进度条与倒计时估算） */}
             {diagnosing && (
               <div className="rounded-2xl border border-amber-500/40 bg-stone-900/90 p-5 space-y-4 shadow-xl animate-in fade-in duration-200">
-                {/* 顶部加载动效与计时器 */}
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pb-3 border-b border-stone-800">
                   <div className="flex items-center gap-3">
                     <LatticeLoader
                       status={diagnoseStatus}
-                      label="AI 简历精修 Agent 正在深度诊断..."
+                      label="AI 简历精修正在深度诊断..."
                       doneLabel="精修完成"
                       errorLabel="诊断异常"
                       pattern="orbit"
@@ -764,7 +776,6 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
             {/* 状态 B: 本地即时 ATS 启发式算法评分看板 (未诊断或平时展示) */}
             {atsScore && !diagnosing && (
               <div className="rounded-2xl border border-stone-800 bg-stone-900/60 p-4 space-y-3">
-                {/* 综合得分与标题 */}
                 <div className="flex items-center justify-between pb-2.5 border-b border-stone-800">
                   <div className="flex items-center gap-2">
                     <Gauge className="size-4 text-emerald-400" />
@@ -932,7 +943,6 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
                 {/* 持续追问对话区 */}
                 <div className="pt-2 border-t border-stone-800/80 space-y-2">
                   <span className="text-[11px] font-bold text-stone-400 flex items-center gap-1">
-                    <Bot className="size-3.5 text-amber-400" />
                     <span>继续追问微调</span>
                   </span>
 
@@ -986,7 +996,7 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
       )}
 
       {/* ========================================================================= */}
-      {/* 模式 B: 求职意向画像 (Agent 1 意向管家) 极简界面                             */}
+      {/* 模式 B: 求职意向画像极简界面                                               */}
       {/* ========================================================================= */}
       {panelMode === "copilot" && (
         <div className="space-y-3.5 max-w-4xl mx-auto">
@@ -995,7 +1005,7 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
             {agentMessages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center p-4">
                 <div className="size-10 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mb-2 border border-amber-500/20">
-                  <Bot className="h-5 w-5 text-amber-400" />
+                  <span className="text-xl">🤖</span>
                 </div>
                 <p className="text-sm font-bold text-stone-100 mb-1">说出你的背景，AI 替你规划投递</p>
                 <p className="text-xs text-stone-400 max-w-sm leading-relaxed">
@@ -1009,7 +1019,7 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
                   <div key={index} className={`flex gap-2.5 ${isUser ? "justify-end" : "justify-start"}`}>
                     {!isUser && (
                       <div className="size-7 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center text-xs shrink-0">
-                        <Bot className="h-3.5 w-3.5" />
+                        <span className="text-xs">🤖</span>
                       </div>
                     )}
                     <div
@@ -1034,7 +1044,7 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
             {agentPending && (
               <div className="flex gap-2.5 items-center text-stone-400">
                 <div className="size-7 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center text-xs">
-                  <Bot className="h-3.5 w-3.5" />
+                  <span className="text-xs">🤖</span>
                 </div>
                 <div className="bg-stone-900 border border-stone-800 rounded-2xl px-4 py-2 text-xs flex items-center gap-2">
                   <span className="size-2 rounded-full bg-amber-400 animate-ping" />

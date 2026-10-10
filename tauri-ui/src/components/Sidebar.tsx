@@ -28,6 +28,7 @@ import { LANGS, type Lang } from "../lib/i18n";
 import { useRunStore } from "../store";
 import PillNavButton from "./core/PillNavButton";
 import NotificationDock from "./NotificationDock";
+import DepthText from "./core/DepthText";
 
 export type NavItem = "workbench" | "profile" | "resumes" | "copilot" | "analytics";
 
@@ -130,7 +131,18 @@ export default function Sidebar({
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <span className="font-bold text-sm tracking-tight text-[var(--ink)]">JobHunter</span>
+                <DepthText
+                  text="JobHunter"
+                  layers={14}
+                  depth={1.4}
+                  faceColor={isMonochrome ? "#f4f4f5" : "#fbbf24"}
+                  depthColor={isMonochrome ? "#3f3f46" : "#b45309"}
+                  fontSize="13px"
+                  fontWeight={900}
+                  tilt={6}
+                  pointerTracking={true}
+                  shadow={true}
+                />
                 <span className={`rounded border px-1 py-0.2 text-[9px] font-semibold ${
                   isMonochrome
                     ? "bg-white/10 border-white/25 text-zinc-200"
