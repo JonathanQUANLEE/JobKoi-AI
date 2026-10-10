@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import {
   X,
   Settings,
+  Clock,
   User,
   Palette,
   Keyboard,
@@ -15,6 +16,7 @@ import { useRunStore } from "../store";
 import { auditDb, type AuditLogItem } from "../lib/auditDb";
 import OptionWheel, { type OptionWheelItemData } from "./OptionWheel";
 import GeneralTab from "./settings/tabs/GeneralTab";
+import ScheduleTab from "./settings/tabs/ScheduleTab";
 import ProfileTab from "./settings/tabs/ProfileTab";
 import AppearanceTab from "./settings/tabs/AppearanceTab";
 import ShortcutsTab from "./settings/tabs/ShortcutsTab";
@@ -24,6 +26,7 @@ import AboutTab from "./settings/tabs/AboutTab";
 
 export type SettingsTab =
   | "general"
+  | "schedule"
   | "profile"
   | "appearance"
   | "shortcuts"
@@ -159,6 +162,11 @@ export default function SettingsModal({
       icon: <Settings className="size-4" />,
     },
     {
+      id: "schedule",
+      label: isEn ? "Scheduled Cruise" : "定时巡航系统",
+      icon: <Clock className="size-4" />,
+    },
+    {
       id: "profile",
       label: isEn ? "Profile" : "个人主页",
       icon: <User className="size-4" />,
@@ -246,6 +254,7 @@ export default function SettingsModal({
             <h2 className="text-sm font-bold text-[var(--ink)] flex items-center gap-2">
               <span className={isMonochrome ? "text-white" : "text-amber-400"}>
                 {activeTab === "general" && <Settings className="size-4" />}
+                {activeTab === "schedule" && <Clock className="size-4" />}
                 {activeTab === "profile" && <User className="size-4" />}
                 {activeTab === "appearance" && <Palette className="size-4" />}
                 {activeTab === "shortcuts" && <Keyboard className="size-4" />}
@@ -255,6 +264,7 @@ export default function SettingsModal({
               </span>
               <span>
                 {activeTab === "general" && (isEn ? "General Settings" : "通用设置")}
+                {activeTab === "schedule" && (isEn ? "Scheduled Cruise System" : "定时自动巡航系统")}
                 {activeTab === "profile" && (isEn ? "User Profile" : "个人主页与求职者信息")}
                 {activeTab === "appearance" && (isEn ? "Appearance & Theme" : "外观与显示主题")}
                 {activeTab === "shortcuts" && (isEn ? "Keyboard Shortcuts" : "常用快捷键")}
@@ -283,6 +293,13 @@ export default function SettingsModal({
                 busy={busy}
                 savedSuccess={savedSuccess}
                 onSaveAll={handleSaveAll}
+              />
+            )}
+
+            {activeTab === "schedule" && (
+              <ScheduleTab
+                isMonochrome={isMonochrome}
+                busy={busy}
               />
             )}
 

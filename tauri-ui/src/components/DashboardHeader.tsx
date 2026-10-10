@@ -1,4 +1,4 @@
-import { FlaskConical, PanelLeftOpen, SlidersHorizontal } from "lucide-react";
+import { FlaskConical, PanelLeftOpen, SlidersHorizontal, Minus, Square, X } from "lucide-react";
 import type { Lang } from "../lib/i18n";
 import { useRunStore } from "../store";
 import type { NavItem } from "./Sidebar";
@@ -29,8 +29,11 @@ export default function DashboardHeader({
   const isMonochrome = useRunStore((s) => s.theme === "monochrome");
 
   return (
-    <header className="h-12 shrink-0 border-b border-[var(--grid)] bg-[var(--sidebar-bg)]/90 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between z-20">
-      <div className="flex items-center gap-2 text-xs">
+    <header
+      data-tauri-drag-region
+      className="h-12 shrink-0 border-b border-[var(--grid)] bg-[var(--sidebar-bg)]/90 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between z-20 select-none"
+    >
+      <div className="flex items-center gap-2 text-xs" data-tauri-drag-region>
         {/* WorkBuddy 风格：展开侧边栏入口按钮（侧边栏收起时呈现，如水露凝结浮现；点击触发雨滴涟漪） */}
         {sidebarCollapsed && (
           <button
@@ -93,6 +96,49 @@ export default function DashboardHeader({
           />
           {statusText}
         </span>
+
+        {/* Windows 现代化沉浸无边框窗口控制器（最小化、最大化、关闭） */}
+        <div className="flex items-center ml-2 border-l border-[var(--grid)] pl-2 space-x-1">
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const { getCurrentWindow } = await import("@tauri-apps/api/window");
+                await getCurrentWindow().minimize();
+              } catch {}
+            }}
+            title="最小化"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-stone-400 hover:bg-stone-800 hover:text-stone-200 transition-colors cursor-pointer"
+          >
+            <Minus className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const { getCurrentWindow } = await import("@tauri-apps/api/window");
+                await getCurrentWindow().toggleMaximize();
+              } catch {}
+            }}
+            title="最大化 / 还原"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-stone-400 hover:bg-stone-800 hover:text-stone-200 transition-colors cursor-pointer"
+          >
+            <Square className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const { getCurrentWindow } = await import("@tauri-apps/api/window");
+                await getCurrentWindow().close();
+              } catch {}
+            }}
+            title="关闭软件"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-stone-400 hover:bg-red-600 hover:text-white transition-colors cursor-pointer"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
     </header>
   );
