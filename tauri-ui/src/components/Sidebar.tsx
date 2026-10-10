@@ -243,20 +243,20 @@ export default function Sidebar({
           <div className="flex items-center gap-1.5">
             <span className="text-amber-400 text-sm">🐰</span>
             <span className="text-[11px] font-semibold text-stone-200">
-              {lang === "ja" ? "ウサギ特助" : "乌萨奇特助"}
+              {lang === "en" ? "Usagi Assistant" : "乌萨奇特助"}
             </span>
             <span className="text-[9px] text-stone-500 font-normal">
-              {lang === "ja" ? "全画面自由配置" : "可全屏拖拽"}
+              {lang === "en" ? "Free Docking" : "可全屏拖拽"}
             </span>
           </div>
           <button
             type="button"
             onClick={() => onOpenSettingsModal?.("schedule")}
             className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-stone-800 hover:bg-stone-700 text-amber-300 cursor-pointer transition-colors"
-            title={lang === "ja" ? "定時設定" : "快捷定时设置"}
+            title={lang === "en" ? "Schedule Timer" : "快捷定时设置"}
           >
             <Clock className="h-3 w-3" />
-            <span>{lang === "ja" ? "定時" : "定时"}</span>
+            <span>{lang === "en" ? "Schedule" : "定时"}</span>
           </button>
         </div>
       </div>

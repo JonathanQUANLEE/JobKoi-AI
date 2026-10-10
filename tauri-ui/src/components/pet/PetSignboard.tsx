@@ -103,7 +103,6 @@ export const PetSignboard: FC<PetSignboardProps> = ({
     }
   };
 
-  const isJa = lang === "ja";
   const placementClass = placement === "bottom" ? "top-full mt-2" : "bottom-full mb-2";
   const alignClass =
     horizontalAlign === "left"
@@ -130,7 +129,7 @@ export const PetSignboard: FC<PetSignboardProps> = ({
           <div className="flex items-center gap-1.5">
             <span className="text-amber-400 text-xs">🪧</span>
             <span className="text-[12px] font-bold tracking-tight text-amber-200">
-              {isJa ? "ウサギの定時立て看板" : "定时巡航小木牌"}
+              定时巡航小木牌
             </span>
           </div>
 
@@ -144,7 +143,7 @@ export const PetSignboard: FC<PetSignboardProps> = ({
                   ? "text-amber-300 hover:bg-amber-500/20"
                   : "text-stone-500 hover:bg-stone-800"
               }`}
-              title={soundEnabled ? (isJa ? "ボイス: オン" : "乌萨奇语音: 已开启") : (isJa ? "ボイス: オフ" : "乌萨奇语音: 已静音")}
+              title={soundEnabled ? "乌萨奇语音: 已开启" : "乌萨奇语音: 已静音"}
             >
               {soundEnabled ? (
                 <Volume2 className="h-3.5 w-3.5" />
@@ -170,12 +169,10 @@ export const PetSignboard: FC<PetSignboardProps> = ({
           <div className="py-2.5 flex flex-col items-center text-center space-y-2.5">
             <div className="space-y-1">
               <div className="text-[13px] font-bold text-amber-100 flex items-center justify-center gap-1">
-                <span>{isJa ? "定時巡航をセットする？⏰" : "你要开启定时巡航吗？⏰"}</span>
+                <span>你要开启定时巡航吗？⏰</span>
               </div>
               <p className="text-[10px] text-stone-400 px-1 leading-relaxed">
-                {isJa
-                  ? "毎日決まった時間に自動で求人巡航・応募を開始します！"
-                  : "设定时间后，特助每天会在指定时刻准时自动帮您启动巡航打卡投递！"}
+                设定时间后，特助每天会在指定时刻准时自动帮您启动巡航打卡投递！
               </p>
             </div>
 
@@ -183,24 +180,24 @@ export const PetSignboard: FC<PetSignboardProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  usagiSound.speak(isJa ? "はい、時間をセットしてね！" : "好的，滑动滚轮设定时间吧！", "yaha");
+                  usagiSound.play("signboard_confirm");
                   setMode("picker");
                   updateConfig((prev) => ({ ...prev, enabled: true }));
                 }}
                 className="flex-1 py-1.5 px-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold text-[11px] shadow-md shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
               >
-                {isJa ? "はい、設定する！" : "是的，设定时间"}
+                是的，设定时间
               </button>
 
               <button
                 type="button"
                 onClick={() => {
-                  usagiSound.speak(isJa ? "またね！" : "好嘞，有需要随时点我！", "mock");
+                  usagiSound.play("signboard_cancel");
                   onClose();
                 }}
                 className="py-1.5 px-3 rounded-xl bg-stone-800/90 hover:bg-stone-700/90 text-stone-300 font-medium text-[11px] border border-stone-700/60 active:scale-95 transition-all cursor-pointer"
               >
-                {isJa ? "今はいいや" : "先不用啦"}
+                先不用啦
               </button>
             </div>
           </div>
@@ -209,7 +206,7 @@ export const PetSignboard: FC<PetSignboardProps> = ({
           <div className="py-2 flex flex-col items-center">
             <div className="w-full flex items-center justify-between mb-2">
               <span className="text-[10px] text-stone-400">
-                {isJa ? "マウスホイールで時間選択" : "鼠标滚轮滑动选时"}
+                鼠标滚轮滑动选时
               </span>
 
               {/* 快速总启停开关 */}
@@ -218,7 +215,7 @@ export const PetSignboard: FC<PetSignboardProps> = ({
                 onClick={() => {
                   const nextState = !config.enabled;
                   updateConfig((prev) => ({ ...prev, enabled: nextState }));
-                  if (nextState) usagiSound.play("celebrate");
+                  if (nextState) usagiSound.play("cruise");
                 }}
                 className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
                   config.enabled
@@ -227,7 +224,7 @@ export const PetSignboard: FC<PetSignboardProps> = ({
                 }`}
               >
                 <Power className={`h-2.5 w-2.5 ${config.enabled ? "text-emerald-400" : "text-stone-400"}`} />
-                <span>{config.enabled ? (isJa ? "有効" : "已开启") : (isJa ? "無効" : "已暂停")}</span>
+                <span>{config.enabled ? "已开启" : "已暂停"}</span>
               </button>
             </div>
 
@@ -241,7 +238,7 @@ export const PetSignboard: FC<PetSignboardProps> = ({
                     ? "bg-zinc-900 border-zinc-700 hover:border-zinc-500"
                     : "bg-stone-900 border-stone-700 hover:border-amber-500/50"
                 }`}
-                title={isJa ? "ホイールで時間を変更" : "鼠标滚轮增减小时"}
+                title="鼠标滚轮增减小时"
               >
                 <button
                   type="button"
@@ -260,7 +257,7 @@ export const PetSignboard: FC<PetSignboardProps> = ({
                 >
                   <ChevronDown className="h-3 w-3" />
                 </button>
-                <span className="text-[9px] text-stone-400 pb-0.5">{isJa ? "時" : "时"}</span>
+                <span className="text-[9px] text-stone-400 pb-0.5">时</span>
               </div>
 
               <span className="text-xl font-bold font-mono text-amber-500/70 animate-pulse">:</span>
@@ -273,7 +270,7 @@ export const PetSignboard: FC<PetSignboardProps> = ({
                     ? "bg-zinc-900 border-zinc-700 hover:border-zinc-500"
                     : "bg-stone-900 border-stone-700 hover:border-amber-500/50"
                 }`}
-                title={isJa ? "ホイールで分を変更 (5分刻み)" : "鼠标滚轮增减分钟 (步长5分)"}
+                title="鼠标滚轮增减分钟 (步长5分)"
               >
                 <button
                   type="button"
@@ -292,7 +289,7 @@ export const PetSignboard: FC<PetSignboardProps> = ({
                 >
                   <ChevronDown className="h-3 w-3" />
                 </button>
-                <span className="text-[9px] text-stone-400 pb-0.5">{isJa ? "分" : "分"}</span>
+                <span className="text-[9px] text-stone-400 pb-0.5">分</span>
               </div>
             </div>
 
@@ -304,7 +301,7 @@ export const PetSignboard: FC<PetSignboardProps> = ({
                 className="flex items-center gap-1 text-[10px] text-amber-400 hover:text-amber-300 font-medium transition-colors cursor-pointer"
               >
                 <Sliders className="h-3 w-3" />
-                <span>{isJa ? "詳細設定 »" : "详细设置 »"}</span>
+                <span>详细设置 »</span>
               </button>
 
               <button
@@ -312,7 +309,7 @@ export const PetSignboard: FC<PetSignboardProps> = ({
                 onClick={onClose}
                 className="px-2.5 py-0.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 text-[10px] font-medium transition-colors cursor-pointer"
               >
-                {isJa ? "完了" : "完成"}
+                完成
               </button>
             </div>
           </div>
