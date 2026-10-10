@@ -135,14 +135,10 @@ export const PillNavButton: FC<PillNavButtonProps> = ({
     bubbleColor ||
     (isMonochrome
       ? variant === "primary"
-        ? "#ffffff" // 用户需求反转：日常黑底白字，悬停时展开纯白液体气泡！
+        ? "#000000" // 启动巡航主按钮：默认白底，悬停展开纯黑液体气泡！
         : variant === "danger-menu"
-        ? "rgba(239, 68, 68, 0.18)"
-        : variant === "menu"
-        ? "rgba(255, 255, 255, 0.14)"
-        : active
-        ? "rgba(255, 255, 255, 0.14)"
-        : "rgba(255, 255, 255, 0.08)"
+        ? "rgba(239, 68, 68, 0.25)"
+        : "#ffffff" // 所有其他功能模块与菜单：默认黑底，悬停展开纯白液体气泡！
       : variant === "primary"
       ? "rgba(255, 255, 255, 0.24)"
       : variant === "danger-menu"
@@ -155,14 +151,14 @@ export const PillNavButton: FC<PillNavButtonProps> = ({
 
   const baseVariantStyles = isMonochrome
     ? variant === "primary"
-      ? "w-full justify-center rounded-xl bg-black border border-white/20 hover:border-white/50 px-3 py-2.5 text-xs font-bold text-white shadow-lg shadow-black/40 active:scale-[0.98] transition-all disabled:opacity-50 overflow-hidden cursor-pointer"
+      ? "w-full justify-center rounded-xl bg-white px-3 py-2.5 text-xs font-black text-black shadow-lg shadow-white/10 active:scale-[0.98] transition-all disabled:opacity-50 overflow-hidden cursor-pointer"
       : variant === "menu"
-      ? "w-full justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-300 hover:text-white transition-colors"
+      ? "w-full justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-300 hover:text-black transition-colors overflow-hidden cursor-pointer"
       : variant === "danger-menu"
-      ? "w-full justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-400 hover:text-red-400 transition-colors"
+      ? "w-full justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-400 hover:text-red-400 transition-colors overflow-hidden cursor-pointer"
       : active
-      ? "w-full justify-between rounded-xl px-3 py-2.5 text-xs font-semibold bg-zinc-900 text-zinc-100 border border-zinc-700/80 shadow-inner transition-all"
-      : "w-full justify-between rounded-xl px-3 py-2.5 text-xs font-medium text-zinc-400 hover:text-zinc-100 transition-all"
+      ? "w-full justify-between rounded-xl px-3 py-2.5 text-xs font-semibold bg-zinc-900 text-zinc-100 border border-zinc-700/80 shadow-inner transition-all overflow-hidden cursor-pointer"
+      : "w-full justify-between rounded-xl px-3 py-2.5 text-xs font-medium text-zinc-300 hover:text-black transition-all overflow-hidden cursor-pointer"
     : variant === "primary"
     ? "w-full justify-center rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-3 py-2.5 text-xs font-bold text-stone-950 shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all disabled:opacity-50"
     : variant === "menu"
@@ -200,7 +196,13 @@ export const PillNavButton: FC<PillNavButtonProps> = ({
           <span
             ref={normalLabelRef}
             className={`pill-btn-label-normal ${
-              isMonochrome && variant === "primary" ? "text-white font-bold" : ""
+              isMonochrome
+                ? variant === "primary"
+                  ? "text-black font-black"
+                  : active
+                  ? "text-zinc-100 font-semibold"
+                  : "text-zinc-300 font-medium"
+                : ""
             }`}
           >
             {icon && <span className="shrink-0">{icon}</span>}
@@ -213,14 +215,10 @@ export const PillNavButton: FC<PillNavButtonProps> = ({
             className={`pill-btn-label-hovered ${
               isMonochrome
                 ? variant === "primary"
-                  ? "text-black font-black"
+                  ? "text-white font-black"
                   : variant === "danger-menu"
                   ? "text-red-400 font-semibold"
-                  : variant === "menu"
-                  ? "text-white font-semibold"
-                  : active
-                  ? "text-white font-bold"
-                  : "text-white font-semibold"
+                  : "text-black font-bold"
                 : variant === "primary"
                 ? "text-stone-950 font-black"
                 : variant === "danger-menu"

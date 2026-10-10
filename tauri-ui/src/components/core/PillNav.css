@@ -210,3 +210,8 @@
   will-change: transform, opacity;
   white-space: nowrap;
 }
+
+.pill-btn-label-hovered svg {
+  color: inherit !important;
+}
+
