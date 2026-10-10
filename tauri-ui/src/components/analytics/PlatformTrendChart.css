@@ -1,0 +1,76 @@
+/* 平台历史投递趋势折线图专属动态特效样式 */
+
+/* 曲线自左向右生长动画与面积淡入 */
+@keyframes draw-line {
+  from {
+    stroke-dashoffset: 2000;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes fade-in-area {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.trend-draw-line {
+  stroke-dasharray: 2000;
+  stroke-dashoffset: 2000;
+  animation: draw-line 1.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.trend-area-fade {
+  opacity: 0;
+  animation: fade-in-area 0.8s ease-out forwards;
+}
+
+/* 黄色总览虚线缓慢流动微动效 */
+@keyframes dash-flow {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -32;
+  }
+}
+
+.trend-flowing-dash {
+  stroke-dasharray: 6 3;
+  animation: dash-flow 14s linear infinite;
+}
+
+/* 最新数据点呼吸光晕微动效 */
+@keyframes breathing-halo {
+  0%, 100% {
+    r: 4;
+    opacity: 0.7;
+  }
+  50% {
+    r: 9;
+    opacity: 0.15;
+  }
+}
+
+.breathing-halo-circle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: breathing-halo 3s ease-in-out infinite;
+}
+
+/* 尊重减少动态效果设置 (Accessibility) */
+@media (prefers-reduced-motion: reduce) {
+  .trend-flowing-dash,
+  .breathing-halo-circle,
+  .trend-draw-line,
+  .trend-area-fade {
+    animation: none !important;
+    stroke-dashoffset: 0 !important;
+    opacity: 1 !important;
+  }
+}
