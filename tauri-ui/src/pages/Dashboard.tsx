@@ -3,7 +3,7 @@ import { ipc } from "../lib/ipc";
 import ResumePanel from "../components/ResumePanel";
 import ProfilePanel from "../components/ProfilePanel";
 import AgentPanel from "../components/AgentPanel";
-import AnalyticsPanel from "../components/AnalyticsPanel";
+import DeliveryAnalyticsView from "../components/analytics/DeliveryAnalyticsView";
 import DashboardHeader from "../components/DashboardHeader";
 import WorkbenchView from "../views/WorkbenchView";
 import SettingsDrawer, { type DrawerTab } from "../components/SettingsDrawer";
@@ -338,29 +338,12 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TAB 5: 投递数据与自动化执行大屏 */}
+          {/* TAB 5: 历史投递多平台数据统计与投递早报 */}
           {activeNav === "analytics" && (
-            <AnalyticsPanel
-              mode={profileForm.mode}
-              setMode={profileForm.setMode}
-              running={botRuntime.running}
-              currentIndex={botRuntime.currentIndex}
-              dryRun={profileForm.dryRun}
-              delayMin={profileForm.delayMin}
-              delayMax={profileForm.delayMax}
-              stats={botRuntime.stats}
-              currentJob={botRuntime.currentJob}
-              latestSent={botRuntime.latestSent}
-              latestSkip={botRuntime.latestSkip}
-              events={botRuntime.events}
-              logs={botRuntime.logs}
-              statusText={botRuntime.statusText}
-              message={message}
-              onOpenDrawer={(tab) => {
-                if (tab) setDrawerTab(tab);
-                setDrawerOpen(true);
+            <DeliveryAnalyticsView
+              onStartCruise={() => {
+                botRuntime.startRun();
               }}
-              onCopyLogs={botRuntime.copyLogs}
             />
           )}
         </main>

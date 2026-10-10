@@ -5,6 +5,7 @@ import {
   FolderOpen,
   Bot,
   BarChart3,
+  TrendingUp,
   Play,
   Square,
   SlidersHorizontal,
@@ -245,8 +246,8 @@ export default function Sidebar({
         <NavItemButton
           active={activeNav === "analytics"}
           onClick={() => onSelectNav("analytics")}
-          icon={<BarChart3 className="h-4 w-4 shrink-0" />}
-          label={lang === "en" ? "Analytics & Logs" : "投递数据与日志"}
+          icon={<TrendingUp className="h-4 w-4 shrink-0 text-amber-400" />}
+          label={lang === "en" ? "Analytics & Brief" : "数据统计与早报"}
         />
       </nav>
 

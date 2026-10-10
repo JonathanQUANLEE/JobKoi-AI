@@ -128,7 +128,7 @@ export default function DashboardHeader({
           {activeNav === "profile" && (lang === "en" ? "Job Profile" : "求职画像")}
           {activeNav === "resumes" && (lang === "en" ? "Resume Vault" : "简历资料库")}
           {activeNav === "copilot" && (lang === "en" ? "Resume Polish" : "简历精修")}
-          {activeNav === "analytics" && (lang === "en" ? "Analytics & Logs" : "投递数据与日志")}
+          {activeNav === "analytics" && (lang === "en" ? "Delivery Analytics & Morning Brief" : "数据统计与早报")}
         </span>
       </div>
 
