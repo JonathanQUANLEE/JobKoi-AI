@@ -50,7 +50,7 @@ async def send_job_descriptions_to_chat(
 
     cfg = LoopConfig.load()
 
-    if use_current_page:
+    if use_current_page or finding_jobs.get_tab() is not None:
         await finding_jobs.ensure_current_tab()
     else:
         await finding_jobs.open_browser_with_options(url, browser_type)

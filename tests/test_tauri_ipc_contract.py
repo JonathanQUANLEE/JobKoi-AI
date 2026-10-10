@@ -51,6 +51,9 @@ def test_tauri_ipc_commands_match_gui_v02_contract():
         "window_minimize",
         "window_toggle_maximize",
         "window_close",
+        # 投递历史与记录
+        "get_delivery_history",
+        "reset_today_delivery",
         # 简历扩展
         "open_resume_native",
         "diagnose_resume",

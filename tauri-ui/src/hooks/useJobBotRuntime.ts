@@ -158,34 +158,59 @@ export function useJobBotRuntime({
     const error = validateBeforeRun();
     if (error) {
       setMessage(error);
+      useRunStore.getState().notify({
+        type: "warning",
+        text: `无法启动巡航：${error}`,
+        source: "巡航启动",
+      });
       return;
     }
     setBusy(true);
     setMessage(null);
     try {
-      await ipc.saveGreeting(greeting.trim(), greetingPath.trim() || "./greetings/default.txt");
+      const effectiveGreeting = greeting.trim() || "您好！我对贵公司的岗位非常感兴趣，希望能与您进一步沟通交流！";
+      await ipc.saveGreeting(effectiveGreeting, greetingPath.trim() || "./greetings/default.txt");
       await ipc.saveProfile(profileName.trim(), currentProfileData());
       clear();
       setRunning(true);
+      useRunStore.getState().notify({
+        type: "info",
+        text: `已启动「${label.trim() || "全自动"}」自动巡航，正在唤起/连接受控浏览器...`,
+        source: "巡航工作台",
+      });
       const progressChannel = new Channel<ProgressEvent>((ev) => {
         const timestamp = ev.ts_local || formatLocalTime();
         const event = { ...ev, ts_local: timestamp };
         pushEvent(event);
         pushLog(eventLogLine(event, timestamp));
+
+        if (ev.kind === "limit_reached" || (ev as any).reason === "daily_limit") {
+          useRunStore.getState().notify({
+            type: "warning",
+            text: (ev as any).message || "今日投递已达安全上限，已自动安全停机以保护账号安全！",
+            source: "安全防护",
+            duration: 12000,
+          });
+        }
       });
       const logChannel = new Channel<string>((line) => pushLog(`${formatLocalTime()} ${line}`));
       const config: RunConfig = {
-        usrName: usrName.trim(),
+        usrName: usrName.trim() || "求职者",
         label: label.trim(),
         dryRun,
         profile: profileName.trim(),
-        useCurrentPage: true,
+        useCurrentPage: false,
       };
       await ipc.startRun(config, progressChannel, logChannel);
     } catch (err) {
       setRunning(false);
       pushLog(`${formatLocalTime()} ${t("message.startFailed", { error: String(err) })}`);
       setMessage(t("message.startFailed", { error: String(err) }));
+      useRunStore.getState().notify({
+        type: "error",
+        text: `启动巡航失败: ${String(err)}`,
+        source: "巡航工作台",
+      });
     } finally {
       setBusy(false);
     }

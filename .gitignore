@@ -109,7 +109,11 @@ tauri-ui/.ds-compiled.css
 /profiles/0my.yml
 /greetings/my-greeting.txt
 /resume/*.docx
+/resume/*.doc
 /resume/*.png
+/resume/*.jpg
+/resume/*.jpeg
+/resume/*.webp
 
 # 默认简历标记（含个人文件名）
 /resume/default.txt
