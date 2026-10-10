@@ -17,9 +17,12 @@ import {
   ExternalLink,
   ShieldCheck,
   Bell,
+  Contrast,
+  Sparkles,
 } from "lucide-react";
 import { LANGS, type Lang } from "../lib/i18n";
 import { ipc, type LLMConfig, type LLMPreset } from "../lib/ipc";
+import { useRunStore } from "../store";
 import OptionWheel, { type OptionWheelItemData } from "./OptionWheel";
 
 export type SettingsTab = "general" | "profile" | "appearance" | "shortcuts" | "model" | "about";
@@ -55,8 +58,10 @@ export default function SettingsModal({
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
 
-  // Appearance state
-  const [theme, setTheme] = useState<"dark" | "light" | "system">("dark");
+  // Appearance state - synced with global store
+  const appTheme = useRunStore((s) => s.theme);
+  const setAppTheme = useRunStore((s) => s.setTheme);
+  const isMonochrome = appTheme === "monochrome";
 
   // General settings
   const [notifyOnMatch, setNotifyOnMatch] = useState(true);
@@ -193,6 +198,8 @@ export default function SettingsModal({
               if (item?.id) setActiveTab(item.id as SettingsTab);
             }}
             side="right"
+            activeColor={isMonochrome ? "#ffffff" : "#f59e0b"}
+            textColor={isMonochrome ? "#a1a1aa" : undefined}
             fontSize={0.95}
             spacing={2.4}
             curve={1.1}
@@ -210,11 +217,11 @@ export default function SettingsModal({
         </aside>
 
         {/* 右侧：独立浮岛 主设置内容区 */}
-        <main className="flex-1 w-full flex flex-col min-w-0 bg-[#171513]/95 backdrop-blur-xl border border-[var(--grid)] rounded-2xl shadow-2xl shadow-black/80 overflow-hidden h-[480px] md:h-[580px] text-stone-200">
+        <main className="flex-1 w-full flex flex-col min-w-0 bg-[var(--panel)]/95 backdrop-blur-xl border border-[var(--grid)] rounded-2xl shadow-2xl shadow-black/80 overflow-hidden h-[480px] md:h-[580px] text-[var(--ink)]">
           {/* 顶栏关闭按钮 */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--grid)]/70 shrink-0 bg-[#1b1916]/50">
-            <h2 className="text-sm font-bold text-stone-100 flex items-center gap-2">
-              <span className="text-amber-400">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--grid)]/70 shrink-0 bg-[var(--panel-2)]/50">
+            <h2 className="text-sm font-bold text-[var(--ink)] flex items-center gap-2">
+              <span className={isMonochrome ? "text-white" : "text-amber-400"}>
                 {activeTab === "general" && <Settings className="size-4" />}
                 {activeTab === "profile" && <User className="size-4" />}
                 {activeTab === "appearance" && <Palette className="size-4" />}
@@ -249,9 +256,9 @@ export default function SettingsModal({
                 <div className="space-y-3">
                   <h3 className="font-semibold text-stone-200 text-xs">消息与提醒</h3>
                   <div className="space-y-2">
-                    <label className="flex items-center justify-between p-3 rounded-xl border border-[var(--grid)] bg-[#1c1917]">
+                    <label className="flex items-center justify-between p-3 rounded-xl border border-[var(--grid)] bg-[var(--panel-2)]">
                       <div className="flex items-center gap-2.5">
-                        <Bell className="size-4 text-amber-400" />
+                        <Bell className={`size-4 ${isMonochrome ? "text-zinc-300" : "text-amber-400"}`} />
                         <div>
                           <div className="font-medium text-stone-200">命中满意岗位时系统提示</div>
                           <div className="text-[10px] text-stone-500">巡航筛选出匹配岗位时在右下角发出气泡提醒</div>
@@ -261,11 +268,11 @@ export default function SettingsModal({
                         type="checkbox"
                         checked={notifyOnMatch}
                         onChange={(e) => setNotifyOnMatch(e.target.checked)}
-                        className="rounded accent-amber-500 size-4 cursor-pointer"
+                        className={`rounded size-4 cursor-pointer ${isMonochrome ? "accent-white" : "accent-amber-500"}`}
                       />
                     </label>
 
-                    <label className="flex items-center justify-between p-3 rounded-xl border border-[var(--grid)] bg-[#1c1917]">
+                    <label className="flex items-center justify-between p-3 rounded-xl border border-[var(--grid)] bg-[var(--panel-2)]">
                       <div className="flex items-center gap-2.5">
                         <ShieldCheck className="size-4 text-emerald-400" />
                         <div>
@@ -285,7 +292,11 @@ export default function SettingsModal({
                     type="button"
                     onClick={handleSaveAll}
                     disabled={busy}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold transition-all cursor-pointer"
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${
+                      isMonochrome
+                        ? "bg-white hover:bg-zinc-200 text-black shadow-md shadow-white/10"
+                        : "bg-amber-500 hover:bg-amber-400 text-stone-950 shadow-md shadow-amber-500/20"
+                    }`}
                   >
                     {savedSuccess ? <Check className="size-3.5" /> : <Save className="size-3.5" />}
                     <span>{savedSuccess ? "已保存" : "保存通用设置"}</span>
@@ -328,9 +339,9 @@ export default function SettingsModal({
                   <label className="block text-stone-400 text-[11px] mb-1 font-medium">
                     默认投递简历文件
                   </label>
-                  <div className="flex items-center justify-between p-3 rounded-xl border border-[var(--grid)] bg-[#1c1917]">
+                  <div className="flex items-center justify-between p-3 rounded-xl border border-[var(--grid)] bg-[var(--panel-2)]">
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <FileText className="size-4 text-amber-400 shrink-0" />
+                      <FileText className={`size-4 shrink-0 ${isMonochrome ? "text-zinc-300" : "text-amber-400"}`} />
                       <span className="font-medium text-stone-200 truncate">{defaultResumeName}</span>
                     </div>
                     <button
@@ -339,7 +350,9 @@ export default function SettingsModal({
                         onClose();
                         onGoToResumes();
                       }}
-                      className="text-amber-400 hover:underline flex items-center gap-1 text-[11px] shrink-0 ml-2 cursor-pointer"
+                      className={`hover:underline flex items-center gap-1 text-[11px] shrink-0 ml-2 cursor-pointer ${
+                        isMonochrome ? "text-zinc-300 hover:text-white" : "text-amber-400"
+                      }`}
                     >
                       <span>前往简历库更换</span>
                       <ExternalLink className="size-3" />
@@ -352,7 +365,11 @@ export default function SettingsModal({
                     type="button"
                     onClick={handleSaveAll}
                     disabled={busy}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold transition-all cursor-pointer"
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${
+                      isMonochrome
+                        ? "bg-white hover:bg-zinc-200 text-black shadow-md shadow-white/10"
+                        : "bg-amber-500 hover:bg-amber-400 text-stone-950 shadow-md shadow-amber-500/20"
+                    }`}
                   >
                     {savedSuccess ? <Check className="size-3.5" /> : <Save className="size-3.5" />}
                     <span>{savedSuccess ? "已保存" : "保存信息"}</span>
@@ -363,57 +380,161 @@ export default function SettingsModal({
 
             {/* 3. 外观主题 */}
             {activeTab === "appearance" && (
-              <div className="space-y-5">
+              <div className="space-y-6">
                 <div>
-                  <label className="block text-stone-400 text-[11px] mb-2 font-medium">
-                    界面显示主题
-                  </label>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <label className="block text-[var(--muted-fg)] text-[11px] font-semibold tracking-wide uppercase">
+                      {isEn ? "Interface Theme" : "界面显示主题"}
+                    </label>
+                    <span className="text-[10px] text-stone-500">
+                      {isEn ? "Instant preview & auto-saved" : "即时切换 · 自动保存"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                    {/* 1. 经典黑金 (默认) */}
                     <button
                       type="button"
-                      onClick={() => setTheme("dark")}
-                      className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all cursor-pointer ${
-                        theme === "dark"
-                          ? "border-amber-500/70 bg-amber-500/10 text-amber-300 font-bold"
-                          : "border-[var(--grid)] bg-[#1c1917] text-stone-400 hover:text-white"
+                      onClick={() => setAppTheme("classic")}
+                      className={`p-3.5 rounded-2xl border flex flex-col justify-between gap-3 transition-all cursor-pointer relative overflow-hidden group text-left ${
+                        appTheme === "classic"
+                          ? "border-amber-500/80 bg-amber-500/10 text-amber-300 font-bold shadow-lg shadow-amber-500/10 ring-1 ring-amber-500/30"
+                          : "border-[var(--grid)] bg-[var(--panel-2)] text-[var(--muted-fg)] hover:text-white hover:border-amber-500/40 hover:bg-[var(--panel-hover)]"
                       }`}
                     >
-                      <Moon className="size-5" />
-                      <span>深色模式 (默认)</span>
+                      <div className="flex items-center justify-between w-full">
+                        <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 group-hover:scale-105 transition-transform">
+                          <Sparkles className="size-4" />
+                        </div>
+                        {appTheme === "classic" ? (
+                          <span className="text-[10px] font-semibold text-amber-400 bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <Check className="size-3" />
+                            <span>{isEn ? "Active" : "当前使用"}</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-amber-400/60 font-mono">Default</span>
+                        )}
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-bold text-stone-100 flex items-center gap-1.5">
+                          <span>{isEn ? "Classic Warm Amber" : "经典黑金"}</span>
+                          <span className="text-[10px] font-normal text-amber-400/80">
+                            {isEn ? "(Default)" : "(默认)"}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-stone-400 mt-1 leading-relaxed">
+                          {isEn
+                            ? "Warm dark tone, amber cyber glow, geek cockpit aesthetic"
+                            : "沉浸暖黑底色 · 金琥珀微光 · 经典极客质感"}
+                        </div>
+                      </div>
+
+                      {/* 视觉调色板微缩胶囊 */}
+                      <div className="flex items-center gap-1.5 pt-1 border-t border-[var(--grid)]/60 w-full">
+                        <span className="h-2 w-6 rounded-full bg-[#141210] border border-amber-500/40" />
+                        <span className="h-2 w-4 rounded-full bg-amber-500" />
+                        <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                      </div>
                     </button>
 
+                    {/* 2. 黑白高级感 */}
                     <button
                       type="button"
-                      onClick={() => setTheme("light")}
-                      className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all cursor-pointer ${
-                        theme === "light"
-                          ? "border-amber-500/70 bg-amber-500/10 text-amber-300 font-bold"
-                          : "border-[var(--grid)] bg-[#1c1917] text-stone-400 hover:text-white opacity-60"
+                      onClick={() => setAppTheme("monochrome")}
+                      className={`p-3.5 rounded-2xl border flex flex-col justify-between gap-3 transition-all cursor-pointer relative overflow-hidden group text-left ${
+                        appTheme === "monochrome"
+                          ? "border-white/90 bg-white/10 text-white font-bold shadow-xl shadow-white/10 ring-1 ring-white/40"
+                          : "border-[var(--grid)] bg-[var(--panel-2)] text-[var(--muted-fg)] hover:text-white hover:border-white/40 hover:bg-[var(--panel-hover)]"
                       }`}
                     >
-                      <Sun className="size-5" />
-                      <span>浅色模式 (即将支持)</span>
+                      <div className="flex items-center justify-between w-full">
+                        <div className="p-2 rounded-xl bg-white/15 text-white border border-white/30 group-hover:scale-105 transition-transform">
+                          <Contrast className="size-4" />
+                        </div>
+                        {appTheme === "monochrome" ? (
+                          <span className="text-[10px] font-semibold text-black bg-white px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                            <Check className="size-3" />
+                            <span>{isEn ? "Active" : "当前使用"}</span>
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-semibold bg-white/10 text-zinc-300 px-1.5 py-0.2 rounded border border-white/20">
+                            Luxe
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-bold text-stone-100 flex items-center gap-1.5">
+                          <span>{isEn ? "Monochrome Luxe" : "黑白高级感"}</span>
+                          <span className="text-[9px] font-semibold bg-white text-black px-1.5 py-0.2 rounded">
+                            高奢
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-zinc-400 mt-1 leading-relaxed">
+                          {isEn
+                            ? "Deep obsidian black, zinc silver tiers, high-contrast PillNav invert"
+                            : "纯粹极夜曜黑 · 钛银灰阶 · 高反差 PillNav 翻转"}
+                        </div>
+                      </div>
+
+                      {/* 视觉调色板微缩胶囊 */}
+                      <div className="flex items-center gap-1.5 pt-1 border-t border-[var(--grid)]/60 w-full">
+                        <span className="h-2 w-6 rounded-full bg-black border border-white/40" />
+                        <span className="h-2 w-4 rounded-full bg-white" />
+                        <span className="h-2 w-2 rounded-full bg-zinc-400" />
+                      </div>
                     </button>
 
+                    {/* 3. 跟随系统 */}
                     <button
                       type="button"
-                      onClick={() => setTheme("system")}
-                      className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all cursor-pointer ${
-                        theme === "system"
-                          ? "border-amber-500/70 bg-amber-500/10 text-amber-300 font-bold"
-                          : "border-[var(--grid)] bg-[#1c1917] text-stone-400 hover:text-white"
+                      onClick={() => setAppTheme("system")}
+                      className={`p-3.5 rounded-2xl border flex flex-col justify-between gap-3 transition-all cursor-pointer relative overflow-hidden group text-left ${
+                        appTheme === "system"
+                          ? "border-cyan-500/80 bg-cyan-500/10 text-cyan-300 font-bold shadow-lg shadow-cyan-500/10 ring-1 ring-cyan-500/30"
+                          : "border-[var(--grid)] bg-[var(--panel-2)] text-[var(--muted-fg)] hover:text-white hover:border-cyan-500/40 hover:bg-[var(--panel-hover)]"
                       }`}
                     >
-                      <Laptop className="size-5" />
-                      <span>跟随系统</span>
+                      <div className="flex items-center justify-between w-full">
+                        <div className="p-2 rounded-xl bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 group-hover:scale-105 transition-transform">
+                          <Laptop className="size-4" />
+                        </div>
+                        {appTheme === "system" ? (
+                          <span className="text-[10px] font-semibold text-cyan-400 bg-cyan-500/20 border border-cyan-500/40 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <Check className="size-3" />
+                            <span>{isEn ? "Active" : "当前使用"}</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-cyan-400/60 font-mono">Auto</span>
+                        )}
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-bold text-stone-100 flex items-center gap-1.5">
+                          <span>{isEn ? "System Adaptive" : "跟随系统"}</span>
+                        </div>
+                        <div className="text-[10px] text-stone-400 mt-1 leading-relaxed">
+                          {isEn
+                            ? "Adapt automatically according to OS dark/contrast appearance"
+                            : "自适应检测系统深色与高对比外观模式"}
+                        </div>
+                      </div>
+
+                      {/* 视觉调色板微缩胶囊 */}
+                      <div className="flex items-center gap-1.5 pt-1 border-t border-[var(--grid)]/60 w-full">
+                        <span className="h-2 w-6 rounded-full bg-stone-900 border border-cyan-500/40" />
+                        <span className="h-2 w-4 rounded-full bg-cyan-400" />
+                        <span className="h-2 w-2 rounded-full bg-stone-500" />
+                      </div>
                     </button>
                   </div>
                 </div>
 
                 <div className="pt-3 border-t border-[var(--grid)]">
-                  <label className="block text-stone-400 text-[11px] mb-2 font-medium flex items-center gap-1.5">
-                    <Languages className="size-3.5 text-stone-400" />
-                    <span>系统显示语言 (Language)</span>
+                  <label className="block text-[var(--muted-fg)] text-[11px] mb-2 font-semibold tracking-wide uppercase flex items-center gap-1.5">
+                    <Languages className="size-3.5 text-[var(--muted-fg)]" />
+                    <span>{isEn ? "System Language" : "系统显示语言 (Language)"}</span>
                   </label>
                   <div className="grid grid-cols-2 gap-3">
                     {LANGS.map((item) => (
@@ -423,12 +544,16 @@ export default function SettingsModal({
                         onClick={() => onSetLang(item.value)}
                         className={`p-3 rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
                           lang === item.value
-                            ? "border-amber-500/70 bg-amber-500/10 text-amber-300 font-bold"
-                            : "border-[var(--grid)] bg-[#1c1917] text-stone-400 hover:text-white"
+                            ? isMonochrome
+                              ? "border-white/80 bg-white/10 text-white font-bold"
+                              : "border-amber-500/70 bg-amber-500/10 text-amber-300 font-bold"
+                            : "border-[var(--grid)] bg-[var(--panel-2)] text-[var(--muted-fg)] hover:text-white hover:bg-[var(--panel-hover)]"
                         }`}
                       >
                         <span className="text-xs">{item.label}</span>
-                        {lang === item.value && <Check className="size-3.5 text-amber-400" />}
+                        {lang === item.value && (
+                          <Check className={`size-3.5 ${isMonochrome ? "text-white" : "text-amber-400"}`} />
+                        )}
                       </button>
                     ))}
                   </div>
@@ -464,8 +589,10 @@ export default function SettingsModal({
                         onClick={() => handleSelectPreset(p)}
                         className={`px-3 py-1.5 rounded-xl border text-xs transition-all cursor-pointer ${
                           selectedPreset === p.id
-                            ? "border-amber-500/70 bg-amber-500/15 text-amber-300 font-bold"
-                            : "border-[var(--grid)] bg-[#1c1917] text-stone-400 hover:text-white"
+                            ? isMonochrome
+                              ? "border-white/80 bg-white/15 text-white font-bold"
+                              : "border-amber-500/70 bg-amber-500/15 text-amber-300 font-bold"
+                            : "border-[var(--grid)] bg-[var(--panel-2)] text-[var(--muted-fg)] hover:text-white hover:bg-[var(--panel-hover)]"
                         }`}
                       >
                         {p.label}
@@ -515,7 +642,7 @@ export default function SettingsModal({
                 </div>
 
                 {modelStatusMsg && (
-                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
+                  <div className={`p-2.5 rounded-xl border text-xs ${isMonochrome ? "bg-white/10 border-white/20 text-white" : "bg-amber-500/10 border-amber-500/20 text-amber-300"}`}>
                     {modelStatusMsg}
                   </div>
                 )}
@@ -524,7 +651,11 @@ export default function SettingsModal({
                   <button
                     type="button"
                     onClick={handleSaveModel}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold transition-all cursor-pointer shadow-md"
+                    className={`px-4 py-2 rounded-xl font-bold transition-all cursor-pointer shadow-md ${
+                      isMonochrome
+                        ? "bg-white hover:bg-zinc-200 text-black shadow-white/10"
+                        : "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 shadow-amber-500/20"
+                    }`}
                   >
                     保存大模型配置
                   </button>
@@ -535,7 +666,7 @@ export default function SettingsModal({
             {/* 6. 关于 */}
             {activeTab === "about" && (
               <div className="space-y-4">
-                <div className="p-4 rounded-xl border border-[var(--grid)] bg-[#1c1917] flex items-center gap-3.5">
+                <div className="p-4 rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] flex items-center gap-3.5">
                   <img src="/favicon.png" alt="Logo" className="size-10 rounded-xl border border-pink-400/30" />
                   <div>
                     <div className="font-bold text-sm text-stone-100">JobHunter 求职助手</div>
@@ -553,7 +684,7 @@ export default function SettingsModal({
                   <button
                     type="button"
                     onClick={() => alert("当前已是最新版本 v0.2.0")}
-                    className="text-amber-400 hover:underline cursor-pointer"
+                    className={`hover:underline cursor-pointer ${isMonochrome ? "text-zinc-300 hover:text-white" : "text-amber-400"}`}
                   >
                     检查更新
                   </button>

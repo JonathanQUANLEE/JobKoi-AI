@@ -72,6 +72,7 @@ export default function Sidebar({
 
   const notification = useRunStore((s) => s.notification);
   const clearNotification = useRunStore((s) => s.clearNotification);
+  const isMonochrome = useRunStore((s) => s.theme === "monochrome");
 
   const handleCollapseClick = () => {
     setCollapseRipple(true);
@@ -96,14 +97,20 @@ export default function Sidebar({
 
   return (
     <aside
-      className={`relative flex h-screen shrink-0 flex-col border-r border-[var(--grid)] bg-[#141210] select-none z-30 water-fluid-sidebar overflow-hidden ${
+      className={`relative flex h-screen shrink-0 flex-col border-r border-[var(--grid)] bg-[var(--sidebar-bg)] select-none z-30 water-fluid-sidebar overflow-hidden ${
         collapsed
           ? "w-0 opacity-0 -translate-x-6 blur-[2px] border-r-0 pointer-events-none"
           : "w-60 opacity-100 translate-x-0 blur-0"
       }`}
     >
       {/* 水面张力微光光晕边线 */}
-      <div className="absolute top-0 right-0 bottom-0 w-[1px] bg-gradient-to-b from-transparent via-amber-400/25 via-cyan-400/20 to-transparent pointer-events-none z-40" />
+      <div
+        className={`absolute top-0 right-0 bottom-0 w-[1px] pointer-events-none z-40 ${
+          isMonochrome
+            ? "bg-gradient-to-b from-transparent via-white/20 via-zinc-400/15 to-transparent"
+            : "bg-gradient-to-b from-transparent via-amber-400/25 via-cyan-400/20 to-transparent"
+        }`}
+      />
 
       {/* 内部固定宽度容器，防止侧边栏展开/收起时内容被挤压变形 */}
       <div className="w-60 min-w-[15rem] h-full flex flex-col justify-between overflow-hidden">
@@ -116,12 +123,16 @@ export default function Sidebar({
                 alt="JobHunter Bunny"
                 className="h-8 w-8 rounded-xl object-cover shadow-md shadow-pink-500/20 border border-pink-400/40"
               />
-              <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-[#141210]" />
+              <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-[var(--sidebar-bg)]" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-sm tracking-tight text-[var(--ink)]">JobHunter</span>
-                <span className="rounded bg-pink-500/15 border border-pink-500/30 px-1 py-0.2 text-[9px] font-semibold text-pink-300">
+                <span className={`rounded border px-1 py-0.2 text-[9px] font-semibold ${
+                  isMonochrome
+                    ? "bg-white/10 border-white/25 text-zinc-200"
+                    : "bg-pink-500/15 border-pink-500/30 text-pink-300"
+                }`}>
                   {lang === "en" ? "Pro" : "Offer版"}
                 </span>
               </div>
@@ -136,7 +147,7 @@ export default function Sidebar({
             <button
               type="button"
               onClick={handleCollapseClick}
-              className="relative flex h-7 w-7 items-center justify-center rounded-lg border border-transparent hover:border-[var(--grid)] text-stone-400 hover:text-stone-200 hover:bg-[#1f1c19] active:scale-95 transition-all ml-1 shrink-0 cursor-pointer overflow-visible"
+              className="relative flex h-7 w-7 items-center justify-center rounded-lg border border-transparent hover:border-[var(--grid)] text-stone-400 hover:text-stone-200 hover:bg-[var(--panel-hover)] active:scale-95 transition-all ml-1 shrink-0 cursor-pointer overflow-visible"
               title={lang === "en" ? "Collapse Sidebar (Ctrl+B)" : "收起侧边栏 (Ctrl+B)"}
               aria-label={lang === "en" ? "Collapse Sidebar" : "收起侧边栏"}
             >
@@ -301,10 +312,10 @@ export default function Sidebar({
       )}
 
       {/* 左下角用户与设置菜单触发器（WorkBuddy 架构） */}
-      <div className="relative border-t border-[var(--grid)]/80 p-2.5 bg-[#100e0d]" ref={menuRef}>
+      <div className="relative border-t border-[var(--grid)]/80 p-2.5 bg-[var(--sidebar-bg)]" ref={menuRef}>
         {/* 向上滑出的弹出菜单 (Popover Menu - 装备 React Bits PillNav 气泡交互) */}
         {menuOpen && (
-          <div className="absolute bottom-16 left-2 right-2 rounded-2xl border border-[var(--grid)] bg-[#1a1816] p-3 shadow-2xl backdrop-blur-md z-50 text-xs space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-150">
+          <div className="absolute bottom-16 left-2 right-2 rounded-2xl border border-[var(--grid)] bg-[var(--panel-2)] p-3 shadow-2xl backdrop-blur-md z-50 text-xs space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-150">
             {/* 用户状态徽章 */}
             <div className="flex items-center gap-2.5 pb-2.5 border-b border-[var(--grid)]">
               <img
@@ -315,7 +326,11 @@ export default function Sidebar({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-[var(--ink)]">{lang === "en" ? "Job Hunter" : "求职锦鲤"}</span>
-                  <span className="text-[10px] text-amber-400 font-semibold px-1.5 py-0.2 rounded bg-amber-500/15">
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.2 rounded ${
+                    isMonochrome
+                      ? "text-zinc-200 bg-white/10 border border-white/20"
+                      : "text-amber-400 bg-amber-500/15"
+                  }`}>
                     {lang === "en" ? "PRO" : "尊享版"}
                   </span>
                 </div>
@@ -333,7 +348,7 @@ export default function Sidebar({
                   setMenuOpen(false);
                   onOpenSettingsModal?.();
                 }}
-                icon={<Settings className="h-3.5 w-3.5 text-amber-400 shrink-0" />}
+                icon={<Settings className={`h-3.5 w-3.5 shrink-0 ${isMonochrome ? "text-zinc-300" : "text-amber-400"}`} />}
                 label={lang === "en" ? "System Settings" : "系统设置"}
                 shortcut="Ctrl+,"
               />
@@ -413,7 +428,9 @@ export default function Sidebar({
                     onClick={() => onSetLang(item.value)}
                     className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all cursor-pointer ${
                       lang === item.value
-                        ? "bg-amber-500 text-stone-950 font-bold"
+                        ? isMonochrome
+                          ? "bg-white text-black font-bold"
+                          : "bg-amber-500 text-stone-950 font-bold"
                         : "text-stone-400 hover:text-stone-200"
                     }`}
                   >
@@ -429,7 +446,7 @@ export default function Sidebar({
         <button
           type="button"
           onClick={() => setMenuOpen(!menuOpen)}
-          className="w-full flex items-center justify-between rounded-xl p-2 hover:bg-[#1f1c19] active:scale-[0.98] transition-all cursor-pointer"
+          className="w-full flex items-center justify-between rounded-xl p-2 hover:bg-[var(--panel-hover)] active:scale-[0.98] transition-all cursor-pointer"
         >
           <div className="flex items-center gap-2.5 min-w-0">
             <img

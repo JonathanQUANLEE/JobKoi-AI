@@ -10,6 +10,14 @@
   color-scheme: light dark;
 }
 
+[data-theme="monochrome"] {
+  --bento-glow-color: 240, 240, 245;
+  --bento-glow: rgba(255, 255, 255, 0.12);
+  --bento-border: rgba(255, 255, 255, 0.4);
+  --border-color: #27272a;
+  --background-dark: #0d0d10;
+}
+
 .card-grid {
   display: grid;
   gap: 0.75rem;
