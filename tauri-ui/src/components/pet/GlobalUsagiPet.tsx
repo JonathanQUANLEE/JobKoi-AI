@@ -19,11 +19,12 @@ interface GlobalUsagiPetProps {
 const STORAGE_POS_KEY = "jobhunter_usagi_floating_pos";
 
 const USAGI_LINES_ZH = [
-  "ヤハ！今天也要元气满满投递，拿下好 Offer！🌟",
-  "ウラ！乌萨奇特助在此，随时待命！💪",
-  "プルルルル！点我上面的牌子可以开启定时巡航哦~ ⏰",
+  "ヤハ！打工！打工！今天也要元气满满投递，拿下好 Offer！🌟",
+  "ウラ！乌萨奇特助在此，冲冲冲拔草投递去喽！💪",
+  "プルルルル！大风车转转转，好运 Offer 快快来！🌀",
+  "哈？！点点我上面的木牌，定时自动巡航超省心~ ⏰",
   "记得喝杯水，活动一下脖子和眼睛哦~ 🍵",
-  "フゥン！每一份投递都在向目标靠近！✨",
+  "フゥン！每一份投递都在向理想团队靠近！✨",
 ];
 
 const USAGI_LINES_JA = [
@@ -38,7 +39,8 @@ const POKE_LINES_ZH = [
   "ヤハッ！摸摸耳朵，求职锦鲤附体！(*^▽^*)",
   "ウラララ！收到主人的拍拍，元气值爆表！💥",
   "プルルルル！大风车甩手蓄力中！🌀",
-  "哈？（歪头晃耳朵）🐰",
+  "哈？（歪头呆萌斜视）🐰",
+  "呜啦啦啦啦！求职打怪升级冲冲冲！🔥",
 ];
 
 const POKE_LINES_JA = [
@@ -149,8 +151,8 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
       if (!dragStartRef.current.moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) {
         dragStartRef.current.moved = true;
         setAction("jump");
-        usagiSound.play("ura");
-        setSpeech(isJa ? "ウラ！お引越し中！🎈" : "哇！抓起来转移阵地啦！🎈");
+        usagiSound.play("grabbed");
+        setSpeech(isJa ? "ウラ！お引越し中！🎈" : "哇！被抓起来转移阵地啦！🎈");
       }
 
       if (dragStartRef.current.moved) {
@@ -172,18 +174,22 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
       setIsDragging(false);
 
       if (didMove) {
-        // 拖拽落地：保存停靠位置，欢快落地音效
+        // 拖拽落地：保存停靠位置，播放落地音效 (spawn.wav)
         setAction("jump");
-        usagiSound.play("yaha");
+        usagiSound.play("spawn");
         setSpeech(isJa ? "ここに決めた！🐾" : "就在这里安家啦！🐾");
         try {
           localStorage.setItem(STORAGE_POS_KEY, JSON.stringify(pos));
         } catch {}
         setTimeout(() => setAction("idle"), 600);
       } else {
-        // 纯点击：触发单击互动并弹出定时告示木牌
+        // 纯点击：触发单击互动，随机播放问候 (hi.wav) 或经典歪头 (mock.wav)
         setAction("jump");
-        usagiSound.play("yaha");
+        if (Math.random() < 0.25) {
+          usagiSound.play("mock");
+        } else {
+          usagiSound.play("hi");
+        }
         const pool = isJa ? POKE_LINES_JA : POKE_LINES_ZH;
         setSpeech(pool[Math.floor(Math.random() * pool.length)]);
         setSpeechVisible(true);
@@ -202,11 +208,11 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
     };
   }, [isDragging, pos, isJa]);
 
-  // 4. 双击乌萨奇：经典大风车甩手旋转 (Usagi Roll) + プルルルル！
+  // 4. 双击乌萨奇：经典大风车甩手旋转 (Usagi Roll) + 狂舞音效 (danceswirl.wav)
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setAction("roll");
-    usagiSound.play("pululu");
+    usagiSound.play("danceswirl");
     setSpeech(isJa ? "プルルルルルル！🌀💥" : "プルルルルルル！🌀💥");
     setSpeechVisible(true);
     setTimeout(() => {
@@ -222,16 +228,16 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
     try {
       localStorage.setItem(STORAGE_POS_KEY, JSON.stringify(def));
     } catch {}
-    usagiSound.play("yaha");
+    usagiSound.play("hi");
     setSpeech(isJa ? "側辺に戻ったよ！🏠" : "回到侧边栏啦！🏠");
   };
 
-  // 6. 巡航状态联动
+  // 6. 巡航状态联动 (开启狂欢进行曲 dance.wav)
   useEffect(() => {
     if (running) {
       setAction("running");
-      setSpeech(isJa ? "ヤハ！全速力で求人巡航中！🚀" : "ヤハ！正在全速巡航投递中！🚀");
-      usagiSound.play("yaha");
+      setSpeech(isJa ? "ヤハ！全速力で求人巡航中！🚀" : "ヤハ！全速巡航打卡投递中！🚀");
+      usagiSound.play("dance");
     } else {
       if (action === "running") {
         setAction("jump");
