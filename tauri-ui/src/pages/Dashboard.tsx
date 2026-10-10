@@ -280,7 +280,7 @@ export default function Dashboard() {
 
           {/* TAB 3: 简历资料库 */}
           {activeNav === "resumes" && (
-            <div className="max-w-6xl mx-auto space-y-5">
+            <div className="w-full space-y-4">
               <ResumePanel
                 onExtractProfile={(resumeName, text) => {
                   pushAgentMessage({

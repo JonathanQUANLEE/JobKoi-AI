@@ -52,8 +52,19 @@
     0 0 1px 1px rgba(255, 255, 255, 0.18);
 }
 
+/* 专注阅读模式样式与防滚动击穿 */
+.reading-content-zone {
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+}
+
+.allow-inner-scroll {
+  overscroll-behavior: contain;
+}
+
 @media (max-width: 768px) {
   .card-swap-container {
     transform: scale(0.85);
   }
 }
+
