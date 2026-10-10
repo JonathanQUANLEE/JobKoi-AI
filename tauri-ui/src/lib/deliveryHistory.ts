@@ -92,10 +92,29 @@ function generateSeedRecords(): DayDeliveryRecord[] {
   return list;
 }
 
+let memoryStore: Record<string, string> = {};
+
+function getStored(key: string): string | null {
+  try {
+    if (typeof localStorage !== "undefined") return localStorage.getItem(key);
+  } catch {}
+  return memoryStore[key] || null;
+}
+
+function setStored(key: string, val: string): void {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(key, val);
+      return;
+    }
+  } catch {}
+  memoryStore[key] = val;
+}
+
 export const deliveryHistoryDb = {
   getRecords(): DayDeliveryRecord[] {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = getStored(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as DayDeliveryRecord[];
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -103,16 +122,12 @@ export const deliveryHistoryDb = {
     } catch {}
 
     const seeded = generateSeedRecords();
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
-    } catch {}
+    setStored(STORAGE_KEY, JSON.stringify(seeded));
     return seeded;
   },
 
   saveRecords(records: DayDeliveryRecord[]): void {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-    } catch {}
+    setStored(STORAGE_KEY, JSON.stringify(records));
   },
 
   /**
