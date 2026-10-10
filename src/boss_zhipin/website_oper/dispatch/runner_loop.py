@@ -1,63 +1,35 @@
-"""主投递巡航循环（DOM 推荐流与搜索流调度）。"""
+"""主投递巡航循环（DOM 推荐流与搜索流调度）。
+
+Facade 与调度中枢：
+- 交互动作拆至 loop_actions
+- 模式分支拆至 loop_modes
+- 翻页与加载恢复拆至 loop_navigator
+- 岗位匹配规则计算拆至 job_evaluator
+"""
 from __future__ import annotations
 
-import asyncio
 import logging
-import os
-import random
+
+from boss_zhipin.website_oper.dispatch.job_evaluator import evaluate_job_match
+from boss_zhipin.website_oper.dispatch.loop_actions import (
+    click_contact_and_send_response,
+    compose_greeting,
+    send_response_and_go_back,
+)
+from boss_zhipin.website_oper.dispatch.loop_modes import (
+    handle_auto_send_job,
+    handle_review_send_job,
+    handle_scan_only_match,
+)
+from boss_zhipin.website_oper.dispatch.loop_navigator import (
+    handle_missing_jd_recovery,
+    reload_feed_and_restart,
+)
 
 log = logging.getLogger(__name__)
 
-
-async def send_response_and_go_back(response: str) -> None:
-    """在 BOSS 沟通页发送 ``response`` 然后退回到列表。"""
-    from boss_zhipin.website_oper import finding_jobs
-
-    await finding_jobs.send_chat_message(response)
-    await finding_jobs.click_send_resume(timeout=5)
-    await asyncio.sleep(10)
-    if not await finding_jobs.return_to_job_list():
-        raise RuntimeError("发送后未能返回岗位列表")
-
-
-async def click_contact_and_send_response(response: str) -> None:
-    """点击“立即沟通”，并兼容 BOSS 直接发送招呼语后的确认弹窗。"""
-    from boss_zhipin.website_oper import finding_jobs, write_response
-
-    contact_xpath = "//a[contains(@class, 'op-btn-chat')]"
-    if not await finding_jobs.click_by_xpath(contact_xpath, timeout=10):
-        raise RuntimeError("立即沟通按钮未找到")
-
-    if await finding_jobs.click_stay_on_page_if_present():
-        log.info("BOSS 已确认发送招呼语，并已留在岗位页")
-        return
-
-    await finding_jobs.dismiss_greeting_dialog(timeout=5)
-
-    if not await finding_jobs.wait_for_css("#chat-input", timeout=50):
-        raise RuntimeError("chat input (#chat-input) 未找到")
-    await write_response.send_response_and_go_back(response)
-
-
-async def _compose_greeting(job_description: str, fixed_greeting: str) -> tuple[str, str]:
-    """F5：review 模式下组合招呼语。返回 ``(greeting, source)``。"""
-    enabled = os.getenv("BOSS_AI_GREETING", "0").strip().lower() in ("1", "true", "yes")
-    if enabled:
-        from boss_zhipin.agent import greeting_generator
-
-        try:
-            result = await greeting_generator.generate_greeting(
-                job_description, fixed_greeting
-            )
-        except Exception as e:
-            log.warning("AI 招呼语生成异常，降级固定招呼语: %s", e)
-            result = {"status": "error", "message": str(e)}
-        if result.get("status") == "ok":
-            return str(result["greeting"]), "ai"
-        log.warning(
-            "AI 招呼语不可用，降级固定招呼语: %s", result.get("message", "未知原因")
-        )
-    return fixed_greeting, "fixed"
+# 向后兼容导出
+_compose_greeting = compose_greeting
 
 
 async def send_job_descriptions_to_chat(
@@ -169,6 +141,7 @@ async def send_job_descriptions_to_chat(
             message=f"从当前选中的第 {start_job_index} 个岗位开始处理。",
         )
         log.info("使用当前页面，从第 %d 个岗位开始运行", start_job_index)
+
     iteration = 0
     consecutive_misses = 0
     consecutive_duplicates = 0
@@ -181,6 +154,7 @@ async def send_job_descriptions_to_chat(
         sent_log_path, profile=write_response._profile_name()
     )
     seen_job_keys: set[str] = write_response._read_seen_job_keys(seen_jobs_path)
+
     if write_response._should_select_label(label, url, use_current_page):
         await finding_jobs.select_dropdown_option(label)
     elif label:
@@ -197,25 +171,6 @@ async def send_job_descriptions_to_chat(
     def advance_window() -> None:
         nonlocal window_index
         window_index += 1
-
-    async def reload_feed_and_restart() -> bool:
-        """列表到底后整页刷新推荐流或轮换下一批意向城市。"""
-        nonlocal window_index, consecutive_misses, consecutive_duplicates
-        nonlocal barren_reloads
-        rotated = await finding_jobs.rotate_next_city_batch(
-            write_response._page_filters_for_click(page_filters),
-            emit_event=lambda payload: write_response._emit_progress("page_filter", **payload),
-        )
-        if not rotated:
-            reloaded = await finding_jobs.reload_current_page()
-            if not reloaded:
-                return False
-        barren_reloads += 1
-        window_index = 1
-        consecutive_misses = 0
-        consecutive_duplicates = 0
-        await write_response.asyncio.sleep(3)
-        return True
 
     while True:
         try:
@@ -242,6 +197,7 @@ async def send_job_descriptions_to_chat(
                 log.info("扫描达到 BOSS_SCAN_MAX_JOBS=%d，结束", scan_max_jobs)
                 write_response._emit_progress("feed_exhausted", total=job_index - 1)
                 break
+
             iteration += 1
             log.info(
                 "=== 第 %d 轮: 处理 job_index=%d window_index=%d ===",
@@ -252,11 +208,13 @@ async def send_job_descriptions_to_chat(
             job = await finding_jobs.get_job_by_index(window_index)
             job_title = job.title if job else ""
             job_description = job.description if job else None
+
             if job_description:
                 job = write_response._job_with_derived_fields(job, job_description)
                 job_title = job.title
                 consecutive_misses = 0
                 dedupe_key = finding_jobs.job_key(job)
+
                 if dedupe_key and dedupe_key in seen_job_keys:
                     consecutive_duplicates += 1
                     duplicate_detail = "本地历史记录中已处理过该岗位"
@@ -288,6 +246,7 @@ async def send_job_descriptions_to_chat(
                         advance_window()
                     else:
                         advance_position()
+
                     if consecutive_duplicates >= MAX_CONSECUTIVE_DUPLICATES:
                         if await finding_jobs.navigate_next_search_page():
                             log.info("当前页全是已投过的岗位，已翻到下一页继续")
@@ -307,7 +266,11 @@ async def send_job_descriptions_to_chat(
                                 attempt=barren_reloads + 1,
                                 limit=MAX_FEED_RELOADS,
                             )
-                            if await reload_feed_and_restart():
+                            if await reload_feed_and_restart(page_filters):
+                                barren_reloads += 1
+                                window_index = 1
+                                consecutive_misses = 0
+                                consecutive_duplicates = 0
                                 continue
                         log.info(
                             "连续 %d 个重复岗位，刷新 %d 次仍无新岗位，结束",
@@ -316,8 +279,10 @@ async def send_job_descriptions_to_chat(
                         )
                         write_response._emit_progress("feed_exhausted", total=job_index - 1)
                         break
+
                     await write_response.asyncio.sleep(3)
                     continue
+
                 if dedupe_key:
                     seen_job_keys.add(dedupe_key)
                     write_response._log_seen(
@@ -325,12 +290,14 @@ async def send_job_descriptions_to_chat(
                     )
                     barren_reloads = 0
                 consecutive_duplicates = 0
+
                 write_response._emit_progress(
                     "job_found",
                     index=job_index,
                     title=job_title,
                     jd_preview=job_description[:80],
                 )
+
                 element = await finding_jobs.get_text_by_css(".op-btn.op-btn-chat")
                 log.info("chat 按钮文字: %r", element)
                 button_text = (element or "").strip()
@@ -367,560 +334,122 @@ async def send_job_descriptions_to_chat(
                     advance_position()
                     await write_response.asyncio.sleep(3)
                     continue
-                if element == "立即沟通":
-                    if profile_filters:
-                        filter_posting = write_response._to_filter_posting(job, job_description)
-                        effective_profile_filters = profile_filters
-                        boss_active_missing = (
-                            boss_active_filter_enabled
-                            and not filter_posting.boss_active_status
-                        )
-                        if boss_active_missing:
-                            effective_profile_filters = write_response._filter_rules_without_boss_active(
-                                profile_filters
-                            )
-                        profile_match = write_response.match_posting(
-                            filter_posting,
-                            effective_profile_filters,
-                        )
-                        match_explanation = write_response.explain_posting_match(
-                            filter_posting,
-                            effective_profile_filters,
-                        )
-                        apply = profile_match.matched
-                        details = {
-                            **match_explanation,
-                            "stage": "profile_filter",
-                            "reason": profile_match.reason,
-                            "matched_keywords": profile_match.matched_keywords,
-                            "missing_keywords": profile_match.missing_keywords,
-                            "job_title": job_title,
-                        }
-                        if boss_active_missing:
-                            details["boss_active_status"] = ""
-                            details["boss_active_note"] = (
-                                "页面未采集到 BOSS 活跃状态，已跳过活跃状态限制，只按岗位规则判断。"
-                            )
-                        if not apply:
-                            log.info(
-                                "⏭️ [profile 跳过 #%d] %s，标题=%r",
-                                job_index,
-                                profile_match.reason,
-                                job_title,
-                            )
-                            write_response._log_skipped(
-                                skipped_log_path,
-                                job=job,
-                                job_key=dedupe_key,
-                                send_mode=send_mode,
-                                reason="profile_filter",
-                                details=details,
-                            )
-                            write_response._emit_progress(
-                                "job_skipped",
-                                index=job_index,
-                                reason="profile_filter",
-                                detail=profile_match.reason,
-                                title=job_title,
-                            )
-                            advance_position()
-                            await write_response.asyncio.sleep(3)
-                            continue
-                    elif scan_only:
-                        term_ok, term_reason = write_response._matches_required_terms(
-                            job_description, scan_required_terms
-                        )
-                        if not term_ok:
-                            apply = False
-                            reason = term_reason
-                        else:
-                            apply, reason = write_response._matches_all_groups(
-                                job_description, scan_groups
-                            )
-                        details = {"stage": "scan_only", "reason": reason}
-                    elif auto_send_fixed_greeting:
-                        apply, reason = write_response._matches_auto_send_job(
-                            title=job_title,
-                            description=job_description,
-                        )
-                        details = {
-                            "stage": "auto_send_fixed_greeting",
-                            "reason": reason,
-                            "matched_keywords": [],
-                            "job_title": job_title,
-                        }
-                        if not apply:
-                            log.info(
-                                "⏭️ [自动发送跳过 #%d] %s，标题=%r",
-                                job_index,
-                                reason,
-                                job_title,
-                            )
-                            write_response._log_skipped(
-                                skipped_log_path,
-                                job=job,
-                                job_key=dedupe_key,
-                                send_mode=send_mode,
-                                reason="auto_send_filter",
-                                details=details,
-                            )
-                            write_response._emit_progress(
-                                "job_skipped",
-                                index=job_index,
-                                reason="auto_send_filter",
-                                detail=reason,
-                                title=job_title,
-                            )
-                            advance_position()
-                            await write_response.asyncio.sleep(3)
-                            continue
-                    elif review_before_send:
-                        term_ok, term_reason = write_response._matches_required_terms(
-                            job_description, review_required_terms
-                        )
-                        if not term_ok:
-                            log.info("⏭️ [跳过 #%d] %s", job_index, term_reason)
-                            write_response._log_skipped(
-                                skipped_log_path,
-                                job=job,
-                                job_key=dedupe_key,
-                                send_mode=send_mode,
-                                reason="required_terms",
-                                details={
-                                    "stage": "required_terms",
-                                    "reason": term_reason,
-                                },
-                            )
-                            write_response._emit_progress(
-                                "job_skipped",
-                                index=job_index,
-                                reason="required_terms",
-                                detail=term_reason,
-                            )
-                            advance_position()
-                            await write_response.asyncio.sleep(3)
-                            continue
-                        location_ok, location_reason = write_response._matches_all_groups(
-                            job_description, [review_locations]
-                        )
-                        if not location_ok:
-                            log.info("⏭️ [跳过 #%d] %s", job_index, location_reason)
-                            write_response._log_skipped(
-                                skipped_log_path,
-                                job=job,
-                                job_key=dedupe_key,
-                                send_mode=send_mode,
-                                reason="required_location",
-                                details={
-                                    "stage": "required_location",
-                                    "reason": location_reason,
-                                },
-                            )
-                            write_response._emit_progress(
-                                "job_skipped",
-                                index=job_index,
-                                reason="required_location",
-                                detail=location_reason,
-                            )
-                            advance_position()
-                            await write_response.asyncio.sleep(3)
-                            continue
-                        apply = True
-                        details = {
-                            "stage": "review",
-                            "reason": "命中审核模式本地条件",
-                            "matched_keywords": [],
-                            "job_title": job_title,
-                        }
 
-                    if scan_only:
-                        if not apply:
-                            log.info(
-                                "⏭️ [扫描跳过 #%d] %s",
-                                job_index,
-                                details.get("reason", ""),
-                            )
-                            write_response._log_skipped(
-                                skipped_log_path,
-                                job=job,
-                                job_key=dedupe_key,
-                                send_mode=send_mode,
-                                reason="scan_only",
-                                details=details,
-                            )
-                            write_response._emit_progress(
-                                "job_skipped",
-                                index=job_index,
-                                reason="scan_only",
-                                detail=details.get("reason", ""),
-                            )
-                            advance_position()
-                            await write_response.asyncio.sleep(3)
-                            continue
+                if element == "立即沟通":
+                    matched, reason, stage_name, details = evaluate_job_match(
+                        job,
+                        job_description,
+                        job_title,
+                        profile_filters=profile_filters,
+                        boss_active_filter_enabled=boss_active_filter_enabled,
+                        scan_only=scan_only,
+                        scan_required_terms=scan_required_terms,
+                        scan_groups=scan_groups,
+                        auto_send_fixed_greeting=auto_send_fixed_greeting,
+                        review_before_send=review_before_send,
+                        review_required_terms=review_required_terms,
+                        review_locations=review_locations,
+                    )
+
+                    if not matched:
                         log.info(
-                            "✅ [扫描命中 #%d] %s", job_index, details.get("reason", "")
+                            "⏭️ [%s 跳过 #%d] %s，标题=%r",
+                            stage_name,
+                            job_index,
+                            reason,
+                            job_title,
                         )
-                        write_response._log_scan_match(
-                            index=job_index,
-                            job_description=job_description,
-                            details=details,
-                        )
-                        write_response._log_sent(
-                            sent_log_path,
+                        write_response._log_skipped(
+                            skipped_log_path,
                             job=job,
                             job_key=dedupe_key,
                             send_mode=send_mode,
-                            status="scan_only",
+                            reason=stage_name,
                             details=details,
-                            dry_run=True,
-                            sent=False,
                         )
                         write_response._emit_progress(
-                            "job_matched",
+                            "job_skipped",
                             index=job_index,
-                            status="scan_only",
-                            detail=details.get("reason", ""),
-                            jd_preview=job_description[:160],
+                            reason=stage_name,
+                            detail=reason,
+                            title=job_title,
                         )
                         advance_position()
                         await write_response.asyncio.sleep(3)
                         continue
 
-                    match_score = None
+                    if scan_only:
+                        await handle_scan_only_match(
+                            job_index=job_index,
+                            job=job,
+                            job_description=job_description,
+                            dedupe_key=dedupe_key,
+                            sent_log_path=sent_log_path,
+                            send_mode=send_mode,
+                            details=details,
+                        )
+                        advance_position()
+                        await write_response.asyncio.sleep(3)
+                        continue
 
                     if auto_send_fixed_greeting:
-                        response = fixed_greeting
-                        validation = write_response.validate_letter(response)
-                        if not validation.ok:
-                            log.warning(
-                                "[BLOCKED] 固定招呼语未通过校验: %s — preview: %r",
-                                validation.reasons,
-                                response[:80],
-                            )
-                            write_response.log_attempt(
-                                source="fixed-greeting",
-                                channel="local",
-                                job_description=job_description,
-                                letter=response,
-                                validation=validation,
-                                dry_run=dry_run,
-                                sent=False,
-                            )
-                            write_response._emit_progress(
-                                "letter_sent",
-                                index=job_index,
-                                status="blocked",
-                                score=match_score,
-                                letter_len=len(response),
-                                match_explanation=write_response._match_explanation(details),
-                                match_details=details,
-                            )
-                            write_response._log_skipped(
-                                skipped_log_path,
-                                job=job,
-                                job_key=dedupe_key,
-                                send_mode=send_mode,
-                                reason="validation",
-                                details={"validation_reasons": validation.reasons},
-                            )
-                            advance_position()
-                            await write_response.asyncio.sleep(3)
-                            continue
-                        if dry_run:
-                            log.info(
-                                "[DRY-RUN][AUTO] 固定招呼语 (%d 字符) 不发送。--- letter ---\n%s\n--------------",
-                                len(response),
-                                response,
-                            )
-                            write_response.log_attempt(
-                                source="fixed-greeting",
-                                channel="local",
-                                job_description=job_description,
-                                letter=response,
-                                validation=validation,
-                                dry_run=True,
-                                sent=False,
-                            )
-                            write_response._emit_progress(
-                                "letter_sent",
-                                index=job_index,
-                                status="dry_run",
-                                score=match_score,
-                                letter_len=len(response),
-                                match_explanation=write_response._match_explanation(details),
-                                match_details=details,
-                            )
-                            write_response._log_sent(
-                                sent_log_path,
-                                job=job,
-                                job_key=dedupe_key,
-                                send_mode=send_mode,
-                                status="dry_run",
-                                details=details,
-                                dry_run=True,
-                                sent=False,
-                            )
-                        else:
-                            log.info("自动发送固定招呼语：%s", response)
-                            await write_response.click_contact_and_send_response(response)
-                            sent_count += 1
-                            daily_sent_count += 1
-                            write_response.log_attempt(
-                                source="fixed-greeting",
-                                channel="local",
-                                job_description=job_description,
-                                letter=response,
-                                validation=validation,
-                                dry_run=False,
-                                sent=True,
-                            )
-                            write_response._emit_progress(
-                                "letter_sent",
-                                index=job_index,
-                                status="sent",
-                                score=match_score,
-                                letter_len=len(response),
-                                match_explanation=write_response._match_explanation(details),
-                                match_details=details,
-                            )
-                            write_response._log_sent(
-                                sent_log_path,
-                                job=job,
-                                job_key=dedupe_key,
-                                send_mode=send_mode,
-                                status="sent",
-                                details=details,
-                                dry_run=False,
-                                sent=True,
-                            )
-                            if sent_count >= auto_send_max_sent:
-                                log.info(
-                                    "已发送 %d 条，达到 BOSS_AUTO_SEND_MAX_SENT 上限，结束",
-                                    sent_count,
-                                )
-                                write_response._emit_progress("feed_exhausted", total=job_index)
-                                break
-                            delay = write_response.random.uniform(
-                                auto_send_delay_min, auto_send_delay_max
-                            )
-                            log.info("自动发送节流等待 %.1f 秒后继续", delay)
-                            await write_response.asyncio.sleep(delay)
+                        should_stop, sent_count, daily_sent_count = await handle_auto_send_job(
+                            job_index=job_index,
+                            job=job,
+                            job_description=job_description,
+                            dedupe_key=dedupe_key,
+                            fixed_greeting=fixed_greeting,
+                            dry_run=dry_run,
+                            sent_log_path=sent_log_path,
+                            skipped_log_path=skipped_log_path,
+                            send_mode=send_mode,
+                            details=details,
+                            auto_send_max_sent=auto_send_max_sent,
+                            delay_min=auto_send_delay_min,
+                            delay_max=auto_send_delay_max,
+                            sent_count=sent_count,
+                            daily_sent_count=daily_sent_count,
+                        )
+                        if should_stop:
+                            break
                         advance_position()
                         await write_response.asyncio.sleep(3)
                         continue
 
                     if review_before_send:
-                        response, greeting_source = await write_response._compose_greeting(
-                            job_description, fixed_greeting
+                        status = await handle_review_send_job(
+                            job_index=job_index,
+                            job=job,
+                            job_description=job_description,
+                            dedupe_key=dedupe_key,
+                            fixed_greeting=fixed_greeting,
+                            dry_run=dry_run,
+                            gui_review=gui_review,
+                            sent_log_path=sent_log_path,
+                            skipped_log_path=skipped_log_path,
+                            send_mode=send_mode,
+                            details=details,
                         )
-                        validation = write_response.validate_letter(response)
-                        if not validation.ok:
-                            log.warning(
-                                "[BLOCKED] 固定招呼语未通过校验: %s — preview: %r",
-                                validation.reasons,
-                                response[:80],
-                            )
-                            write_response.log_attempt(
-                                source="fixed-greeting",
-                                channel="local",
-                                job_description=job_description,
-                                letter=response,
-                                validation=validation,
-                                dry_run=dry_run,
-                                sent=False,
-                            )
-                            write_response._emit_progress(
-                                "letter_sent",
-                                index=job_index,
-                                status="blocked",
-                                score=match_score,
-                                letter_len=len(response),
-                                match_explanation=write_response._match_explanation(details),
-                                match_details=details,
-                            )
-                            write_response._log_skipped(
-                                skipped_log_path,
-                                job=job,
-                                job_key=dedupe_key,
-                                send_mode=send_mode,
-                                reason="validation",
-                                details={"validation_reasons": validation.reasons},
-                            )
-                            advance_position()
-                            await write_response.asyncio.sleep(3)
-                            continue
-                        if gui_review:
-                            decision = await write_response._ask_gui_review_decision(
-                                index=job_index,
-                                job=job,
-                                job_description=job_description,
-                                details=details,
-                                greeting=response,
-                            )
-                        else:
-                            decision = await write_response._ask_review_decision(
-                                index=job_index,
-                                job_description=job_description,
-                                details=details,
-                                greeting=response,
-                            )
-                        if decision == "quit":
-                            log.info("用户在审核模式选择退出")
-                            write_response._emit_progress("feed_exhausted", total=job_index - 1)
+                        if status == "quit":
                             break
-                        if decision == "skip":
-                            log.info("用户跳过岗位 #%d", job_index)
-                            write_response._log_skipped(
-                                skipped_log_path,
-                                job=job,
-                                job_key=dedupe_key,
-                                send_mode=send_mode,
-                                reason="review_skip",
-                                details=details,
-                            )
-                            write_response._emit_progress(
-                                "job_skipped",
-                                index=job_index,
-                                reason="review_skip",
-                                detail="用户审核后跳过",
-                                score=match_score,
-                            )
-                            advance_position()
-                            await write_response.asyncio.sleep(3)
-                            continue
-                        if dry_run:
-                            log.info(
-                                "[DRY-RUN][REVIEW] 固定招呼语 (%d 字符) 不发送。--- letter ---\n%s\n--------------",
-                                len(response),
-                                response,
-                            )
-                            write_response.log_attempt(
-                                source="fixed-greeting",
-                                channel="local",
-                                job_description=job_description,
-                                letter=response,
-                                validation=validation,
-                                dry_run=True,
-                                sent=False,
-                            )
-                            write_response._emit_progress(
-                                "letter_sent",
-                                index=job_index,
-                                status="dry_run",
-                                score=match_score,
-                                letter_len=len(response),
-                                match_explanation=write_response._match_explanation(details),
-                                match_details=details,
-                            )
-                            write_response._log_sent(
-                                sent_log_path,
-                                job=job,
-                                job_key=dedupe_key,
-                                send_mode=send_mode,
-                                status="dry_run",
-                                details=details,
-                                dry_run=True,
-                                sent=False,
-                            )
-                        else:
-                            log.info("审核通过，发送固定招呼语：%s", response)
-                            await write_response.click_contact_and_send_response(response)
-                            write_response.log_attempt(
-                                source="fixed-greeting",
-                                channel="local",
-                                job_description=job_description,
-                                letter=response,
-                                validation=validation,
-                                dry_run=False,
-                                sent=True,
-                            )
-                            write_response._emit_progress(
-                                "letter_sent",
-                                index=job_index,
-                                status="sent",
-                                score=match_score,
-                                letter_len=len(response),
-                                match_explanation=write_response._match_explanation(details),
-                                match_details=details,
-                            )
-                            write_response._log_sent(
-                                sent_log_path,
-                                job=job,
-                                job_key=dedupe_key,
-                                send_mode=send_mode,
-                                status="sent",
-                                details=details,
-                                dry_run=False,
-                                sent=True,
-                            )
                         await write_response.asyncio.sleep(3)
                         advance_position()
                         continue
             else:
-                consecutive_misses += 1
-                log.info(
-                    "job_index=%d 拿不到 JD（连续第 %d 次）",
-                    job_index,
-                    consecutive_misses,
+                action, window_index, consecutive_misses, barren_reloads = (
+                    await handle_missing_jd_recovery(
+                        job_index=job_index,
+                        window_index=window_index,
+                        consecutive_misses=consecutive_misses,
+                        barren_reloads=barren_reloads,
+                        page_filters=page_filters,
+                        max_consecutive_misses=MAX_CONSECUTIVE_MISSES,
+                        max_feed_reloads=MAX_FEED_RELOADS,
+                    )
                 )
-                loaded_count = await finding_jobs.get_loaded_job_count()
-                if loaded_count and window_index > loaded_count:
-                    log.info(
-                        "当前只加载了 %d 个岗位，等待第 %d 个岗位继续加载",
-                        loaded_count,
-                        window_index,
-                    )
-                if await finding_jobs.scroll_to_load_more_jobs():
-                    consecutive_misses = 0
-                    await write_response.asyncio.sleep(1)
+                if action == "continue":
                     continue
-                if await finding_jobs.click_next_page_if_present():
-                    consecutive_misses = 0
-                    window_index = 1
-                    await write_response.asyncio.sleep(1)
-                    continue
-                if await finding_jobs.navigate_next_search_page():
-                    consecutive_misses = 0
-                    window_index = 1
-                    await write_response.asyncio.sleep(2)
-                    continue
-                latest_loaded_count = await finding_jobs.get_loaded_job_count()
-                if loaded_count and window_index > loaded_count and latest_loaded_count >= window_index:
-                    log.info(
-                        "第 %d 个岗位已出现在列表中，重新读取当前岗位",
-                        window_index,
-                    )
-                    consecutive_misses = 0
-                    await write_response.asyncio.sleep(1)
-                    continue
-                if (
-                    loaded_count
-                    and window_index > loaded_count
-                    and consecutive_misses < MAX_CONSECUTIVE_MISSES
-                ):
-                    await write_response.asyncio.sleep(1)
-                    continue
-                if consecutive_misses >= MAX_CONSECUTIVE_MISSES:
-                    if barren_reloads < MAX_FEED_RELOADS:
-                        log.info(
-                            "连续 %d 个岗位拿不到，刷新推荐流换一批（第 %d/%d 次）",
-                            MAX_CONSECUTIVE_MISSES,
-                            barren_reloads + 1,
-                            MAX_FEED_RELOADS,
-                        )
-                        write_response._emit_progress(
-                            "feed_reload",
-                            attempt=barren_reloads + 1,
-                            limit=MAX_FEED_RELOADS,
-                        )
-                        if await reload_feed_and_restart():
-                            continue
-                    log.info(
-                        "连续 %d 个岗位拿不到，刷新 %d 次仍拉不到新岗位，结束",
-                        MAX_CONSECUTIVE_MISSES,
-                        barren_reloads,
-                    )
-                    write_response._emit_progress("feed_exhausted", total=job_index - 1)
+                if action == "exhausted":
                     break
 
             await write_response.asyncio.sleep(3)
@@ -934,3 +463,11 @@ async def send_job_descriptions_to_chat(
                 message=f"{type(e).__name__}: {e}",
             )
             break
+
+
+__all__ = [
+    "_compose_greeting",
+    "click_contact_and_send_response",
+    "send_job_descriptions_to_chat",
+    "send_response_and_go_back",
+]
