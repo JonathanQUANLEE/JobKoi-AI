@@ -177,7 +177,7 @@ export default function Dashboard() {
         <main
           ref={wheel.mainScrollRef}
           className={`flex-1 ${
-            activeNav === "workbench" && !heroChat.isChattingOrHasHistory
+            activeNav === "workbench"
               ? "px-2 sm:px-4 lg:px-6 py-0 overflow-hidden"
               : activeNav === "resumes"
               ? "px-3 sm:px-5 py-3 space-y-4 overflow-y-auto"
@@ -211,15 +211,9 @@ export default function Dashboard() {
               profileRef={wheel.profileRef}
               ringActiveIndex={wheel.ringActiveIndex}
               scrollToRingStage={wheel.scrollToRingStage}
-              handleStagePointerDown={
-                !heroChat.isChattingOrHasHistory ? wheel.handleStagePointerDown : undefined
-              }
-              handleStagePointerMove={
-                !heroChat.isChattingOrHasHistory ? wheel.handleStagePointerMove : undefined
-              }
-              handleStagePointerEnd={
-                !heroChat.isChattingOrHasHistory ? wheel.handleStagePointerEnd : undefined
-              }
+              handleStagePointerDown={wheel.handleStagePointerDown}
+              handleStagePointerMove={wheel.handleStagePointerMove}
+              handleStagePointerEnd={wheel.handleStagePointerEnd}
               isChattingOrHasHistory={heroChat.isChattingOrHasHistory}
               heroChatMessages={heroChat.heroChatMessages}
               heroChatting={heroChat.heroChatting}
