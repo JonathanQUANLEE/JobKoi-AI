@@ -52,8 +52,8 @@ export default function ResumeStageControls({
         ) : (
           <span className="text-[11px] text-stone-500 hidden sm:inline">
             {viewMode === "3d"
-              ? "· 鼠标滚轮上下滚动或点击卡片即可轮换 · 点击正文进入阅读"
-              : "· 2D 纯平面直读 · 点击正文进入专注阅读 · 零倾角无景深"}
+              ? "· 鼠标滚轮上下滚动或点击卡片即可轮换 · 点击正文直接滚轮浏览"
+              : "· 2D 纯平直读 · 滚轮在卡片外可切换资料 · 点击正文直接滚轮浏览全文"}
           </span>
         )}
       </div>

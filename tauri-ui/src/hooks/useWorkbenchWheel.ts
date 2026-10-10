@@ -238,6 +238,10 @@ export function useWorkbenchWheel({
     if (!scrollEl) return;
 
     const onWheel = (e: WheelEvent) => {
+      // 仅在当前处于工作台 (workbench) 页面时才接管滚轮做 3D 舞台切换
+      // 在简历资料库 (resumes)、AI 助手 (agent) 等其他页面绝对不拦截原生滚轮
+      if (activeNav !== "workbench") return;
+
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === "TEXTAREA" || target.tagName === "INPUT" || target.isContentEditable)) {
         if (target.scrollHeight > target.clientHeight) return;
@@ -292,7 +296,7 @@ export function useWorkbenchWheel({
       if (stageWheelTimerRef.current) clearTimeout(stageWheelTimerRef.current);
       if (stageRafRef.current != null) cancelAnimationFrame(stageRafRef.current);
     };
-  }, [applyStageTarget, renderStageTransforms]);
+  }, [applyStageTarget, renderStageTransforms, activeNav]);
 
   // 监听导航切换：保持当前目标站台，渲染对应姿态，不再生硬重置为 0
   useEffect(() => {

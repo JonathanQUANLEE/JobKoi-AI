@@ -121,6 +121,48 @@ export default function ResumePanel({
     }
   };
 
+  const lastFlatWheelTimeRef = useRef<number>(0);
+
+  // 平铺模式下滚轮抽换卡片（在外部轮廓、顶栏、底栏滚动时切换简历；在正文区滚动时留给正文阅读）
+  const handleFlatWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement | null;
+
+    // 1. 如果光标位于正文阅读区域，或者处于专注阅读模式：100% 留给正文原生平滑滚动
+    if (
+      isReadingMode ||
+      target?.closest(".reading-content-zone, .allow-inner-scroll, [data-allow-scroll], textarea, input, pre")
+    ) {
+      return;
+    }
+
+    // 2. 如果是全部展开网格平铺，或者资料只有 1 份，不拦截
+    if (flatSpreadAll || resumes.length <= 1) {
+      return;
+    }
+
+    if (Math.abs(e.deltaY) < 14) return;
+
+    const now = performance.now();
+    if (now - lastFlatWheelTimeRef.current < 260) return;
+    lastFlatWheelTimeRef.current = now;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const currentIndex = resumes.findIndex((r) => r.name === selectedName);
+    const validIndex = currentIndex >= 0 ? currentIndex : 0;
+
+    if (e.deltaY > 0) {
+      // 往下滚：换下一份
+      const nextIdx = (validIndex + 1) % resumes.length;
+      setSelectedName(resumes[nextIdx].name);
+    } else if (e.deltaY < 0) {
+      // 往上滚：换上一份
+      const prevIdx = (validIndex - 1 + resumes.length) % resumes.length;
+      setSelectedName(resumes[prevIdx].name);
+    }
+  };
+
   // 统一渲染单份卡片预览器
   const renderViewer = (item: ResumeItem, isFlat: boolean) => (
     <ResumeCardViewer
@@ -275,7 +317,10 @@ export default function ResumePanel({
                 </div>
               ) : (
                 /* 2D 纯净平铺模式视图 */
-                <div className="w-full space-y-4 pt-1 pb-4 animate-in fade-in duration-150">
+                <div
+                  onWheel={handleFlatWheel}
+                  className="w-full space-y-4 pt-1 pb-4 animate-in fade-in duration-150"
+                >
                   {/* 横向快捷切换标签栏 */}
                   {!flatSpreadAll && resumes.length > 1 && (
                     <div className="w-full flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
