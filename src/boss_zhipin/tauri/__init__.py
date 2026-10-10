@@ -536,6 +536,30 @@ async def open_platform_login(body: _PlatformLoginBody) -> dict[str, Any]:
     return await get_platform_manager().open_login(body.platform_id)
 
 
+@commands.command()
+async def window_minimize(webview_window: WebviewWindow) -> dict[str, str]:
+    """最小化主窗口。"""
+    webview_window.minimize()
+    return {"status": "ok"}
+
+
+@commands.command()
+async def window_toggle_maximize(webview_window: WebviewWindow) -> dict[str, str]:
+    """最大化或还原主窗口。"""
+    if webview_window.is_maximized():
+        webview_window.unmaximize()
+    else:
+        webview_window.maximize()
+    return {"status": "ok"}
+
+
+@commands.command()
+async def window_close(webview_window: WebviewWindow) -> dict[str, str]:
+    """关闭主窗口。"""
+    webview_window.close()
+    return {"status": "ok"}
+
+
 def main() -> int:
     """启动 PyTauri app——根据 BOSS_TAURI_STANDALONE 自动切换 wheel / standalone。"""
     if BOSS_STANDALONE:

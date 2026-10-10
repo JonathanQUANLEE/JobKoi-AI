@@ -22,12 +22,12 @@ import {
   AlertCircle,
   Sparkles,
   Info,
+  Clock,
 } from "lucide-react";
 import { LANGS, type Lang } from "../lib/i18n";
 import { useRunStore } from "../store";
 import PillNavButton from "./core/PillNavButton";
 import NotificationDock from "./NotificationDock";
-import SidebarPet from "./pet/SidebarPet";
 
 export type NavItem = "workbench" | "profile" | "resumes" | "copilot" | "analytics";
 
@@ -237,13 +237,29 @@ export default function Sidebar({
       {/* ================= 侧边栏专属联动通知坞 (Notification Dock - 装备 React Bits SwipeRow & 平铺/折叠) ================= */}
       <NotificationDock />
 
-      {/* ================= 侧边栏特助乌萨奇与快捷定时巡航木牌 ================= */}
-      <SidebarPet
-        running={running}
-        onStartRun={onStartRun}
-        onOpenSettingsModal={onOpenSettingsModal}
-        lang={lang}
-      />
+      {/* ================= 侧边栏特助快捷定时与归位基站 ================= */}
+      <div className="px-3 py-2 shrink-0 select-none">
+        <div className="flex items-center justify-between px-2.5 py-1.5 rounded-xl border border-[var(--grid)] bg-[var(--panel-2)]/60 text-xs text-stone-300">
+          <div className="flex items-center gap-1.5">
+            <span className="text-amber-400 text-sm">🐰</span>
+            <span className="text-[11px] font-semibold text-stone-200">
+              {lang === "ja" ? "ウサギ特助" : "乌萨奇特助"}
+            </span>
+            <span className="text-[9px] text-stone-500 font-normal">
+              {lang === "ja" ? "全画面自由配置" : "可全屏拖拽"}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => onOpenSettingsModal?.("schedule")}
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-stone-800 hover:bg-stone-700 text-amber-300 cursor-pointer transition-colors"
+            title={lang === "ja" ? "定時設定" : "快捷定时设置"}
+          >
+            <Clock className="h-3 w-3" />
+            <span>{lang === "ja" ? "定時" : "定时"}</span>
+          </button>
+        </div>
+      </div>
 
       {/* 左下角用户与设置菜单触发器（WorkBuddy 架构） */}
       <div className="relative border-t border-[var(--grid)]/80 p-2.5 bg-[var(--sidebar-bg)]" ref={menuRef}>

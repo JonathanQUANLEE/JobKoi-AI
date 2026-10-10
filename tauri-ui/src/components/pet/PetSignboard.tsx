@@ -10,6 +10,8 @@ interface PetSignboardProps {
   onOpenSettingsModal?: (tab?: string) => void;
   isMonochrome?: boolean;
   lang?: string;
+  placement?: "top" | "bottom";
+  horizontalAlign?: "center" | "left" | "right";
 }
 
 export const PetSignboard: FC<PetSignboardProps> = ({
@@ -18,6 +20,8 @@ export const PetSignboard: FC<PetSignboardProps> = ({
   onOpenSettingsModal,
   isMonochrome = false,
   lang = "zh",
+  placement = "top",
+  horizontalAlign = "center",
 }) => {
   const [config, setConfig] = useState<PetScheduleConfig>(loadScheduleConfig);
   const [mode, setMode] = useState<"ask" | "picker">("ask");
@@ -100,11 +104,18 @@ export const PetSignboard: FC<PetSignboardProps> = ({
   };
 
   const isJa = lang === "ja";
+  const placementClass = placement === "bottom" ? "top-full mt-2" : "bottom-full mb-2";
+  const alignClass =
+    horizontalAlign === "left"
+      ? "left-0 translate-x-0"
+      : horizontalAlign === "right"
+      ? "right-0 translate-x-0"
+      : "left-1/2 -translate-x-1/2";
 
   return (
     <div
       onClick={(e) => e.stopPropagation()}
-      className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 z-50 select-none animate-in fade-in zoom-in-95 duration-200"
+      className={`absolute ${placementClass} ${alignClass} w-64 z-50 select-none animate-in fade-in zoom-in-95 duration-200`}
     >
       {/* 卡通木质公告牌本体 */}
       <div
