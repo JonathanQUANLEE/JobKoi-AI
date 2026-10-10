@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { TrendingUp, MessageSquare, Award, Calendar, Play, Download, RotateCcw } from "lucide-react";
 import { deliveryHistoryDb, type DayDeliveryRecord, type MorningBrief } from "../../lib/deliveryHistory";
 import { useRunStore } from "../../store";
+import { AnimatedNumber } from "../core/animated-number";
 import PlatformTrendChart from "./PlatformTrendChart";
 import MorningBriefCard from "./MorningBriefCard";
 
@@ -81,7 +82,10 @@ export default function DeliveryAnalyticsView({ onStartCruise }: DeliveryAnalyti
             <TrendingUp className={`size-4 ${isMonochrome ? "text-zinc-300" : "text-amber-400"}`} />
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className="text-2xl font-black text-white font-mono">{totals.sentSum}</span>
+            <AnimatedNumber
+              value={totals.sentSum}
+              className="text-2xl font-black text-white font-mono"
+            />
             <span className="text-xs text-stone-500">家企业</span>
           </div>
         </div>
@@ -96,9 +100,10 @@ export default function DeliveryAnalyticsView({ onStartCruise }: DeliveryAnalyti
             <MessageSquare className={`size-4 ${isMonochrome ? "text-zinc-300" : "text-emerald-400"}`} />
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className={`text-2xl font-black font-mono ${isMonochrome ? "text-white" : "text-emerald-400"}`}>
-              {totals.replySum}
-            </span>
+            <AnimatedNumber
+              value={totals.replySum}
+              className={`text-2xl font-black font-mono ${isMonochrome ? "text-white" : "text-emerald-400"}`}
+            />
             <span className={`text-xs ${isMonochrome ? "text-zinc-400" : "text-emerald-500/80"}`}>人次</span>
           </div>
         </div>
@@ -113,9 +118,11 @@ export default function DeliveryAnalyticsView({ onStartCruise }: DeliveryAnalyti
             <Award className={`size-4 ${isMonochrome ? "text-zinc-300" : "text-purple-400"}`} />
           </div>
           <div className="flex items-baseline gap-1">
-            <span className={`text-2xl font-black font-mono ${isMonochrome ? "text-white" : "text-purple-300"}`}>
-              {totals.avgRate}
-            </span>
+            <AnimatedNumber
+              value={totals.avgRate}
+              decimalPlaces={1}
+              className={`text-2xl font-black font-mono ${isMonochrome ? "text-white" : "text-purple-300"}`}
+            />
             <span className={`text-sm font-bold ${isMonochrome ? "text-zinc-400" : "text-purple-300"}`}>%</span>
           </div>
         </div>
@@ -130,7 +137,10 @@ export default function DeliveryAnalyticsView({ onStartCruise }: DeliveryAnalyti
             <Calendar className={`size-4 ${isMonochrome ? "text-zinc-300" : "text-blue-400"}`} />
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className="text-2xl font-black text-white font-mono">{totals.activeDays}</span>
+            <AnimatedNumber
+              value={totals.activeDays}
+              className="text-2xl font-black text-white font-mono"
+            />
             <span className="text-xs text-stone-500">天</span>
           </div>
         </div>

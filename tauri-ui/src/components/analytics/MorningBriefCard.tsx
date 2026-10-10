@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Sparkles, Sun, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
 import type { MorningBrief } from "../../lib/deliveryHistory";
+import { AnimatedNumber } from "../core/animated-number";
 
 interface MorningBriefCardProps {
   brief: MorningBrief;
@@ -91,7 +92,10 @@ export default function MorningBriefCard({
         <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/5">
           <span className="text-[11px] text-stone-400 block mb-1">昨日投递总量</span>
           <div className="flex items-baseline gap-1.5">
-            <span className="text-2xl font-black text-white font-mono">{brief.totalSent}</span>
+            <AnimatedNumber
+              value={brief.totalSent}
+              className="text-2xl font-black text-white font-mono"
+            />
             <span className="text-xs text-stone-500">家</span>
           </div>
         </div>
@@ -108,9 +112,10 @@ export default function MorningBriefCard({
             <CheckCircle2 className={`size-3.5 ${isMonochrome ? "text-white" : "text-emerald-400"}`} />
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className={`text-2xl font-black font-mono ${isMonochrome ? "text-white" : "text-emerald-400"}`}>
-              {brief.repliedCount}
-            </span>
+            <AnimatedNumber
+              value={brief.repliedCount}
+              className={`text-2xl font-black font-mono ${isMonochrome ? "text-white" : "text-emerald-400"}`}
+            />
             <span className={`text-xs ${isMonochrome ? "text-zinc-400" : "text-emerald-500/80"}`}>家</span>
           </div>
         </div>
@@ -121,7 +126,10 @@ export default function MorningBriefCard({
             <XCircle className="size-3.5 text-stone-500" />
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className="text-2xl font-black text-stone-300 font-mono">{brief.unrepliedCount}</span>
+            <AnimatedNumber
+              value={brief.unrepliedCount}
+              className="text-2xl font-black text-stone-300 font-mono"
+            />
             <span className="text-xs text-stone-500">家</span>
           </div>
         </div>
@@ -147,9 +155,11 @@ export default function MorningBriefCard({
             </span>
           </div>
           <div className="flex items-baseline gap-1">
-            <span className={`text-2xl font-black font-mono ${isMonochrome ? "text-black" : "text-amber-400"}`}>
-              {brief.replyRate}
-            </span>
+            <AnimatedNumber
+              value={brief.replyRate}
+              decimalPlaces={1}
+              className={`text-2xl font-black font-mono ${isMonochrome ? "text-black" : "text-amber-400"}`}
+            />
             <span className={`text-sm font-bold ${isMonochrome ? "text-black" : "text-amber-400"}`}>%</span>
           </div>
         </div>
@@ -174,11 +184,17 @@ export default function MorningBriefCard({
                     <span className="size-2 rounded-full" style={{ backgroundColor: platformColor }} />
                     {p.name}
                   </span>
-                  <span className="text-xs font-mono font-bold text-white">{p.rate}% 回复率</span>
+                  <span className="text-xs font-mono font-bold text-white">
+                    <AnimatedNumber value={p.rate} decimalPlaces={1} className="font-mono text-white" />% 回复率
+                  </span>
                 </div>
                 <div className="text-[11px] text-stone-400 flex items-center justify-between">
-                  <span>已投 {p.sent} 家</span>
-                  <span className={isMonochrome ? "text-zinc-200" : "text-emerald-400"}>已回 {p.replied} 家</span>
+                  <span>
+                    已投 <AnimatedNumber value={p.sent} className="font-mono text-stone-300" /> 家
+                  </span>
+                  <span className={isMonochrome ? "text-zinc-200" : "text-emerald-400"}>
+                    已回 <AnimatedNumber value={p.replied} className={`font-mono ${isMonochrome ? "text-zinc-200" : "text-emerald-400"}`} /> 家
+                  </span>
                 </div>
               </div>
             );
