@@ -88,6 +88,7 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
   const [signboardOpen, setSignboardOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [soundOn, setSoundOn] = useState(() => usagiSound.isEnabled());
+  const [voiceMode, setVoiceMode] = useState<"zh" | "ja">(() => usagiSound.getVoiceMode());
 
   const dragStartRef = useRef<{ startX: number; startY: number; petX: number; petY: number; moved: boolean } | null>(null);
   const cruiseScheduleCheckerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -151,8 +152,9 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
       if (!dragStartRef.current.moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) {
         dragStartRef.current.moved = true;
         setAction("jump");
-        usagiSound.play("grabbed");
-        setSpeech(isJa ? "ウラ！お引越し中！🎈" : "哇！被抓起来转移阵地啦！🎈");
+        const msg = isJa ? "ウラ！お引越し中！🎈" : "哇！被抓起来转移阵地啦！🎈";
+        setSpeech(msg);
+        usagiSound.speak(msg, "grabbed");
       }
 
       if (dragStartRef.current.moved) {
@@ -176,24 +178,23 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
       if (didMove) {
         // 拖拽落地：保存停靠位置，播放落地音效 (spawn.wav)
         setAction("jump");
-        usagiSound.play("spawn");
-        setSpeech(isJa ? "ここに決めた！🐾" : "就在这里安家啦！🐾");
+        const msg = isJa ? "ここに決めた！🐾" : "就在这里安家啦！🐾";
+        setSpeech(msg);
+        usagiSound.speak(msg, "spawn");
         try {
           localStorage.setItem(STORAGE_POS_KEY, JSON.stringify(pos));
         } catch {}
         setTimeout(() => setAction("idle"), 600);
       } else {
-        // 纯点击：触发单击互动，随机播放问候 (hi.wav) 或经典歪头 (mock.wav)
+        // 纯点击：触发单击互动，播放问候并朗读中文语音
         setAction("jump");
-        if (Math.random() < 0.25) {
-          usagiSound.play("mock");
-        } else {
-          usagiSound.play("hi");
-        }
+        const soundType = Math.random() < 0.25 ? "mock" : "hi";
         const pool = isJa ? POKE_LINES_JA : POKE_LINES_ZH;
-        setSpeech(pool[Math.floor(Math.random() * pool.length)]);
+        const msg = pool[Math.floor(Math.random() * pool.length)];
+        setSpeech(msg);
         setSpeechVisible(true);
         setSignboardOpen(true);
+        usagiSound.speak(msg, soundType);
         setTimeout(() => setAction("idle"), 500);
       }
 
@@ -212,9 +213,10 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setAction("roll");
-    usagiSound.play("danceswirl");
-    setSpeech(isJa ? "プルルルルルル！🌀💥" : "プルルルルルル！🌀💥");
+    const msg = isJa ? "プルルルルルル！🌀💥" : "大风车甩手转转转，好运快快来！🌀💥";
+    setSpeech(msg);
     setSpeechVisible(true);
+    usagiSound.speak(msg, "danceswirl");
     setTimeout(() => {
       setAction("idle");
     }, 2400);
@@ -228,21 +230,24 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
     try {
       localStorage.setItem(STORAGE_POS_KEY, JSON.stringify(def));
     } catch {}
-    usagiSound.play("hi");
-    setSpeech(isJa ? "側辺に戻ったよ！🏠" : "回到侧边栏啦！🏠");
+    const msg = isJa ? "側辺に戻ったよ！🏠" : "回到侧边栏啦！🏠";
+    setSpeech(msg);
+    usagiSound.speak(msg, "hi");
   };
 
   // 6. 巡航状态联动 (开启狂欢进行曲 dance.wav)
   useEffect(() => {
     if (running) {
       setAction("running");
-      setSpeech(isJa ? "ヤハ！全速力で求人巡航中！🚀" : "ヤハ！全速巡航打卡投递中！🚀");
-      usagiSound.play("dance");
+      const msg = isJa ? "ヤハ！全速力で求人巡航中！🚀" : "ヤハ！全速巡航打卡投递中！🚀";
+      setSpeech(msg);
+      usagiSound.speak(msg, "dance");
     } else {
       if (action === "running") {
         setAction("jump");
-        setSpeech(isJa ? "ウラ！本次巡航完了！🎉" : "太棒啦！本次巡航圆满完成🎉");
-        usagiSound.play("celebrate");
+        const msg = isJa ? "ウラ！本次巡航完了！🎉" : "太棒啦！本次巡航圆满完成🎉";
+        setSpeech(msg);
+        usagiSound.speak(msg, "celebrate");
         setTimeout(() => setAction("idle"), 3000);
       }
     }
@@ -351,8 +356,8 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
           className="w-12 h-1.5 rounded-full bg-black/60 blur-[2px] -mt-1 pointer-events-none"
         />
 
-        {/* 悬停微按钮条 (一键归位回侧边栏 / 快速静音) */}
-        <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-stone-900/90 border border-stone-700/80 rounded-full px-1.5 py-0.5 shadow-lg backdrop-blur-md text-[9px] text-stone-300 pointer-events-auto">
+        {/* 悬停微按钮条 (一键归位回侧边栏 / 中文配音与原声切换 / 快速静音) */}
+        <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 bg-stone-900/90 border border-stone-700/80 rounded-full px-2 py-0.5 shadow-lg backdrop-blur-md text-[9px] text-stone-300 pointer-events-auto whitespace-nowrap">
           <button
             type="button"
             onClick={handleResetToSidebar}
@@ -361,6 +366,25 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
           >
             <RotateCcw className="h-2.5 w-2.5" />
             <span>归位</span>
+          </button>
+          <span className="text-stone-600">|</span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              const nextMode = voiceMode === "zh" ? "ja" : "zh";
+              setVoiceMode(nextMode);
+              usagiSound.setVoiceMode(nextMode);
+              if (nextMode === "zh") {
+                usagiSound.speak("中文语音已开启！", "hi");
+              } else {
+                usagiSound.play("yaha");
+              }
+            }}
+            className="hover:text-amber-300 flex items-center gap-0.5 cursor-pointer font-medium"
+            title="点击切换：中文配音 / 日文原声"
+          >
+            <span>{voiceMode === "zh" ? "🇨🇳 中文" : "🇯🇵 原声"}</span>
           </button>
           <span className="text-stone-600">|</span>
           <button

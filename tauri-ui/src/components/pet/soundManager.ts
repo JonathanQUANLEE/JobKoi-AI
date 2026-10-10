@@ -1,7 +1,7 @@
 /**
  * 乌萨奇 (Usagi) 专属声音引擎
- * 集成真实动漫/游戏原声音频库 (10 大高质音频切片)
- * 若音频离线或异常，自动平滑降级至 Web Audio 原生音效合成
+ * 集成真实动漫原声音频库 + 中文版萌系自媒体/中配语音生成器
+ * 支持中/日双语音模式切换 (Voice Mode: zh / ja)
  */
 
 export type UsagiSound =
@@ -16,6 +16,8 @@ export type UsagiSound =
   | "mock"       // mock.wav "哈？"
   | "spawn"      // spawn.wav 落地回弹
   | "jump";      // 映射到 spawn.wav
+
+export type UsagiVoiceMode = "zh" | "ja";
 
 const SOUND_FILE_MAP: Record<UsagiSound, string | string[]> = {
   hi: "/sounds/usagi/hi.wav",
@@ -35,6 +37,7 @@ class UsagiSoundManager {
   private ctx: AudioContext | null = null;
   private soundEnabled: boolean = true;
   private volume: number = 0.55;
+  private voiceMode: UsagiVoiceMode = "zh"; // 默认优先使用中文版
   private currentAudio: HTMLAudioElement | null = null;
 
   constructor() {
@@ -46,6 +49,10 @@ class UsagiSoundManager {
       const savedVol = localStorage.getItem("jobhunter_usagi_volume");
       if (savedVol !== null) {
         this.volume = parseFloat(savedVol);
+      }
+      const savedMode = localStorage.getItem("jobhunter_usagi_voice_mode") as UsagiVoiceMode | null;
+      if (savedMode === "zh" || savedMode === "ja") {
+        this.voiceMode = savedMode;
       }
     } catch {}
   }
@@ -72,6 +79,17 @@ class UsagiSoundManager {
     } catch {}
   }
 
+  public getVoiceMode(): UsagiVoiceMode {
+    return this.voiceMode;
+  }
+
+  public setVoiceMode(mode: UsagiVoiceMode) {
+    this.voiceMode = mode;
+    try {
+      localStorage.setItem("jobhunter_usagi_voice_mode", mode);
+    } catch {}
+  }
+
   private initContext() {
     if (!this.ctx && typeof window !== "undefined") {
       const AudioCtx =
@@ -86,10 +104,12 @@ class UsagiSoundManager {
     }
   }
 
+  /**
+   * 播放单体拟声音效
+   */
   public play(type: UsagiSound) {
     if (!this.soundEnabled || this.volume <= 0) return;
 
-    // 获取对应的真实音频路径
     const mapping = SOUND_FILE_MAP[type];
     let targetPath = "/sounds/usagi/hi.wav";
     if (Array.isArray(mapping)) {
@@ -106,7 +126,6 @@ class UsagiSoundManager {
       const playPromise = audio.play();
       if (playPromise) {
         playPromise.catch(() => {
-          // 备用：如遇本地静态路径拦截，自动使用 Web Audio 原生合成
           this.playSynthetic(type);
         });
       }
@@ -116,8 +135,58 @@ class UsagiSoundManager {
   }
 
   /**
-   * 停止当前播放（如巡航或长音效中断时）
+   * 场景化语音综合表达：
+   * 结合动作拟声切片 + 中文版高萌语音朗读（当语音模式为中文时）
    */
+  public speak(text: string, soundType?: UsagiSound) {
+    if (!this.soundEnabled || this.volume <= 0) return;
+
+    // 先播放乌萨奇标志性高能拟声
+    if (soundType) {
+      this.play(soundType);
+    }
+
+    // 若当前为中文版语音模式，且有有效文本，调用高音调拟人中文萌音朗读
+    if (this.voiceMode === "zh" && text && typeof window !== "undefined" && "speechSynthesis" in window) {
+      try {
+        // 清理特殊符号，提取自然中文
+        const clean = text
+          .replace(/[ヤハウラプルルルルル〜~*^▽^*≧∇≦🌀💥🐾🎈⏰🍵🌟💪🔥]/g, "")
+          .replace(/[！!？?，,。.]/g, " ")
+          .trim();
+
+        if (clean) {
+          window.speechSynthesis.cancel();
+          const utter = new SpeechSynthesisUtterance(clean);
+          utter.volume = Math.min(1, this.volume * 1.1);
+          utter.pitch = 1.85; // 调高音调，呈现乌萨奇专属高音萌音
+          utter.rate = 1.25;  // 稍快语速，呈现活泼跳脱性格
+          utter.lang = "zh-CN";
+
+          const voices = window.speechSynthesis.getVoices();
+          const zhVoice = voices.find(
+            (v) =>
+              v.lang.includes("zh") &&
+              (v.name.includes("Xiaoxiao") ||
+                v.name.includes("Huihui") ||
+                v.name.includes("Natural") ||
+                v.name.includes("Female"))
+          );
+          if (zhVoice) {
+            utter.voice = zhVoice;
+          }
+
+          // 延迟 200ms 等待前置短叫声先发声
+          setTimeout(() => {
+            try {
+              window.speechSynthesis.speak(utter);
+            } catch {}
+          }, 200);
+        }
+      } catch {}
+    }
+  }
+
   public stop() {
     if (this.currentAudio) {
       try {
@@ -126,11 +195,13 @@ class UsagiSoundManager {
       } catch {}
       this.currentAudio = null;
     }
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+    }
   }
 
-  /**
-   * Web Audio 原生音效合成器 (100% 离线兜底无依赖保障)
-   */
   private playSynthetic(type: UsagiSound) {
     try {
       this.initContext();
