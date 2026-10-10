@@ -277,10 +277,10 @@ const NotificationRowItem: FC<NotificationRowItemProps> = ({
         </div>
       </SwipeRow>
 
-      {/* 底部 20 秒倒计时动态进度光带 */}
+      {/* 底部 8 秒倒计时动态进度光带 */}
       <div className="absolute bottom-0 inset-x-0 h-[2px] bg-white/10 overflow-hidden pointer-events-none">
         <div
-          className="h-full origin-left animate-countdown-20s"
+          className="h-full origin-left animate-countdown-8s"
           style={{ backgroundColor: barColor }}
         />
       </div>

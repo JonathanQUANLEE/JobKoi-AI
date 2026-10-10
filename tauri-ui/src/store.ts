@@ -71,7 +71,7 @@ type RunState = {
   restoredPage: Record<string, unknown> | null;
   restoredPageFilters: Record<string, unknown>[];
 
-  // 全局联动消息通知（统一定位在左侧边栏，支持 20s 自动消失、最多5条折叠堆叠与双击平铺）
+  // 全局联动消息通知（统一定位在左侧边栏，支持 8s 自动消失、最多5条折叠堆叠与双击平铺）
   notifications: NotificationItem[];
   notification: NotificationItem | null;
   notify: (item: {
@@ -150,7 +150,7 @@ export const useRunStore = create<RunState>((set) => ({
     const d = new Date(timestamp);
     const pad = (n: number) => n.toString().padStart(2, "0");
     const timeFormatted = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-    const duration = item.duration ?? 20000; // 默认 20 秒后自动消失
+    const duration = item.duration ?? 8000; // 默认 8 秒后自动消失
 
     // 同步持久化记录到本地审计数据库
     auditDb.addLog({
