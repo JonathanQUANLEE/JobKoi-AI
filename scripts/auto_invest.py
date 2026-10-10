@@ -139,8 +139,9 @@ def main() -> None:
             f"剩 {DAILY_LIMIT - today_count} 额度）=====\n"
             f"[{_stamp()}] 本轮搜索：{env.get('BOSS_START_URL', '-')}"
         )
+        profile = os.environ.get("BOSS_PROFILE", "0my")  # 默认保持历史行为；定时巡航传 gui-default
         proc = subprocess.Popen(
-            ["uv", "run", "main.py", "--profile", "0my"],
+            ["uv", "run", "main.py", "--profile", profile],
             cwd=str(ROOT),
             env=env,
             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,

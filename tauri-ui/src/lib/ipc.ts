@@ -33,6 +33,8 @@ export type RunConfig = {
   dryRun: boolean;
   profile: string;
   useCurrentPage: boolean;
+  /** 本轮要跑的招聘平台 id（默认 ["boss"]；勾选多个则并发巡航） */
+  platforms?: string[];
 };
 
 export type ProfileSummary = {
@@ -312,4 +314,23 @@ export const ipc = {
   windowMinimize: () => pyInvoke<{ status: string }>("window_minimize", {}),
   windowToggleMaximize: () => pyInvoke<{ status: string }>("window_toggle_maximize", {}),
   windowClose: () => pyInvoke<{ status: string }>("window_close", {}),
+  // 定时巡航闹钟（系统级 Windows 计划任务）
+  getScheduleStatus: () =>
+    pyInvoke<{ exists: boolean; raw?: string; error?: string }>("get_schedule_status", {}),
+  saveSchedule: (config: {
+    time: string;
+    enabled: boolean;
+    repeatDays?: number[];
+    autoRun?: boolean;
+  }) =>
+    pyInvoke<{ status: string; task?: string; time?: string; scope?: string; message?: string }>(
+      "save_schedule",
+      {
+        time: config.time,
+        enabled: config.enabled,
+        repeatDays: config.repeatDays ?? [],
+        autoRun: config.autoRun ?? false,
+      },
+    ),
+  cancelSchedule: () => pyInvoke<{ status: string }>("cancel_schedule", {}),
 };

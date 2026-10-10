@@ -74,6 +74,8 @@ class RunConfig(_CamelModel):
     dry_run: bool = False
     profile: str = ""
     use_current_page: bool = False
+    # 本轮要跑的招聘平台 id 列表（默认只跑 BOSS；勾选多个则并发巡航）
+    platforms: list[str] = ["boss"]
 
 
 class StartRunBody(_CamelModel):
@@ -119,12 +121,65 @@ def _build_main_loop_factory(config: RunConfig):
                 environ["BOSS_LABEL"] = config.label
 
         # 主循环全部走 cli.run_automation——CLI 和 GUI 共用一份逻辑。
-        await run_automation(
+        platforms = [str(p) for p in (config.platforms or []) if str(p)]
+        if "boss" not in platforms:
+            platforms.insert(0, "boss")
+
+        if len(platforms) == 1:
+            await run_automation(
+                usr_name=config.usr_name,
+                label=config.label or environ.get("BOSS_LABEL", ""),
+                dry_run=config.dry_run,
+                use_current_page=config.use_current_page,
+            )
+            return
+
+        # 多平台巡航：BOSS + 猎聘 + 51job 在同一个事件循环里并发跑。
+        # 三平台各自独立的浏览器 profile / 去重账本 / 限额，互不干扰；
+        # 任一平台异常不影响其他平台，统一收敛到日志。
+        import asyncio as _asyncio
+
+        boss_coro = run_automation(
             usr_name=config.usr_name,
             label=config.label or environ.get("BOSS_LABEL", ""),
             dry_run=config.dry_run,
             use_current_page=config.use_current_page,
         )
+
+        async def _wrap_platform(name: str, coro) -> None:
+            try:
+                await coro
+            except Exception as e:  # noqa: BLE001 — 单平台失败不拖垮其他链路
+                log.warning("[multi-platform] %s 链异常终止: %s", name, e)
+
+        tasks = [_asyncio.create_task(_wrap_platform("boss", boss_coro))]
+
+        if "liepin" in platforms:
+            from liepin import apply as liepin_apply
+            from liepin import driver as liepin_driver
+
+            liepin_limit = int(environ.get("LIEPIN_DAILY_LIMIT", "100"))
+            liepin_coro = liepin_apply.run(
+                list(liepin_apply.DEFAULT_KEYWORDS),
+                liepin_limit,
+                liepin_driver._greeting_text(),
+            )
+            tasks.append(_asyncio.create_task(_wrap_platform("liepin", liepin_coro)))
+
+        if "job51" in platforms:
+            from job51 import apply as job51_apply
+
+            job51_limit = int(environ.get("JOB51_DAILY_LIMIT", "40"))
+            tasks.append(
+                _asyncio.create_task(
+                    _wrap_platform(
+                        "job51", job51_apply.run(list(job51_apply.DEFAULT_KEYWORDS), job51_limit)
+                    )
+                )
+            )
+
+        for task in tasks:
+            await task
 
     return factory
 
@@ -622,6 +677,47 @@ async def window_close(webview_window: WebviewWindow) -> dict[str, str]:
     """关闭主窗口。"""
     webview_window.close()
     return {"status": "ok"}
+
+
+# ---------- 定时巡航闹钟（系统级 Windows 计划任务） ----------
+# 用户设定时间保存后 -> 写成计划任务「JobHunter定时巡航」，App 关掉也到点自动跑；
+# 执行体是 scripts/scheduled_cruise.py（三平台并行 + GUI 画像 gui-default）。
+
+
+class _SaveScheduleBody(_CamelModel):
+    time: str = "09:00"
+    enabled: bool = False
+    repeat_days: list[int] = []
+    auto_run: bool = False
+
+
+@commands.command()
+async def get_schedule_status() -> dict:
+    """查询定时巡航计划任务落盘状态。"""
+    from boss_zhipin.gui.scheduler import get_scheduled_task_status
+
+    return get_scheduled_task_status()
+
+
+@commands.command()
+async def save_schedule(body: _SaveScheduleBody) -> dict:
+    """保存闹钟：启用则创建/覆盖 Windows 计划任务，停用则删除。"""
+    from boss_zhipin.gui.scheduler import (
+        create_scheduled_task,
+        delete_scheduled_task,
+    )
+
+    if not body.enabled or not body.auto_run:
+        return delete_scheduled_task()
+    return create_scheduled_task(time=body.time, repeat_days=body.repeat_days)
+
+
+@commands.command()
+async def cancel_schedule() -> dict:
+    """停用闹钟：删除计划任务。"""
+    from boss_zhipin.gui.scheduler import delete_scheduled_task
+
+    return delete_scheduled_task()
 
 
 def main() -> int:
