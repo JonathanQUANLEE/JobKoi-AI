@@ -18,36 +18,21 @@ interface GlobalUsagiPetProps {
 
 const STORAGE_POS_KEY = "jobhunter_usagi_floating_pos";
 
-const USAGI_LINES_ZH = [
-  "ヤハ！打工！打工！今天也要元气满满投递，拿下好 Offer！🌟",
-  "ウラ！乌萨奇特助在此，冲冲冲拔草投递去喽！💪",
-  "プルルルル！大风车转转转，好运 Offer 快快来！🌀",
-  "哈？！点点我上面的木牌，定时自动巡航超省心~ ⏰",
+const USAGI_LINES = [
+  "打工！打工！今天也要元气满满投递，拿下好 Offer！🌟",
+  "乌萨奇特助在此，冲冲冲拔草投递去喽！💪",
+  "大风车转转转，好运 Offer 快快来！🌀",
+  "点点我上面的小木牌，定时自动巡航超省心~ ⏰",
   "记得喝杯水，活动一下脖子和眼睛哦~ 🍵",
-  "フゥン！每一份投递都在向理想团队靠近！✨",
+  "每一份投递都在向理想团队靠近！✨",
 ];
 
-const USAGI_LINES_JA = [
-  "ヤハ！今日も元気に巡航して内定を勝ち取ろう！🌟",
-  "ウラ！ウサギ特助がいつでもサポートするよ！💪",
-  "プルルルル！看板をクリックして定時巡航をセットしてね⏰",
-  "水分補給とお茶休憩も忘れずにね🍵",
-  "フゥン！一歩ずつ希望の職場に近づいてるよ！✨",
-];
-
-const POKE_LINES_ZH = [
-  "ヤハッ！摸摸耳朵，求职锦鲤附体！(*^▽^*)",
-  "ウラララ！收到主人的拍拍，元气值爆表！💥",
-  "プルルルル！大风车甩手蓄力中！🌀",
-  "哈？（歪头呆萌斜视）🐰",
-  "呜啦啦啦啦！求职打怪升级冲冲冲！🔥",
-];
-
-const POKE_LINES_JA = [
-  "ヤハッ！耳をなでなで、内定運UP！(*^▽^*)",
-  "ウラララ！タップされて元気満タン！💥",
-  "プルルルル！ぐるぐる腕回しチャージ中！🌀",
-  "ハァ？（首をかしげる）🐰",
+const POKE_LINES = [
+  "摸摸耳朵，求职锦鲤附体！(*^▽^*)",
+  "收到主人的拍拍，元气值爆表！💥",
+  "大风车甩手蓄力中！🌀",
+  "看什么看！还不快去刷Boss直聘！🐰",
+  "求职打怪升级冲冲冲！🔥",
 ];
 
 export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
@@ -83,27 +68,24 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
 
   const [action, setAction] = useState<PetAction>("idle");
   const [facing, setFacing] = useState<"left" | "right">("right");
-  const [speech, setSpeech] = useState("");
+  const [speech, setSpeech] = useState("我是你的求职特助乌萨奇！");
   const [speechVisible, setSpeechVisible] = useState(true);
   const [signboardOpen, setSignboardOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [soundOn, setSoundOn] = useState(() => usagiSound.isEnabled());
-  const [voiceMode, setVoiceMode] = useState<"zh" | "ja">(() => usagiSound.getVoiceMode());
 
   const dragStartRef = useRef<{ startX: number; startY: number; petX: number; petY: number; moved: boolean } | null>(null);
   const cruiseScheduleCheckerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastScheduledTriggerDateRef = useRef<string>("");
-  const isJa = lang === "ja";
 
-  // 1. 初始化气泡语言与问候
+  // 1. 初始化气泡问候
   useEffect(() => {
-    setSpeech(isJa ? "ヤハ！求人巡航ウサギ特助だよ！" : "ヤハ！我是你的求职特助乌萨奇！");
+    setSpeech("打工！打工！今天也要拿下好Offer！🌟");
     const t = setTimeout(() => {
-      const pool = isJa ? USAGI_LINES_JA : USAGI_LINES_ZH;
-      setSpeech(pool[0]);
+      setSpeech(USAGI_LINES[0]);
     }, 4500);
     return () => clearTimeout(t);
-  }, [isJa]);
+  }, []);
 
   // 2. 窗口尺寸调整时防止乌萨奇掉出屏幕边界
   useEffect(() => {
@@ -111,14 +93,14 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
       setPos((prev) => {
         const maxX = Math.max(20, window.innerWidth - 85);
         const maxY = Math.max(60, window.innerHeight - 95);
-        const clampedX = Math.min(Math.max(10, prev.x), maxX);
-        const clampedY = Math.min(Math.max(50, prev.y), maxY);
-        if (clampedX !== prev.x || clampedY !== prev.y) {
-          const next = { x: clampedX, y: clampedY };
+        const nextX = Math.min(Math.max(10, prev.x), maxX);
+        const nextY = Math.min(Math.max(50, prev.y), maxY);
+        if (nextX !== prev.x || nextY !== prev.y) {
+          const clamped = { x: nextX, y: nextY };
           try {
-            localStorage.setItem(STORAGE_POS_KEY, JSON.stringify(next));
+            localStorage.setItem(STORAGE_POS_KEY, JSON.stringify(clamped));
           } catch {}
-          return next;
+          return clamped;
         }
         return prev;
       });
@@ -152,9 +134,9 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
       if (!dragStartRef.current.moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) {
         dragStartRef.current.moved = true;
         setAction("jump");
-        const msg = isJa ? "ウラ！お引越し中！🎈" : "哇！被抓起来转移阵地啦！🎈";
+        const msg = "快放我下来！快放我下来！抓本兔子干嘛！救命啊！🎈";
         setSpeech(msg);
-        usagiSound.speak(msg, "grabbed");
+        usagiSound.play("grabbed");
       }
 
       if (dragStartRef.current.moved) {
@@ -176,25 +158,23 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
       setIsDragging(false);
 
       if (didMove) {
-        // 拖拽落地：保存停靠位置，播放落地音效 (spawn.wav)
+        // 拖拽落地：保存停靠位置，播放短视频 AI 落地音效 (zh_dock.mp3)
         setAction("jump");
-        const msg = isJa ? "ここに決めた！🐾" : "就在这里安家啦！🐾";
+        const msg = "打工！打工！今天也要拿下好Offer！冲冲冲！🐾";
         setSpeech(msg);
-        usagiSound.speak(msg, "spawn");
+        usagiSound.play("dock");
         try {
           localStorage.setItem(STORAGE_POS_KEY, JSON.stringify(pos));
         } catch {}
         setTimeout(() => setAction("idle"), 600);
       } else {
-        // 纯点击：触发单击互动，播放问候并朗读中文语音
+        // 纯点击：触发单击互动，弹出定时木牌
         setAction("jump");
-        const soundType = Math.random() < 0.25 ? "mock" : "hi";
-        const pool = isJa ? POKE_LINES_JA : POKE_LINES_ZH;
-        const msg = pool[Math.floor(Math.random() * pool.length)];
+        const msg = "你要开启定时巡航打招呼吗？快点我设定！⏰";
         setSpeech(msg);
         setSpeechVisible(true);
         setSignboardOpen(true);
-        usagiSound.speak(msg, soundType);
+        usagiSound.play("signboard_ask");
         setTimeout(() => setAction("idle"), 500);
       }
 
@@ -207,16 +187,16 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isDragging, pos, isJa]);
+  }, [isDragging, pos]);
 
-  // 4. 双击乌萨奇：经典大风车甩手旋转 (Usagi Roll) + 狂舞音效 (danceswirl.wav)
+  // 4. 双击乌萨奇：经典大风车甩手旋转 + 短视频爆款大风车音效 (zh_windmill.mp3)
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setAction("roll");
-    const msg = isJa ? "プルルルルルル！🌀💥" : "大风车甩手转转转，好运快快来！🌀💥";
+    const msg = "大风车转转转！转死所有不理人的HR！转转转！🌀💥";
     setSpeech(msg);
     setSpeechVisible(true);
-    usagiSound.speak(msg, "danceswirl");
+    usagiSound.play("windmill");
     setTimeout(() => {
       setAction("idle");
     }, 2400);
@@ -230,28 +210,28 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
     try {
       localStorage.setItem(STORAGE_POS_KEY, JSON.stringify(def));
     } catch {}
-    const msg = isJa ? "側辺に戻ったよ！🏠" : "回到侧边栏啦！🏠";
+    const msg = "回工位打卡！时刻待命！🏠";
     setSpeech(msg);
-    usagiSound.speak(msg, "hi");
+    usagiSound.play("reset_sidebar");
   };
 
-  // 6. 巡航状态联动 (开启狂欢进行曲 dance.wav)
+  // 6. 巡航状态联动
   useEffect(() => {
     if (running) {
       setAction("running");
-      const msg = isJa ? "ヤハ！全速力で求人巡航中！🚀" : "ヤハ！全速巡航打卡投递中！🚀";
+      const msg = "开始巡航打招呼！全速冲刺！今天必拿Offer！🚀";
       setSpeech(msg);
-      usagiSound.speak(msg, "dance");
+      usagiSound.play("cruise");
     } else {
       if (action === "running") {
         setAction("jump");
-        const msg = isJa ? "ウラ！本次巡航完了！🎉" : "太棒啦！本次巡航圆满完成🎉";
+        const msg = "太棒啦！本次巡航圆满完成🎉";
         setSpeech(msg);
-        usagiSound.speak(msg, "celebrate");
+        usagiSound.play("dock");
         setTimeout(() => setAction("idle"), 3000);
       }
     }
-  }, [running, isJa]);
+  }, [running]);
 
   // 7. 定时巡航后台检查器 (每 30 秒核验一次)
   useEffect(() => {
@@ -261,27 +241,27 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
 
       const now = new Date();
       const currentDay = now.getDay();
-      const pad = (n: number) => String(n).padStart(2, "0");
-      const currentTimeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-      const todayDateKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}_${currentTimeStr}`;
+      if (!schedule.repeatDays.includes(currentDay)) return;
 
-      if (
-        schedule.repeatDays.includes(currentDay) &&
-        currentTimeStr === schedule.time &&
-        lastScheduledTriggerDateRef.current !== todayDateKey
-      ) {
-        lastScheduledTriggerDateRef.current = todayDateKey;
+      const [targetH, targetM] = schedule.time.split(":").map(Number);
+      if (isNaN(targetH) || isNaN(targetM)) return;
 
-        notify({
-          type: "info",
-          text: `⏰ 定时巡航时间已到达 (${schedule.time})，特助乌萨奇正在自动为您开启巡航！`,
-          source: "定时巡航系统",
-        });
+      const nowH = now.getHours();
+      const nowM = now.getMinutes();
+      const todayStr = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}-${targetH}:${targetM}`;
 
-        usagiSound.play("celebrate");
-
-        if (schedule.autoRun && onStartRun && !running) {
-          onStartRun();
+      if (nowH === targetH && nowM === targetM && lastScheduledTriggerDateRef.current !== todayStr) {
+        lastScheduledTriggerDateRef.current = todayStr;
+        if (!running) {
+          notify?.({
+            type: "info",
+            source: "定时打卡",
+            text: `特助乌萨奇准时为您启动每日巡航！(${schedule.time})`,
+          });
+          setSpeech(`每日定时到点啦！(${schedule.time}) 乌萨奇全速出击！🚀`);
+          setSpeechVisible(true);
+          usagiSound.play("cruise");
+          onStartRun?.();
         }
       }
     };
@@ -289,12 +269,40 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
     checkCruiseSchedule();
     cruiseScheduleCheckerRef.current = setInterval(checkCruiseSchedule, 30000);
     return () => {
-      if (cruiseScheduleCheckerRef.current) clearInterval(cruiseScheduleCheckerRef.current);
+      if (cruiseScheduleCheckerRef.current) {
+        clearInterval(cruiseScheduleCheckerRef.current);
+      }
     };
-  }, [notify, onStartRun, running]);
+  }, [running, onStartRun, notify]);
 
-  // 判断木牌和气泡是否因为靠近屏幕顶部而需要向下展开
-  const isNearTop = pos.y < 230;
+  // 8. 闲置气泡与动作周期
+  useEffect(() => {
+    const speechTimer = setInterval(() => {
+      if (!isDragging && !signboardOpen && action !== "running" && action !== "roll") {
+        const pool = USAGI_LINES;
+        const line = pool[Math.floor(Math.random() * pool.length)];
+        setSpeech(line);
+        setSpeechVisible(true);
+      }
+    }, 18000);
+
+    const actionTimer = setInterval(() => {
+      if (!isDragging && !signboardOpen && action !== "running" && action !== "roll") {
+        const rnd = Math.random();
+        if (rnd < 0.35) {
+          setAction("jump");
+          setTimeout(() => setAction("idle"), 600);
+        } else if (rnd < 0.6) {
+          setFacing((prev) => (prev === "left" ? "right" : "left"));
+        }
+      }
+    }, 7000);
+
+    return () => {
+      clearInterval(speechTimer);
+      clearInterval(actionTimer);
+    };
+  }, [isDragging, signboardOpen, action]);
 
   return (
     <div
@@ -302,39 +310,32 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
         position: "fixed",
         left: `${pos.x}px`,
         top: `${pos.y}px`,
-        zIndex: isDragging ? 9999 : 50,
-        transition: isDragging ? "none" : "transform 0.1s ease-out",
+        zIndex: 50,
+        touchAction: "none",
+        transition: isDragging ? "none" : "box-shadow 0.2s ease",
       }}
-      className="select-none pointer-events-auto"
+      className="select-none flex flex-col items-center"
     >
-      {/* 定时巡航小木牌 (点击乌萨奇后弹出) */}
+      {/* 顶部对话气泡 */}
+      <div className="absolute bottom-[68px] z-50 pointer-events-none">
+        <PetSpeechBubble
+          message={speech}
+          visible={speechVisible && !signboardOpen}
+          isMonochrome={isMonochrome}
+        />
+      </div>
+
+      {/* 点击弹出的卡通定时小木牌 */}
       <PetSignboard
         visible={signboardOpen}
         onClose={() => setSignboardOpen(false)}
         onOpenSettingsModal={onOpenSettingsModal}
         isMonochrome={isMonochrome}
         lang={lang}
-        placement={isNearTop ? "bottom" : "top"}
-        horizontalAlign={pos.x < 130 ? "left" : typeof window !== "undefined" && pos.x > window.innerWidth - 180 ? "right" : "center"}
+        placement={pos.y < 280 ? "bottom" : "top"}
       />
 
-      {/* 乌萨奇对话气泡 */}
-      <div
-        className={`absolute ${
-          isNearTop ? "top-full mt-2" : "bottom-full mb-3"
-        } left-1/2 -translate-x-1/2 z-40 pointer-events-none`}
-      >
-        <div className="pointer-events-auto">
-          <PetSpeechBubble
-            message={speech}
-            visible={speechVisible && !signboardOpen}
-            isMonochrome={isMonochrome}
-            onClick={() => setSpeechVisible(false)}
-          />
-        </div>
-      </div>
-
-      {/* 乌萨奇精灵本体 */}
+      {/* 乌萨奇本体交互区域 */}
       <div
         onMouseDown={handleMouseDown}
         onDoubleClick={handleDoubleClick}
@@ -356,7 +357,7 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
           className="w-12 h-1.5 rounded-full bg-black/60 blur-[2px] -mt-1 pointer-events-none"
         />
 
-        {/* 悬停微按钮条 (一键归位回侧边栏 / 中文配音与原声切换 / 快速静音) */}
+        {/* 悬停微按钮条 (一键归位回侧边栏 / 快速静音) */}
         <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 bg-stone-900/90 border border-stone-700/80 rounded-full px-2 py-0.5 shadow-lg backdrop-blur-md text-[9px] text-stone-300 pointer-events-auto whitespace-nowrap">
           <button
             type="button"
@@ -372,34 +373,16 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              const nextMode = voiceMode === "zh" ? "ja" : "zh";
-              setVoiceMode(nextMode);
-              usagiSound.setVoiceMode(nextMode);
-              if (nextMode === "zh") {
-                usagiSound.speak("中文语音已开启！", "hi");
-              } else {
-                usagiSound.play("yaha");
-              }
-            }}
-            className="hover:text-amber-300 flex items-center gap-0.5 cursor-pointer font-medium"
-            title="点击切换：中文配音 / 日文原声"
-          >
-            <span>{voiceMode === "zh" ? "🇨🇳 中文" : "🇯🇵 原声"}</span>
-          </button>
-          <span className="text-stone-600">|</span>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
               const next = !soundOn;
               setSoundOn(next);
               usagiSound.setEnabled(next);
-              if (next) usagiSound.play("yaha");
+              if (next) usagiSound.play("click");
             }}
-            className="hover:text-amber-300 cursor-pointer"
+            className="hover:text-amber-300 cursor-pointer flex items-center gap-0.5"
             title={soundOn ? "静音" : "开启声音"}
           >
             {soundOn ? <Volume2 className="h-2.5 w-2.5" /> : <VolumeX className="h-2.5 w-2.5 text-stone-500" />}
+            <span>{soundOn ? "声音" : "静音"}</span>
           </button>
         </div>
       </div>
