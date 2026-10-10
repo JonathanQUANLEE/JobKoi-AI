@@ -353,12 +353,18 @@ export const CardSwap = forwardRef<CardSwapHandle, CardSwapProps>(
       let lastWheelTime = 0;
 
       const handleWheel = (e: WheelEvent) => {
-        // 1. 如果处于专注阅读模式：绝不拦截，滚轮 100% 留给正文阅读与长文档滑动
-        if (isReadingMode) {
+        const target = e.target as HTMLElement | null;
+
+        // 1. 如果光标位于正文阅读区域，或者已经处于专注阅读模式：
+        // 绝不拦截，滚轮 100% 留给正文阅读与长文档平滑滚动！
+        if (
+          isReadingMode ||
+          target?.closest(".reading-content-zone, .allow-inner-scroll, [data-allow-scroll], textarea, input, pre")
+        ) {
           return;
         }
 
-        // 2. 如果非阅读模式：滚轮上下滚动立即用于抽换卡片，且绝不被内部文本拦截
+        // 2. 如果在卡片外部轮廓、顶栏、底栏或背景上滚动：滚轮用于 3D 抽换卡片
         if (Math.abs(e.deltaY) < 12) return;
 
         const now = performance.now();

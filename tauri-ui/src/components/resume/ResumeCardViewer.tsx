@@ -266,6 +266,10 @@ export default function ResumeCardViewer({
                 e.stopPropagation();
                 if (!isReadingMode) onSetReadingMode(true);
               }}
+              onWheel={(e) => {
+                e.stopPropagation();
+                if (!isReadingMode) onSetReadingMode(true);
+              }}
               className={`flex-1 min-h-0 overflow-y-auto rounded-xl border p-5 leading-relaxed text-stone-200 select-text allow-inner-scroll reading-content-zone transition-all ${
                 isReadingMode
                   ? isMonochrome
