@@ -2,6 +2,7 @@ import { FlaskConical, PanelLeftOpen, SlidersHorizontal, Minus, Square, X } from
 import type { Lang } from "../lib/i18n";
 import { useRunStore } from "../store";
 import type { NavItem } from "./Sidebar";
+import { ipc } from "../lib/ipc";
 
 interface DashboardHeaderProps {
   sidebarCollapsed: boolean;
@@ -51,10 +52,14 @@ export default function DashboardHeader({
     e.preventDefault();
     e.stopPropagation();
     try {
-      const win = await getTauriWindow();
-      if (win) await win.minimize();
-    } catch (err) {
-      console.warn("Minimize error:", err);
+      await ipc.windowMinimize();
+    } catch {
+      try {
+        const win = await getTauriWindow();
+        if (win) await win.minimize();
+      } catch (err) {
+        console.warn("Minimize error:", err);
+      }
     }
   };
 
@@ -62,10 +67,14 @@ export default function DashboardHeader({
     e.preventDefault();
     e.stopPropagation();
     try {
-      const win = await getTauriWindow();
-      if (win) await win.toggleMaximize();
-    } catch (err) {
-      console.warn("Maximize error:", err);
+      await ipc.windowToggleMaximize();
+    } catch {
+      try {
+        const win = await getTauriWindow();
+        if (win) await win.toggleMaximize();
+      } catch (err) {
+        console.warn("Maximize error:", err);
+      }
     }
   };
 
@@ -73,10 +82,14 @@ export default function DashboardHeader({
     e.preventDefault();
     e.stopPropagation();
     try {
-      const win = await getTauriWindow();
-      if (win) await win.close();
-    } catch (err) {
-      console.warn("Close error:", err);
+      await ipc.windowClose();
+    } catch {
+      try {
+        const win = await getTauriWindow();
+        if (win) await win.close();
+      } catch (err) {
+        console.warn("Close error:", err);
+      }
     }
   };
 

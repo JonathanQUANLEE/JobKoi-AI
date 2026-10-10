@@ -236,4 +236,7 @@ export const ipc = {
     pyInvoke<{ status: string; name: string }>("delete_resume_file", { name }),
   openResumeNative: (name: string) =>
     pyInvoke<{ status: string; name: string; path: string }>("open_resume_native", { name }),
+  windowMinimize: () => pyInvoke<{ status: string }>("window_minimize", {}),
+  windowToggleMaximize: () => pyInvoke<{ status: string }>("window_toggle_maximize", {}),
+  windowClose: () => pyInvoke<{ status: string }>("window_close", {}),
 };

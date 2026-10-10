@@ -9,6 +9,7 @@ import WorkbenchView from "../views/WorkbenchView";
 import SettingsDrawer, { type DrawerTab } from "../components/SettingsDrawer";
 import SettingsModal, { type SettingsTab } from "../components/SettingsModal";
 import Sidebar, { type NavItem } from "../components/Sidebar";
+import GlobalUsagiPet from "../components/pet/GlobalUsagiPet";
 import { useWorkbenchWheel } from "../hooks/useWorkbenchWheel";
 import { useProfileFormState } from "../hooks/useProfileFormState";
 import { useJobBotRuntime } from "../hooks/useJobBotRuntime";
@@ -422,6 +423,18 @@ export default function Dashboard() {
         }}
         onSaveConfig={profileForm.saveConfig}
         busy={busy}
+      />
+
+      {/* 乌萨奇全窗口自由停靠浮动特助 (方案 A：可在软件任何位置随意拖拽、松手定格) */}
+      <GlobalUsagiPet
+        running={botRuntime.running}
+        onStartRun={botRuntime.startRun}
+        onOpenSettingsModal={(tab) => {
+          setSettingsModalTab((tab as SettingsTab) || "general");
+          setSettingsModalOpen(true);
+        }}
+        lang={lang}
+        sidebarCollapsed={sidebarCollapsed}
       />
     </div>
   );
