@@ -1,0 +1,140 @@
+/* 设置打开时的局部雾化全屏覆盖层 */
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  isolation: isolate;
+  background: rgba(8, 10, 16, 0.45);
+  animation: overlay-fade-in 0.3s ease-out both;
+}
+
+@keyframes overlay-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 中央柔和雾化区域：无矩形方框，椭圆渐隐入虚空 */
+.settings-mist {
+  position: absolute;
+  z-index: 0;
+  width: min(90vw, 1080px);
+  height: min(85vh, 760px);
+  background: radial-gradient(
+    ellipse at center,
+    rgba(245, 158, 11, 0.08) 0%,
+    rgba(140, 160, 210, 0.08) 35%,
+    rgba(20, 22, 30, 0.85) 60%,
+    transparent 80%
+  );
+  -webkit-backdrop-filter: blur(28px) saturate(135%);
+  backdrop-filter: blur(28px) saturate(135%);
+  -webkit-mask-image: radial-gradient(
+    ellipse at center,
+    black 0%,
+    black 48%,
+    rgba(0, 0, 0, 0.7) 65%,
+    transparent 84%
+  );
+  mask-image: radial-gradient(
+    ellipse at center,
+    black 0%,
+    black 48%,
+    rgba(0, 0, 0, 0.7) 65%,
+    transparent 84%
+  );
+  pointer-events: none;
+}
+
+/* 真正的设置内容：完全无硬外边框限制，文字与控件通透浮现 */
+.settings-content {
+  position: relative;
+  z-index: 1;
+  width: min(820px, calc(100vw - 48px));
+  max-height: calc(88vh - 40px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 36px 44px;
+  background: transparent;
+  border: none;
+  animation: settings-appear 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* 内容从模糊状态中优雅渐显 (雾气浮现) */
+@keyframes settings-appear {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+    filter: blur(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+/* 悬浮标题与分类 (Floating Typography) */
+.floating-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: gentle-float 6s ease-in-out infinite;
+}
+
+@keyframes gentle-float {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -5px, 0);
+  }
+}
+
+/* 设置行不使用生硬卡片，仅以透气留白和柔和微弱细线分组 */
+.mist-setting-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.mist-setting-row:last-child {
+  border-bottom: none;
+}
+
+.mist-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  color: #f3f4f6;
+  font-size: 0.8125rem;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.mist-input:focus {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(245, 158, 11, 0.6);
+  box-shadow: 0 0 16px -2px rgba(245, 158, 11, 0.2);
+}
+
+/* 尊重系统的减少动态效果设置 */
+@media (prefers-reduced-motion: reduce) {
+  .settings-content {
+    animation: none;
+  }
+  .floating-title {
+    animation: none;
+  }
+}

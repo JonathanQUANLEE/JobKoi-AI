@@ -8,6 +8,7 @@ import DashboardHeader from "../components/DashboardHeader";
 import WorkbenchView from "../views/WorkbenchView";
 import SettingsDrawer, { type DrawerTab } from "../components/SettingsDrawer";
 import SettingsModal, { type SettingsTab } from "../components/SettingsModal";
+import MistSettingsModal, { type MistModalType } from "../components/settings/MistSettingsModal";
 import Sidebar, { type NavItem } from "../components/Sidebar";
 import GlobalUsagiPet from "../components/pet/GlobalUsagiPet";
 import { useWorkbenchWheel } from "../hooks/useWorkbenchWheel";
@@ -33,6 +34,7 @@ export default function Dashboard() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeNav, setActiveNav] = useState<NavItem>("workbench");
   const [drawerTab, setDrawerTab] = useState<DrawerTab>("rules");
+  const [mistModalType, setMistModalType] = useState<MistModalType>(null);
   const [defaultResumeName, setDefaultResumeName] = useState<string>("我的求职简历.docx");
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [settingsModalTab, setSettingsModalTab] = useState<SettingsTab>("general");
@@ -139,8 +141,11 @@ export default function Dashboard() {
         onStopRun={botRuntime.stopRun}
         busy={busy}
         onOpenSettings={(tab) => {
-          if (tab) setDrawerTab(tab);
-          setDrawerOpen(true);
+          if (tab === "rules" || tab === "policy" || tab === "greeting" || tab === "model") {
+            setMistModalType(tab);
+          } else {
+            setMistModalType("rules");
+          }
         }}
         onOpenSettingsModal={(tab) => {
           setSettingsModalTab(tab || "general");
@@ -321,8 +326,11 @@ export default function Dashboard() {
                 }
                 onRun={() => botRuntime.startRun()}
                 onOpenSettings={(tab) => {
-                  if (tab) setDrawerTab(tab);
-                  setDrawerOpen(true);
+                  if (tab === "rules" || tab === "policy" || tab === "greeting" || tab === "model") {
+                    setMistModalType(tab);
+                  } else {
+                    setMistModalType("model");
+                  }
                 }}
               />
             </div>
@@ -425,6 +433,33 @@ export default function Dashboard() {
         }}
         onSaveConfig={profileForm.saveConfig}
         busy={busy}
+      />
+
+      {/* 4 大独立居中局部雾化悬浮设置弹窗（过滤规则、投递安全、打招呼模板、AI模型配置） */}
+      <MistSettingsModal
+        type={mistModalType}
+        onClose={() => setMistModalType(null)}
+        currentProfileData={profileForm.currentProfileData}
+        onSaveProfileData={(data) => {
+          profileForm.hydrateFromProfile({
+            name: profileForm.profileName,
+            path: "",
+            data,
+          });
+        }}
+        rule={profileForm.rule}
+        setRule={profileForm.setRule}
+        dailyLimit={profileForm.dailyLimit}
+        setDailyLimit={profileForm.setDailyLimit}
+        delayMin={profileForm.delayMin}
+        setDelayMin={profileForm.setDelayMin}
+        delayMax={profileForm.delayMax}
+        setDelayMax={profileForm.setDelayMax}
+        dryRun={profileForm.dryRun}
+        setDryRun={profileForm.setDryRun}
+        greeting={profileForm.greeting}
+        setGreeting={profileForm.setGreeting}
+        onSaveConfig={profileForm.saveConfig}
       />
 
       {/* 乌萨奇全窗口自由停靠浮动特助 (方案 A：可在软件任何位置随意拖拽、松手定格) */}
