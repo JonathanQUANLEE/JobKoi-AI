@@ -48,6 +48,22 @@
     0 0 20px rgba(245, 158, 11, 0.2);
 }
 
+[data-theme="monochrome"] .drawer-stack-card {
+  background: linear-gradient(135deg, #18181b 0%, #09090b 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 
+    0 10px 25px -5px rgba(0, 0, 0, 0.85),
+    0 8px 10px -6px rgba(0, 0, 0, 0.7),
+    0 0 15px rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="monochrome"] .drawer-stack-card:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 
+    0 15px 30px -5px rgba(0, 0, 0, 0.95),
+    0 0 20px rgba(255, 255, 255, 0.1);
+}
+
 /* 抽屉抽出动画关键帧 (Drawer Pull Out) */
 .card-drawer-pulling {
   animation: drawerPullOut 0.55s cubic-bezier(0.4, 0, 0.2, 1) forwards;

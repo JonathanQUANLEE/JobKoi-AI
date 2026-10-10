@@ -10,6 +10,7 @@ import {
   type HTMLAttributes,
 } from 'react';
 import { gsap } from 'gsap';
+import { useRunStore } from '../../store';
 import './MagicBento.css';
 
 export const DEFAULT_PARTICLE_COUNT = 10;
@@ -135,6 +136,13 @@ export const ParticleCard: FC<ParticleCardProps> = ({
   onClick,
   ...rest
 }) => {
+  const currentTheme = useRunStore((s) => s.theme);
+  const isMonochrome = currentTheme === "monochrome";
+  const effectiveGlowColor =
+    isMonochrome && (glowColor === DEFAULT_GLOW_COLOR || glowColor === '245, 158, 11')
+      ? '240, 240, 245'
+      : glowColor;
+
   const cardRef = useRef<HTMLDivElement>(null);
   const particlesRef = useRef<HTMLElement[]>([]);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -150,10 +158,10 @@ export const ParticleCard: FC<ParticleCardProps> = ({
     if (width === 0 || height === 0) return;
 
     memoizedParticles.current = Array.from({ length: particleCount }, () =>
-      createParticleElement(Math.random() * width, Math.random() * height, glowColor)
+      createParticleElement(Math.random() * width, Math.random() * height, effectiveGlowColor)
     );
     particlesInitialized.current = true;
-  }, [particleCount, glowColor]);
+  }, [particleCount, effectiveGlowColor]);
 
   const clearAllParticles = useCallback(() => {
     timeoutsRef.current.forEach(clearTimeout);
@@ -333,7 +341,7 @@ export const ParticleCard: FC<ParticleCardProps> = ({
         width: ${maxDistance * 2}px;
         height: ${maxDistance * 2}px;
         border-radius: 50%;
-        background: radial-gradient(circle, rgba(${glowColor}, 0.35) 0%, rgba(${glowColor}, 0.15) 30%, transparent 70%);
+        background: radial-gradient(circle, rgba(${effectiveGlowColor}, 0.35) 0%, rgba(${effectiveGlowColor}, 0.15) 30%, transparent 70%);
         left: ${x - maxDistance}px;
         top: ${y - maxDistance}px;
         pointer-events: none;
@@ -381,7 +389,7 @@ export const ParticleCard: FC<ParticleCardProps> = ({
     clickEffect,
     enableBorderGlow,
     spotlightRadius,
-    glowColor,
+    effectiveGlowColor,
   ]);
 
   const borderGlowClass = enableBorderGlow ? 'magic-bento-card--border-glow' : '';
@@ -394,7 +402,7 @@ export const ParticleCard: FC<ParticleCardProps> = ({
         ...style,
         position: 'relative',
         overflow: 'hidden',
-        ['--glow-color' as string]: glowColor,
+        ['--glow-color' as string]: effectiveGlowColor,
       }}
       onClick={onClick}
       {...rest}

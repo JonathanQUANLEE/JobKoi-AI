@@ -35,6 +35,23 @@
     0 0 1px 1px rgba(255, 255, 255, 0.1);
 }
 
+[data-theme="monochrome"] .card-swap-item {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, #141417 0%, #09090b 100%);
+  box-shadow: 
+    0 24px 48px -12px rgba(0, 0, 0, 0.95),
+    0 0 24px rgba(0, 0, 0, 0.8),
+    0 0 1px 1px rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="monochrome"] .card-swap-item:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 
+    0 28px 56px -12px rgba(0, 0, 0, 0.98),
+    0 0 28px rgba(255, 255, 255, 0.12),
+    0 0 1px 1px rgba(255, 255, 255, 0.18);
+}
+
 @media (max-width: 768px) {
   .card-swap-container {
     transform: scale(0.85);

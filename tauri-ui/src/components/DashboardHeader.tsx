@@ -1,5 +1,6 @@
 import { FlaskConical, PanelLeftOpen, SlidersHorizontal } from "lucide-react";
 import type { Lang } from "../lib/i18n";
+import { useRunStore } from "../store";
 import type { NavItem } from "./Sidebar";
 
 interface DashboardHeaderProps {
@@ -25,24 +26,28 @@ export default function DashboardHeader({
   lang,
   onOpenSettingsModal,
 }: DashboardHeaderProps) {
+  const isMonochrome = useRunStore((s) => s.theme === "monochrome");
+
   return (
-    <header className="h-12 shrink-0 border-b border-[var(--grid)] bg-[#141210]/90 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between z-20">
+    <header className="h-12 shrink-0 border-b border-[var(--grid)] bg-[var(--sidebar-bg)]/90 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between z-20">
       <div className="flex items-center gap-2 text-xs">
         {/* WorkBuddy 风格：展开侧边栏入口按钮（侧边栏收起时呈现，如水露凝结浮现；点击触发雨滴涟漪） */}
         {sidebarCollapsed && (
           <button
             type="button"
             onClick={onExpandSidebar}
-            className="relative group flex items-center gap-1.5 rounded-lg border border-[var(--grid)] bg-[#1c1917] hover:bg-[#25201d] hover:border-amber-500/50 px-2.5 py-1 text-xs font-medium text-stone-200 hover:text-amber-400 shadow-sm transition-all cursor-pointer water-drop-btn mr-1.5 overflow-visible"
+            className={`relative group flex items-center gap-1.5 rounded-lg border border-[var(--grid)] bg-[var(--panel-2)] hover:bg-[var(--panel-hover)] px-2.5 py-1 text-xs font-medium text-stone-200 shadow-sm transition-all cursor-pointer water-drop-btn mr-1.5 overflow-visible ${
+              isMonochrome ? "hover:border-white/40 hover:text-white" : "hover:border-amber-500/50 hover:text-amber-400"
+            }`}
             title={lang === "en" ? "Expand Sidebar (Ctrl+B)" : "展开侧边栏 (Ctrl+B)"}
           >
             {expandRipple && (
               <span className="pointer-events-none absolute inset-0 -m-3 flex items-center justify-center">
-                <span className="absolute h-8 w-8 rounded-full border border-amber-400/80 bg-amber-400/20 animate-raindrop-1" />
+                <span className={`absolute h-8 w-8 rounded-full border animate-raindrop-1 ${isMonochrome ? "border-white/80 bg-white/20" : "border-amber-400/80 bg-amber-400/20"}`} />
                 <span className="absolute h-8 w-8 rounded-full border border-cyan-400/70 bg-cyan-400/15 animate-raindrop-2" />
               </span>
             )}
-            <PanelLeftOpen className="h-3.5 w-3.5 text-amber-400 group-hover:scale-110 transition-transform relative z-10" />
+            <PanelLeftOpen className={`h-3.5 w-3.5 group-hover:scale-110 transition-transform relative z-10 ${isMonochrome ? "text-white" : "text-amber-400"}`} />
             <span className="font-medium relative z-10">{lang === "en" ? "Expand" : "展开侧边栏"}</span>
             <span className="hidden md:inline-block text-[10px] text-stone-500 font-mono ml-0.5 relative z-10">
               Ctrl+B
@@ -71,7 +76,11 @@ export default function DashboardHeader({
         <button
           type="button"
           onClick={onOpenSettingsModal}
-          className="btn-ghost !py-1 !px-2.5 text-xs flex items-center gap-1.5 rounded-lg border border-[var(--grid)] hover:border-amber-500/40 text-amber-400 cursor-pointer"
+          className={`btn-ghost !py-1 !px-2.5 text-xs flex items-center gap-1.5 rounded-lg border border-[var(--grid)] cursor-pointer transition-all ${
+            isMonochrome
+              ? "hover:border-white/50 text-zinc-200 hover:text-white"
+              : "hover:border-amber-500/40 text-amber-400"
+          }`}
         >
           <SlidersHorizontal className="h-3.5 w-3.5" />
           <span>{lang === "en" ? "Settings" : "系统设置"}</span>

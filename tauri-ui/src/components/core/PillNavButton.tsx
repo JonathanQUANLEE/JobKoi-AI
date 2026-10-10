@@ -6,6 +6,7 @@ import {
   type FC,
 } from "react";
 import { gsap } from "gsap";
+import { useRunStore } from "../../store";
 import "./PillNav.css";
 
 export interface PillNavButtonProps {
@@ -126,10 +127,23 @@ export const PillNavButton: FC<PillNavButtonProps> = ({
     });
   };
 
+  const currentTheme = useRunStore((s) => s.theme);
+  const isMonochrome = currentTheme === "monochrome";
+
   // 根据不同变体分配基础与气泡配色
   const resolvedBubbleColor =
     bubbleColor ||
-    (variant === "primary"
+    (isMonochrome
+      ? variant === "primary"
+        ? "#000000" // 核心黑白反差：白色药丸按钮，内部展开纯黑液体气泡！
+        : variant === "danger-menu"
+        ? "rgba(239, 68, 68, 0.18)"
+        : variant === "menu"
+        ? "rgba(255, 255, 255, 0.14)"
+        : active
+        ? "rgba(255, 255, 255, 0.14)"
+        : "rgba(255, 255, 255, 0.08)"
+      : variant === "primary"
       ? "rgba(255, 255, 255, 0.24)"
       : variant === "danger-menu"
       ? "rgba(239, 68, 68, 0.16)"
@@ -139,16 +153,25 @@ export const PillNavButton: FC<PillNavButtonProps> = ({
       ? "rgba(245, 158, 11, 0.20)"
       : "rgba(255, 255, 255, 0.08)");
 
-  const baseVariantStyles =
-    variant === "primary"
-      ? "w-full justify-center rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-3 py-2.5 text-xs font-bold text-stone-950 shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all disabled:opacity-50"
+  const baseVariantStyles = isMonochrome
+    ? variant === "primary"
+      ? "w-full justify-center rounded-xl bg-white px-3 py-2.5 text-xs font-black text-black shadow-lg shadow-white/10 active:scale-[0.98] transition-all disabled:opacity-50 overflow-hidden"
       : variant === "menu"
-      ? "w-full justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium text-stone-300 hover:text-amber-400 transition-colors"
+      ? "w-full justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-300 hover:text-white transition-colors"
       : variant === "danger-menu"
-      ? "w-full justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium text-stone-300 hover:text-red-400 transition-colors"
+      ? "w-full justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-400 hover:text-red-400 transition-colors"
       : active
-      ? "w-full justify-between rounded-xl px-3 py-2.5 text-xs font-semibold bg-[#25211c] text-amber-400 border border-amber-500/20 shadow-sm transition-all"
-      : "w-full justify-between rounded-xl px-3 py-2.5 text-xs font-medium text-stone-400 hover:text-stone-100 transition-all";
+      ? "w-full justify-between rounded-xl px-3 py-2.5 text-xs font-semibold bg-zinc-900 text-zinc-100 border border-zinc-700/80 shadow-inner transition-all"
+      : "w-full justify-between rounded-xl px-3 py-2.5 text-xs font-medium text-zinc-400 hover:text-zinc-100 transition-all"
+    : variant === "primary"
+    ? "w-full justify-center rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-3 py-2.5 text-xs font-bold text-stone-950 shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all disabled:opacity-50"
+    : variant === "menu"
+    ? "w-full justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium text-stone-300 hover:text-amber-400 transition-colors"
+    : variant === "danger-menu"
+    ? "w-full justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium text-stone-300 hover:text-red-400 transition-colors"
+    : active
+    ? "w-full justify-between rounded-xl px-3 py-2.5 text-xs font-semibold bg-[#25211c] text-amber-400 border border-amber-500/20 shadow-sm transition-all"
+    : "w-full justify-between rounded-xl px-3 py-2.5 text-xs font-medium text-stone-400 hover:text-stone-100 transition-all";
 
   return (
     <button
@@ -174,7 +197,12 @@ export const PillNavButton: FC<PillNavButtonProps> = ({
       <div className="pill-btn-content">
         <div className="pill-btn-stack">
           {/* 正常默认标签 */}
-          <span ref={normalLabelRef} className="pill-btn-label-normal">
+          <span
+            ref={normalLabelRef}
+            className={`pill-btn-label-normal ${
+              isMonochrome && variant === "primary" ? "text-black font-black" : ""
+            }`}
+          >
             {icon && <span className="shrink-0">{icon}</span>}
             <span className="truncate">{label}</span>
           </span>
@@ -183,7 +211,17 @@ export const PillNavButton: FC<PillNavButtonProps> = ({
           <span
             ref={hoverLabelRef}
             className={`pill-btn-label-hovered ${
-              variant === "primary"
+              isMonochrome
+                ? variant === "primary"
+                  ? "text-white font-black"
+                  : variant === "danger-menu"
+                  ? "text-red-400 font-semibold"
+                  : variant === "menu"
+                  ? "text-white font-semibold"
+                  : active
+                  ? "text-white font-bold"
+                  : "text-white font-semibold"
+                : variant === "primary"
                 ? "text-stone-950 font-black"
                 : variant === "danger-menu"
                 ? "text-red-400 font-semibold"

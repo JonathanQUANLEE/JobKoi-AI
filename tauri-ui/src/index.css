@@ -3,9 +3,10 @@
 @tailwind utilities;
 
 :root {
-  /* 借鉴 Hunt Now (hunt.now) 暖暗夜设计系统与便当盒（Bento Grid）美学 */
+  /* 借鉴 Hunt Now (hunt.now) 经典暖暗夜设计系统与便当盒（Bento Grid）美学 */
   --ink: #f5f5f4;          /* 暖石白 text */
   --paper: #0f0e0d;        /* 沉浸式暖黑底色 */
+  --sidebar-bg: #141210;   /* 侧边栏沉浸基底 */
   --panel: #181614;        /* 便当盒卡片主表面 */
   --panel-2: #221f1c;      /* 浮层与输入框表面 */
   --panel-hover: #292622;  /* 卡片悬停高亮 */
@@ -16,6 +17,28 @@
   --accent: #f59e0b;       /* Hunt Now 标志性暖金琥珀色 */
   --accent-hover: #d97706;
   --accent-subtle: rgba(245, 158, 11, 0.12);
+  --danger: #ef4444;
+  --card-radius: 20px;
+}
+
+:root[data-theme="monochrome"],
+[data-theme="monochrome"],
+.theme-monochrome {
+  /* 极黑纯白 · 黑白高级感夜间设计系统 (Monochrome Luxe) */
+  --paper: #000000;         /* 纯净极夜深黑底色 (夜间使用纯粹深沉护眼) */
+  --sidebar-bg: #09090b;    /* 侧边栏暗哑石墨黑 */
+  --panel: #0d0d10;         /* 便当盒主体表面：黑曜石沉稳质感 */
+  --panel-2: #141417;       /* 浮层表面：精致深石墨黑 */
+  --panel-hover: #1c1c20;   /* 悬停微光提亮 */
+  --grid: #27272a;          /* 极细钛灰冷调发丝线边框 */
+  --ink: #f4f4f5;           /* 典雅银白主文字 (柔和纯净不刺眼) */
+  --muted-fg: #a1a1aa;      /* 钛灰冷银次级文字 (层级分明，拒绝通篇纯白) */
+  --text-dim: #71717a;      /* 铅灰注脚辅助 */
+  --signal: #10b981;        /* 翡翠绿核心指示 */
+  --signal-subtle: rgba(16, 185, 129, 0.14);
+  --accent: #ffffff;        /* 纯白高光（带来黑白反差高级质感） */
+  --accent-hover: #e4e4e7;  /* 钛白微灰 */
+  --accent-subtle: rgba(255, 255, 255, 0.10);
   --danger: #ef4444;
   --card-radius: 20px;
 }
@@ -550,3 +573,71 @@
     --beam-angle: 360deg;
   }
 }
+
+/* ========================================================================= */
+/* 黑白高级感夜间设计系统 (Monochrome Luxe Global Overrides)               */
+/* ========================================================================= */
+
+[data-theme="monochrome"] ::-webkit-scrollbar-thumb {
+  background: #27272a;
+}
+
+[data-theme="monochrome"] ::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+
+/* 纯白主按钮与反差黑字 */
+[data-theme="monochrome"] .btn-primary {
+  background: #ffffff;
+  color: #000000;
+  box-shadow: 0 2px 14px rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="monochrome"] .btn-primary:hover:not(:disabled) {
+  background: #e4e4e7;
+  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.22);
+}
+
+/* 卡片与模式选择高亮 */
+[data-theme="monochrome"] .panel:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+[data-theme="monochrome"] .mode-button:hover,
+[data-theme="monochrome"] .mode-button.active {
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+[data-theme="monochrome"] .spatial-card-glow::before {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.3), transparent 45%, rgba(200, 200, 215, 0.15));
+}
+
+/* 琥珀渐变在黑白高级感模式下转换为高奢银白质感 */
+[data-theme="monochrome"] .bg-gradient-to-r.from-amber-500.to-amber-600 {
+  background: linear-gradient(135deg, #ffffff 0%, #e4e4e7 100%) !important;
+  color: #000000 !important;
+  box-shadow: 0 4px 16px rgba(255, 255, 255, 0.12) !important;
+}
+
+[data-theme="monochrome"] .bg-gradient-to-r.from-amber-500.to-amber-600:hover {
+  background: linear-gradient(135deg, #ffffff 0%, #f4f4f5 100%) !important;
+  box-shadow: 0 6px 22px rgba(255, 255, 255, 0.20) !important;
+}
+
+/* 琥珀微光标签转为典雅银白 */
+[data-theme="monochrome"] .bg-amber-500\/10,
+[data-theme="monochrome"] .bg-amber-500\/15 {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-theme="monochrome"] .border-amber-500\/20,
+[data-theme="monochrome"] .border-amber-500\/30,
+[data-theme="monochrome"] .border-amber-500\/40 {
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+[data-theme="monochrome"] .text-amber-400,
+[data-theme="monochrome"] .text-amber-300 {
+  color: #e4e4e7 !important;
+}
+
