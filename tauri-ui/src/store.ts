@@ -71,6 +71,10 @@ type RunState = {
   restoredPage: Record<string, unknown> | null;
   restoredPageFilters: Record<string, unknown>[];
 
+  // 常驻限额停机横幅：本地安全限额 / 平台限额提示命中后持续显示，直到下一轮运行
+  limitNotice: { message: string } | null;
+  setLimitNotice: (notice: { message: string } | null) => void;
+
   // 全局联动消息通知（统一定位在左侧边栏，支持 8s 自动消失、最多5条折叠堆叠与双击平铺）
   notifications: NotificationItem[];
   notification: NotificationItem | null;
@@ -148,6 +152,8 @@ export const useRunStore = create<RunState>((set) => ({
   restoredLatestSent: null,
   restoredPage: null,
   restoredPageFilters: [],
+  limitNotice: null,
+  setLimitNotice: (limitNotice) => set({ limitNotice }),
 
   lang: detectLang(),
 
@@ -279,7 +285,16 @@ export const useRunStore = create<RunState>((set) => ({
       if (ev.kind === "loop_ended") {
         running = false;
       }
-      return { events, currentIndex, running, reviewPending };
+      // 限额停机（本地安全限额 / 平台限额提示）→ 常驻横幅，不再自动消失
+      let limitNotice = s.limitNotice;
+      if (ev.kind === "limit_reached" || ev.kind === "platform_limit_reached") {
+        const msg =
+          typeof ev.payload.message === "string" && ev.payload.message.trim()
+            ? ev.payload.message
+            : "今日投递已达上限，已安全停止。可在「投递明细记录」中查看今天的实际投递数量。";
+        limitNotice = { message: msg };
+      }
+      return { events, currentIndex, running, reviewPending, limitNotice };
     }),
   pushLog: (line) => set((s) => ({ logs: [...s.logs, line].slice(-MAX_LOGS) })),
   clear: () => set({
@@ -287,6 +302,7 @@ export const useRunStore = create<RunState>((set) => ({
     logs: [],
     currentIndex: null,
     reviewPending: null,
+    limitNotice: null,
     restoredStats: null,
     restoredCurrentJob: null,
     restoredLatestSkip: null,

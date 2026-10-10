@@ -17,6 +17,7 @@ export type EventKind =
   | "letter_sent"
   | "feed_exhausted"
   | "limit_reached"
+  | "platform_limit_reached"
   | "loop_ended"
   | "error";
 

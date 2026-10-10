@@ -161,16 +161,24 @@ export function useProfileFormState({
       try {
         const result = await ipc.listProfiles();
         setProfiles(result.profiles);
+        // 默认名固定为 gui-default：绝不回退到列表里第一个 profile
+        // （第一个往往是用户的私有 profile，如 0my——被 09:00 计划任务依赖，
+        // GUI 用它会污染/覆盖私有配置）。
+        const hasDefault = result.profiles.some(
+          (item) => item.name === DEFAULT_PROFILE_NAME,
+        );
         const nextName =
-          preferredName && result.profiles.some((item) => item.name === preferredName)
+          preferredName &&
+          result.profiles.some((item) => item.name === preferredName)
             ? preferredName
-            : result.profiles.some((item) => item.name === DEFAULT_PROFILE_NAME)
-              ? DEFAULT_PROFILE_NAME
-              : result.profiles[0]?.name;
-        if (nextName) {
-          setProfileName(nextName);
-          await loadProfile(nextName);
+            : DEFAULT_PROFILE_NAME;
+        setProfileName(nextName);
+        if (nextName === DEFAULT_PROFILE_NAME && !hasDefault) {
+          // 没有 gui-default 且未明确指定其他已有 profile 时：
+          // 直接用表单默认值新建，不加载任何现有私有 profile
+          return;
         }
+        await loadProfile(nextName);
       } catch (err) {
         setMessage(t("message.profileReadFailed", { error: String(err) }));
       }

@@ -199,10 +199,23 @@ async def _check_captcha(tab: uc.Tab) -> bool:
     return any(k in txt for k in ("安全验证", "滑块", "拖动", "验证码", "请完成验证", "点击完成", "行为验证"))
 
 
+async def _check_limit_alert(tab: uc.Tab) -> bool:
+    """检测页面是否弹出「今日投递/打招呼次数已达上限」提示（平台限额）。"""
+    from boss_zhipin.platforms.platform_limits import match_limit_alert
+
+    try:
+        txt = await tab.evaluate("(document.body && document.body.innerText || '')")
+    except Exception:  # noqa: BLE001
+        return False
+    if not isinstance(txt, str):
+        return False
+    return match_limit_alert("liepin", txt) is not None
+
+
 async def click_chat_and_send(tab: uc.Tab, greeting: str) -> str:
     """点详情页"聊一聊"，在 IM 输入框里发招呼语。
 
-    返回 "sent" / "captcha"（触发风控，应立即停止） / "failed: 原因" / "already"。
+    返回 "sent" / "limit"（平台今日上限） / "captcha"（触发风控，应立即停止） / "failed: 原因" / "already"。
     """
     # 0. 先查是不是风控验证页（找不到按钮多半是因为被验证码顶掉了）
     if await _check_captcha(tab):
@@ -217,6 +230,10 @@ async def click_chat_and_send(tab: uc.Tab, greeting: str) -> str:
         await asyncio.sleep(3)
     except Exception as e:  # noqa: BLE001
         return f"failed: 点聊一聊异常 {e}"
+
+    # 1.5 点击后检查平台限额提示（动作点检测）
+    if await _check_limit_alert(tab):
+        return "limit"
 
     # 2. 找输入框，填招呼语
     try:
