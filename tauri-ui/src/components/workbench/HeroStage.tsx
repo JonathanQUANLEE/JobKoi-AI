@@ -20,7 +20,6 @@ import type { RuleForm } from "../../lib/profileForm";
 import type { Lang } from "../../lib/i18n";
 import { TextEffect } from "../core/text-effect";
 import { summarizeAgentProfile } from "../../lib/agentPreview";
-import { MagicCard } from "../core/MagicBento";
 import {
   PLACEHOLDERS,
   BACKGROUND_TAGS,
@@ -72,7 +71,7 @@ export default function HeroStage({
   const [isUploadingResume, setIsUploadingResume] = useState(false);
   const [uploadStatusText, setUploadStatusText] = useState("");
 
-  // Codex 式自动下沉模式状态
+  // Codex 式无界画布下沉模式状态
   const [isSunkMode, setIsSunkMode] = useState<boolean>(false);
 
   // 当外部开始 AI 思考时，自动触发下沉
@@ -220,7 +219,7 @@ export default function HeroStage({
     >
       <div
         ref={heroInnerRef}
-        className="mx-auto w-full h-[calc(100vh-6.5rem)] max-h-[840px] flex flex-col justify-center items-center text-center perspective-layer relative z-10 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
+        className="mx-auto w-full h-[calc(100vh-6rem)] max-h-[880px] flex flex-col justify-center items-center text-center perspective-layer relative z-10 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
       >
         <div className="dot-pattern absolute inset-0 -z-10 opacity-70 pointer-events-none" aria-hidden="true" />
         <div
@@ -228,7 +227,7 @@ export default function HeroStage({
           aria-hidden="true"
         />
 
-        {/* 1. 顶部提示文案区（提问后自动直接消失折叠，不占高度；滚轮反向滑动或回看时重新显现） */}
+        {/* 1. 顶部提示文案区（未提问时居中展示；提问后全自动折叠消失，高度归零不占位；滚轮反向滑动时丝滑复原） */}
         <div
           className={`w-full transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden ${
             isSunkMode
@@ -290,189 +289,197 @@ export default function HeroStage({
           </div>
         </div>
 
-        {/* 2. 上方腾出的对话实录区域（提问后展开，上方展示对话气泡与思考计时点阵） */}
+        {/* 2. Codex 风格沉浸式无界对话流（彻底去掉外层厚重卡片与方框，直接在背景画布上呈现，向下大幅延伸） */}
+        {isSunkMode && (
+          <div className="w-full max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-[1360px] flex items-center justify-between pb-1.5 px-2 animate-in fade-in duration-500">
+            <span className="text-xs text-stone-400 font-medium flex items-center gap-2">
+              <Bot className="size-3.5 text-[#ff5722]" />
+              <span>AI 专属顾问 · 交流实录</span>
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsSunkMode(false)}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 hover:border-amber-400/40 text-xs text-stone-300 hover:text-white transition-all cursor-pointer shadow-sm backdrop-blur"
+                title="回看初始视窗并恢复中心检索"
+              >
+                <ChevronUp className="size-3 text-amber-400" />
+                <span>回看主视窗</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onResetChat();
+                  setIsSunkMode(false);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 hover:border-stone-700 text-xs text-stone-400 hover:text-stone-200 transition-all cursor-pointer shadow-sm backdrop-blur"
+                title="清空对话记录"
+              >
+                <RotateCw className="size-3" />
+                <span>清空</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 对话消息区：充满上方宽阔空间，直接在背景画布上流淌，无大黑框束缚 */}
         <div
           ref={dialogueScrollRef}
           className={`w-full max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-[1360px] transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
             isSunkMode
-              ? "flex-1 min-h-[160px] max-h-[calc(100vh-330px)] opacity-100 translate-y-0 mb-4 overflow-y-auto pr-1"
+              ? "flex-1 min-h-[200px] opacity-100 translate-y-0 mb-3 overflow-y-auto px-2 sm:px-4 py-2 space-y-5 [scrollbar-width:thin]"
               : "max-h-0 opacity-0 translate-y-8 overflow-hidden pointer-events-none mb-0"
           }`}
         >
-          <div className="w-full rounded-2xl border border-[#ff5722]/35 bg-gradient-to-b from-[#1c1917]/95 to-[#12100e]/95 p-4 sm:p-5 shadow-2xl backdrop-blur-xl text-left">
-            <div className="flex items-center justify-between pb-2.5 border-b border-stone-800/80 mb-3">
-              <span className="text-xs sm:text-sm font-bold text-stone-200 flex items-center gap-2">
-                <Bot className="size-4 text-[#ff5722]" />
-                <span>AI 求职顾问交流实录</span>
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsSunkMode(false)}
-                  className="text-stone-300 hover:text-white text-xs px-2.5 py-1 rounded-full bg-stone-900/90 border border-stone-700/80 hover:border-[#ff5722]/50 flex items-center gap-1 cursor-pointer transition-all shadow-sm"
-                  title="回看初始视窗并恢复中心检索"
-                >
-                  <ChevronUp className="size-3 text-amber-400" />
-                  <span>回看主视窗</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onResetChat();
-                    setIsSunkMode(false);
-                  }}
-                  className="text-stone-400 hover:text-stone-200 text-xs px-2.5 py-1 rounded-full bg-stone-900/70 border border-stone-800 hover:border-stone-700 flex items-center gap-1 cursor-pointer transition-colors"
-                  title="清空对话记录"
-                >
-                  <RotateCw className="size-3" />
-                  <span>清空</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 对话气泡流 */}
-            <div className="space-y-3 mb-3">
-              {heroChatMessages.map((msg, idx) => (
-                <div
-                  key={idx}
-                  className={`flex items-start gap-2.5 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}
-                >
-                  <div
-                    className={`grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold ${
-                      msg.role === "user"
-                        ? "bg-[#ff5722] text-stone-950"
-                        : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                    }`}
-                  >
-                    {msg.role === "user" ? <User className="size-3.5" /> : <Bot className="size-3.5" />}
+          {/* 消息流 */}
+          {heroChatMessages.map((msg, idx) => (
+            <div key={idx} className="space-y-2">
+              {msg.role === "user" ? (
+                /* 用户提问：沉浸式右上对齐气泡 */
+                <div className="flex items-start justify-end gap-3 pl-8 sm:pl-20">
+                  <div className="rounded-2xl bg-white/[0.09] hover:bg-white/[0.13] border border-white/15 px-4.5 py-2.5 text-[14.5px] sm:text-[15.5px] text-stone-100 leading-relaxed shadow-lg backdrop-blur-md max-w-[85%] whitespace-pre-wrap text-left">
+                    {msg.content}
                   </div>
-                  <div
-                    className={`max-w-[85%] rounded-2xl px-4 py-2 text-xs sm:text-[13px] leading-relaxed ${
-                      msg.role === "user"
-                        ? "bg-[#ff5722]/15 border border-[#ff5722]/30 text-stone-100"
-                        : "bg-stone-900/90 border border-stone-800 text-stone-200"
-                    }`}
-                  >
-                    <div className="text-[10px] text-stone-400 mb-0.5 font-semibold">
-                      {msg.role === "user" ? "你的情况与诉求" : "AI 顾问建议"}
-                    </div>
-                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                  <div className="grid size-8 shrink-0 place-items-center rounded-full bg-gradient-to-tr from-[#ff5722] to-[#ff7a50] text-stone-950 font-bold shadow-md shadow-[#ff5722]/30 text-xs">
+                    <User className="size-4" />
                   </div>
                 </div>
-              ))}
-
-              {/* LatticeLoader 思考状态 */}
-              {heroChatting && (
-                <div className="flex items-center justify-between rounded-2xl bg-stone-900/90 border border-amber-500/30 px-5 py-3 shadow-xl backdrop-blur-md">
-                  <LatticeLoader
-                    status="working"
-                    label={lang === "en" ? "AI Thinking & Analyzing Background" : "AI 深度思考与求职画像规划中"}
-                    doneLabel={lang === "en" ? "Profile Crafted in" : "专属求职画像规划完成"}
-                    pattern="orbit"
-                    grid={3}
-                    shape="round"
-                    cellSize={6}
-                    gap={2.5}
-                    fontSize={13}
-                    glow={true}
-                    glowColor="#f59e0b"
-                    color="#f59e0b"
-                    doneColor="#10b981"
-                    errorColor="#ef4444"
-                    showTimer={true}
-                  />
-                  <span className="text-xs text-stone-400 hidden sm:inline">
-                    已关联简历与意向 · 正在提炼字段
-                  </span>
+              ) : (
+                /* AI 回答：直接在画布背景流淌，如同 Codex / OpenCode 高级排版 */
+                <div className="flex items-start gap-3.5 pr-8 sm:pr-20 text-left">
+                  <div className="grid size-8 shrink-0 place-items-center rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-md shadow-amber-500/10 text-xs mt-0.5">
+                    <Bot className="size-4" />
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <div className="text-[14.5px] sm:text-[15.5px] text-stone-200 leading-relaxed whitespace-pre-wrap selection:bg-[#ff5722]/30">
+                      {msg.content}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
+          ))}
 
-            {/* 提炼出的投递画像卡片 */}
-            {heroProfileResult && (
-              <div className="rounded-xl border border-white/10 bg-black/40 p-4">
-                <div className="flex items-center justify-between mb-3">
+          {/* 实时思考中动效：React Bits LatticeLoader 轨道点阵旋转 + 实时计时器（工作中 X 秒） */}
+          {heroChatting && (
+            <div className="flex items-start gap-3.5 pr-8 sm:pr-20 pt-1 text-left animate-in fade-in duration-300">
+              <div className="grid size-8 shrink-0 place-items-center rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-md shadow-amber-500/10 text-xs mt-0.5">
+                <Bot className="size-4 animate-pulse" />
+              </div>
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-3.5 px-4 py-2.5 rounded-2xl bg-white/[0.05] border border-white/10 shadow-lg backdrop-blur-md">
                   <LatticeLoader
-                    status="done"
-                    label="AI 顾问规划中"
-                    doneLabel={lang === "en" ? "AI Job Profile Generated in" : "AI 专属求职画像已就绪"}
+                    status="working"
+                    label={lang === "en" ? "Thinking" : "工作中"}
+                    doneLabel={lang === "en" ? "Thought in" : "已完成"}
+                    errorLabel={lang === "en" ? "Failed after" : "失败于"}
                     pattern="orbit"
                     grid={3}
                     shape="round"
-                    cellSize={5}
-                    gap={2}
-                    fontSize={13}
-                    color="#10b981"
-                    doneColor="#10b981"
+                    color="#f59e0b"
+                    doneColor="#22c55e"
+                    errorColor="#ef4444"
+                    cellSize={6}
+                    gap={2.5}
+                    fontSize={13.5}
+                    step={90}
+                    idleOpacity={0.25}
                     glow={true}
-                    glowColor="#10b981"
-                    showTimer={false}
+                    glowColor="#f59e0b"
+                    showTimer={true}
                   />
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-950/70 border border-emerald-500/30 text-emerald-300 font-medium">
-                    ● {lang === "en" ? "Ready" : "策略就绪"}
+                  <span className="text-xs text-stone-400 font-medium">
+                    {lang === "en" ? "Deep analyzing background & requirements..." : "正在深度思考并提炼专属求职画像..."}
                   </span>
                 </div>
+              </div>
+            </div>
+          )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs mb-3">
-                  <div className="bg-stone-950/80 p-2.5 rounded-xl border border-stone-800/80">
-                    <span className="text-stone-500 text-[11px] block font-medium">
-                      {lang === "en" ? "Target Role:" : "目标岗位:"}
-                    </span>
-                    <span className="font-semibold text-stone-100 text-xs mt-0.5 block truncate">
-                      {heroProfilePreview?.query || currentLabel}
-                    </span>
-                  </div>
-                  <div className="bg-stone-950/80 p-2.5 rounded-xl border border-stone-800/80">
-                    <span className="text-stone-500 text-[11px] block font-medium">
-                      {lang === "en" ? "Target Cities:" : "意向城市:"}
-                    </span>
-                    <span className="font-semibold text-stone-100 text-xs mt-0.5 block truncate">
-                      {heroProfilePreview?.cities || currentCityValues || (lang === "en" ? "Nationwide / Any" : "全国/不限")}
-                    </span>
-                  </div>
-                  <div className="bg-stone-950/80 p-2.5 rounded-xl border border-stone-800/80">
-                    <span className="text-stone-500 text-[11px] block font-medium">
-                      {lang === "en" ? "Preferred Skills:" : "希望包含技能:"}
-                    </span>
-                    <span className="text-emerald-400 font-medium truncate block text-xs mt-0.5">
-                      {heroProfilePreview?.anyKeywords || currentRule.anyKeywords || "-"}
-                    </span>
-                  </div>
-                  <div className="bg-stone-950/80 p-2.5 rounded-xl border border-stone-800/80">
-                    <span className="text-stone-500 text-[11px] block font-medium">
-                      {lang === "en" ? "Excluded Directions:" : "排除方向:"}
-                    </span>
-                    <span className="text-red-400 font-medium truncate block text-xs mt-0.5">
-                      {heroProfilePreview?.excludeKeywords || currentRule.excludeKeywords || "-"}
-                    </span>
-                  </div>
+          {/* 提炼出的投递画像卡片：直接在画布中优雅展开，轻量通透 */}
+          {heroProfileResult && (
+            <div className="rounded-2xl border border-white/15 bg-white/[0.04] backdrop-blur-xl p-4 sm:p-5 shadow-2xl ml-0 sm:ml-11.5 text-left animate-in fade-in slide-in-from-bottom-2 duration-500">
+              <div className="flex items-center justify-between mb-3.5">
+                <LatticeLoader
+                  status="done"
+                  label={lang === "en" ? "Thinking" : "工作中"}
+                  doneLabel={lang === "en" ? "Job Profile Ready in" : "专属求职画像已就绪"}
+                  pattern="orbit"
+                  grid={3}
+                  shape="round"
+                  cellSize={5.5}
+                  gap={2}
+                  fontSize={13}
+                  color="#10b981"
+                  doneColor="#10b981"
+                  glow={true}
+                  glowColor="#10b981"
+                  showTimer={false}
+                />
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-950/70 border border-emerald-500/30 text-emerald-300 font-medium">
+                  ● {lang === "en" ? "Ready" : "策略就绪"}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs sm:text-[13px] mb-3.5">
+                <div className="bg-stone-900/70 p-3 rounded-xl border border-stone-800/80">
+                  <span className="text-stone-500 text-[11px] block font-medium">
+                    {lang === "en" ? "Target Role:" : "目标岗位:"}
+                  </span>
+                  <span className="font-semibold text-stone-100 text-sm mt-0.5 block truncate">
+                    {heroProfilePreview?.query || currentLabel}
+                  </span>
                 </div>
-
-                <div className="pt-2.5 border-t border-stone-800/80 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 text-xs text-stone-300">
-                    <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
-                    <span className="text-[11px] sm:text-xs text-stone-400">
-                      {lang === "en" ? "Verify AI extraction and proceed" : "已自动提炼画像，可一键前往查看"}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onConfirmProfile();
-                      scrollToRingStage?.(2);
-                    }}
-                    className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold text-xs shadow-md shadow-amber-500/15 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
-                  >
-                    <UserCheck className="size-3.5" />
-                    <span>{lang === "en" ? "Confirm & View Job Profile →" : "确认信息正确，前往求职画像 →"}</span>
-                  </button>
+                <div className="bg-stone-900/70 p-3 rounded-xl border border-stone-800/80">
+                  <span className="text-stone-500 text-[11px] block font-medium">
+                    {lang === "en" ? "Target Cities:" : "意向城市:"}
+                  </span>
+                  <span className="font-semibold text-stone-100 text-sm mt-0.5 block truncate">
+                    {heroProfilePreview?.cities || currentCityValues || (lang === "en" ? "Nationwide / Any" : "全国/不限")}
+                  </span>
+                </div>
+                <div className="bg-stone-900/70 p-3 rounded-xl border border-stone-800/80">
+                  <span className="text-stone-500 text-[11px] block font-medium">
+                    {lang === "en" ? "Preferred Skills:" : "希望包含技能:"}
+                  </span>
+                  <span className="text-emerald-400 font-medium truncate block text-sm mt-0.5">
+                    {heroProfilePreview?.anyKeywords || currentRule.anyKeywords || "-"}
+                  </span>
+                </div>
+                <div className="bg-stone-900/70 p-3 rounded-xl border border-stone-800/80">
+                  <span className="text-stone-500 text-[11px] block font-medium">
+                    {lang === "en" ? "Excluded Directions:" : "排除方向:"}
+                  </span>
+                  <span className="text-red-400 font-medium truncate block text-sm mt-0.5">
+                    {heroProfilePreview?.excludeKeywords || currentRule.excludeKeywords || "-"}
+                  </span>
                 </div>
               </div>
-            )}
-          </div>
+
+              <div className="pt-3 border-t border-stone-800/80 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-1.5 text-xs text-stone-300">
+                  <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
+                  <span className="text-xs text-stone-400">
+                    {lang === "en" ? "Verify AI extraction and proceed" : "已自动提炼定制画像，可一键前往查看"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onConfirmProfile();
+                    scrollToRingStage?.(2);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold text-xs shadow-md shadow-amber-500/20 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <UserCheck className="size-3.5" />
+                  <span>{lang === "en" ? "Confirm & View Job Profile →" : "确认信息正确，前往求职画像 →"}</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* 3. AI 检索框（Codex / OpenCode 下沉底座）：未提问时居中，提问后自动下沉置底 */}
+        {/* 3. AI 检索输入舱（Codex / OpenCode 下沉底座）：紧凑优雅悬停于底部 */}
         <div className="relative w-full max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-[1360px] transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]">
           {/* 回看状态提示：当未下沉但已有对话记录时，提示可点击快速展开 */}
           {!isSunkMode && heroChatMessages.length > 0 && (
@@ -549,7 +556,7 @@ export default function HeroStage({
               </div>
             )}
 
-            <div className="relative px-6 pt-4 sm:px-8 sm:pt-5">
+            <div className="relative px-6 pt-3.5 sm:px-8 sm:pt-4.5">
               <textarea
                 rows={isSunkMode ? 1 : 2}
                 value={heroInputText}
@@ -569,14 +576,14 @@ export default function HeroStage({
                   isDragOver
                     ? "松开鼠标即可导入该文件并自动同步至简历资料库..."
                     : isSunkMode
-                    ? "继续向 AI 顾问补充更多技能、期望要求或追问..."
+                    ? "继续输入向 AI 顾问补充更多要求、技能或修改画像..."
                     : PLACEHOLDERS[placeholderIndex]
                 }
-                className="block min-h-[3.2rem] sm:min-h-[4rem] w-full resize-none bg-transparent text-base sm:text-[17px] leading-6 sm:leading-7 text-stone-100 outline-none placeholder:text-stone-500"
+                className="block min-h-[3rem] sm:min-h-[3.6rem] w-full resize-none bg-transparent text-base sm:text-[17px] leading-6 sm:leading-7 text-stone-100 outline-none placeholder:text-stone-500"
               />
             </div>
 
-            <div className="flex items-center gap-3 px-5 pb-3.5 pt-1 sm:px-6">
+            <div className="flex items-center gap-3 px-5 pb-3 pt-1 sm:px-6">
               <div className="flex min-w-0 flex-1 items-center gap-2.5 overflow-x-auto [scrollbar-width:none] py-0.5">
                 {/* 简历一键导入按钮 */}
                 <button
@@ -622,7 +629,7 @@ export default function HeroStage({
                 disabled={heroChatting || !heroInputText.trim()}
                 title={lang === "en" ? "Send to AI Advisor" : "发送给 AI 顾问"}
                 aria-label={lang === "en" ? "Send to AI Advisor" : "发送给 AI 顾问"}
-                className="grid size-10 shrink-0 place-items-center rounded-full bg-white text-stone-950 transition-all hover:scale-105 active:scale-95 shadow-md disabled:opacity-40 disabled:cursor-not-allowed font-bold cursor-pointer"
+                className="grid size-9.5 shrink-0 place-items-center rounded-full bg-white text-stone-950 transition-all hover:scale-105 active:scale-95 shadow-md disabled:opacity-40 disabled:cursor-not-allowed font-bold cursor-pointer"
               >
                 {heroChatting ? (
                   <RotateCw className="size-4 animate-spin text-stone-900" />
@@ -634,10 +641,10 @@ export default function HeroStage({
           </form>
         </div>
 
-        {/* 4. 求职者个人背景情况案例（支持“换一批情况”，初始显现，下沉时以紧凑形式附着） */}
+        {/* 4. 求职者个人背景情况案例（支持“换一批情况”，初始显现，下沉时以紧凑微动形式附着） */}
         <div
           className={`flex items-center justify-center gap-2.5 text-xs sm:text-[13px] flex-nowrap overflow-x-auto [scrollbar-width:none] w-full px-2 transition-all duration-500 ${
-            isSunkMode ? "mt-2.5 opacity-85 scale-[0.98]" : "mt-5 opacity-100"
+            isSunkMode ? "mt-2 opacity-80 scale-[0.98]" : "mt-5 opacity-100"
           }`}
         >
           {JOBSEEKER_SITUATION_BATCHES[recBatchIndex].map((item) => (
@@ -648,7 +655,7 @@ export default function HeroStage({
                 setHeroInputText(item.userText);
                 handleSend(item.userText);
               }}
-              className="group shrink-0 inline-flex items-center gap-2 rounded-full border border-white/10 bg-[#1c1917]/80 hover:bg-[#25201d] hover:border-[#ff5722]/50 px-3.5 py-1.5 text-stone-300 hover:text-white backdrop-blur transition-all shadow-sm cursor-pointer whitespace-nowrap"
+              className="group shrink-0 inline-flex items-center gap-2 rounded-full border border-white/10 bg-[#1c1917]/80 hover:bg-[#25201d] hover:border-[#ff5722]/50 px-3 py-1.5 text-stone-300 hover:text-white backdrop-blur transition-all shadow-sm cursor-pointer whitespace-nowrap"
             >
               <span className="size-1.5 rounded-full bg-[#ff5722] group-hover:scale-125 transition-transform shadow-[0_0_6px_rgba(255,87,34,0.6)]" />
               <span className="font-medium">{item.role}</span>
