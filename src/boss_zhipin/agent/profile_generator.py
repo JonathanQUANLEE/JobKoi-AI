@@ -73,6 +73,7 @@ async def generate(
             base_url=config.base_url,
             api_key=config.api_key,
             model=config.model,
+            timeout=12.0,
         )
         content = extract_content(data)
     except LLMClientError as e:

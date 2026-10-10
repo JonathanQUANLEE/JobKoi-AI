@@ -438,7 +438,7 @@ export const CardSwap = forwardRef<CardSwapHandle, CardSwapProps>(
     const rendered = childArr.map((child, i) =>
       isValidElement(child)
         ? cloneElement(child as React.ReactElement<any>, {
-            key: i,
+            key: (child as any).key ?? i,
             ref: refs[i],
             style: {
               width: typeof width === "number" ? `${width}px` : width,

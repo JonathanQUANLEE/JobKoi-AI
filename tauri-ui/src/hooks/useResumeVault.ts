@@ -90,13 +90,19 @@ export function useResumeVault() {
     };
   }, []);
 
-  // 设为默认简历
+  // 设为默认简历 / 取消默认简历
   const handleSetDefault = useCallback(async (name: string) => {
     setBusy(true);
     try {
-      await ipc.setDefaultResume(name);
-      await refresh();
-      notify({ type: "success", text: t("resume.defaultSet", { name }), source: "资料档案" });
+      if (!name) {
+        await ipc.setDefaultResume("");
+        await refresh();
+        notify({ type: "success", text: "已取消默认简历绑定", source: "资料档案" });
+      } else {
+        await ipc.setDefaultResume(name);
+        await refresh();
+        notify({ type: "success", text: t("resume.defaultSet", { name }), source: "资料档案" });
+      }
     } catch (err) {
       notify({ type: "error", text: t("resume.setFailed", { error: String(err) }), source: "资料档案" });
     } finally {
@@ -146,6 +152,12 @@ export function useResumeVault() {
       }
 
       setContentsCache((prev) => {
+        const copy = { ...prev };
+        delete copy[name];
+        return copy;
+      });
+
+      setLoadingCache((prev) => {
         const copy = { ...prev };
         delete copy[name];
         return copy;

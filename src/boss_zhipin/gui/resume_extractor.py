@@ -1,10 +1,27 @@
-"""纯本地零依赖简历文本提取器（支持 docx 与 doc 格式）。"""
+"""纯本地简历文本提取器（支持 pdf、docx 与 doc 格式）。"""
 from __future__ import annotations
 
 import logging
 from pathlib import Path
 
 log = logging.getLogger(__name__)
+
+
+def extract_pdf_text(path: Path) -> str:
+    """从 PDF 提取正文文本。"""
+    try:
+        from pypdf import PdfReader
+
+        reader = PdfReader(str(path))
+        texts: list[str] = []
+        for page in reader.pages:
+            t = page.extract_text()
+            if t and t.strip():
+                texts.append(t.strip())
+        return "\n\n".join(texts)
+    except Exception as e:
+        log.warning("提取 pdf 失败: %s", e)
+        return ""
 
 
 def extract_word_text(path: Path) -> str:

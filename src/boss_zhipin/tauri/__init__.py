@@ -397,7 +397,7 @@ async def save_llm_config(body: _SaveLLMConfigBody) -> dict:
 
 
 class _SetDefaultResumeBody(_CamelModel):
-    name: str
+    name: str = ""
 
 
 @commands.command()
@@ -410,9 +410,14 @@ async def list_resumes() -> dict:
 
 @commands.command()
 async def set_default_resume(body: _SetDefaultResumeBody) -> dict:
-    """把某个简历设为默认（写 resume/default.txt 标记）。"""
-    from boss_zhipin.gui.resume_io import set_default_resume as _set_default
+    """把某个简历设为默认（写 resume/default.txt 标记），传空则取消默认。"""
+    from boss_zhipin.gui.resume_io import (
+        set_default_resume as _set_default,
+        unset_default_resume as _unset_default,
+    )
 
+    if not body.name or body.name.strip() in ("", "__none__"):
+        return _unset_default()
     return _set_default(body.name)
 
 

@@ -8,13 +8,15 @@
 - ``set_default_resume`` 校验文件名是**纯文件名**（拒绝 ``../`` 路径穿越）；
 - 目录里个人简历已被 ``.gitignore`` 覆盖（/resume/*.pdf / *.docx / *.png），
   ``default.txt`` 一行文件名也算个人信息，一并 ignore（见 .gitignore）。
+- 严格遵循用户手动选择原则：导入新文件绝不自动绑定为默认简历。
 """
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime
+import logging
 from pathlib import Path
+import unicodedata
 
 log = logging.getLogger(__name__)
 
@@ -24,6 +26,22 @@ DEFAULT_RESUME_DIR = ROOT / "resume"
 
 RESUME_EXTENSIONS = frozenset({".pdf", ".doc", ".docx", ".png", ".jpg", ".jpeg", ".webp"})
 DEFAULT_MARKER_FILENAME = "default.txt"
+
+
+def _find_resume_file(name: str, base: Path) -> Path | None:
+    """查找简历文件，支持严格匹配、Unicode NFC/NFD 标准化及大小写容错。"""
+    clean = _validate_resume_name(name)
+    target = base / clean
+    if target.is_file():
+        return target
+
+    # Unicode 标准化比对（预防跨端文件名编码差异）
+    norm_clean = unicodedata.normalize("NFC", clean).lower()
+    for item in base.iterdir():
+        if item.is_file() and item.suffix.lower() in RESUME_EXTENSIONS:
+            if unicodedata.normalize("NFC", item.name).lower() == norm_clean:
+                return item
+    return None
 
 
 def list_resumes(resume_dir: Path | None = None) -> list[dict]:
@@ -44,7 +62,7 @@ def list_resumes(resume_dir: Path | None = None) -> list[dict]:
                 "mtime": datetime.fromtimestamp(stat.st_mtime).strftime(
                     "%Y-%m-%d %H:%M"
                 ),
-                "is_default": path.name == default_name,
+                "is_default": bool(default_name and path.name == default_name),
             }
         )
     items.sort(key=lambda item: item["mtime"], reverse=True)
@@ -53,14 +71,25 @@ def list_resumes(resume_dir: Path | None = None) -> list[dict]:
 
 def set_default_resume(name: str, resume_dir: Path | None = None) -> dict:
     """把某个简历设为默认。校验纯文件名 + 文件存在，然后写标记文件。"""
-    base = _ensure_dir(resume_dir)
     clean = _validate_resume_name(name)
-    target = base / clean
-    if not target.is_file():
+    base = _ensure_dir(resume_dir)
+
+    target = _find_resume_file(name, base)
+    if not target or not target.is_file():
         raise ValueError(f"简历文件不存在: {clean}")
+
     marker = base / DEFAULT_MARKER_FILENAME
-    marker.write_text(clean, encoding="utf-8")
-    return {"name": clean, "status": "saved"}
+    marker.write_text(target.name, encoding="utf-8")
+    return {"name": target.name, "status": "saved"}
+
+
+def unset_default_resume(resume_dir: Path | None = None) -> dict:
+    """取消默认简历标记。"""
+    base = _ensure_dir(resume_dir)
+    marker = base / DEFAULT_MARKER_FILENAME
+    if marker.is_file():
+        marker.unlink()
+    return {"status": "unset", "name": ""}
 
 
 def get_default_resume(resume_dir: Path | None = None) -> dict | None:
@@ -69,12 +98,12 @@ def get_default_resume(resume_dir: Path | None = None) -> dict | None:
     name = get_default_resume_name(base)
     if not name:
         return None
-    target = base / name
-    if not target.is_file():
+    target = _find_resume_file(name, base)
+    if not target or not target.is_file():
         return None
     stat = target.stat()
     return {
-        "name": name,
+        "name": target.name,
         "size": stat.st_size,
         "mtime": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
         "is_default": True,
@@ -94,7 +123,7 @@ def get_default_resume_name(resume_dir: Path) -> str:
 
 
 def save_resume_file(name: str, content_b64: str, resume_dir: Path | None = None) -> dict:
-    """保存或上传简历文件（接收 Base64 编码数据）。"""
+    """保存或上传简历文件（接收 Base64 编码数据）。严格不自动设为默认。"""
     import base64
 
     base = _ensure_dir(resume_dir)
@@ -107,29 +136,28 @@ def save_resume_file(name: str, content_b64: str, resume_dir: Path | None = None
     target.write_bytes(raw_bytes)
     stat = target.stat()
 
-    # 严格遵循用户手动选择原则：上传新文件不自动设为默认，等待用户显式选择
+    # 严格遵循用户手动选择原则：上传新文件绝不自动设为默认，等待用户显式选择
+    default_name = get_default_resume_name(base)
     return {
         "status": "saved",
         "name": clean,
         "size": stat.st_size,
         "mtime": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
-        "is_default": get_default_resume_name(base) == clean,
+        "is_default": bool(default_name and default_name == clean),
     }
 
 
 def delete_resume_file(name: str, resume_dir: Path | None = None) -> dict:
     """删除指定的简历文件。若为默认简历，同步清理默认标记。"""
     base = _ensure_dir(resume_dir)
-    clean = _validate_resume_name(name)
-    target = base / clean
-    if target.is_file():
+    target = _find_resume_file(name, base)
+    clean = target.name if target else _validate_resume_name(name)
+    if target and target.is_file():
         target.unlink()
 
     default_name = get_default_resume_name(base)
     if default_name == clean:
-        marker = base / DEFAULT_MARKER_FILENAME
-        if marker.is_file():
-            marker.unlink()
+        unset_default_resume(base)
 
     return {"status": "deleted", "name": clean}
 
@@ -139,27 +167,27 @@ def open_resume_native(name: str, resume_dir: Path | None = None) -> dict:
     import os
 
     base = _ensure_dir(resume_dir)
-    clean = _validate_resume_name(name)
-    target = base / clean
-    if not target.is_file():
+    target = _find_resume_file(name, base)
+    if not target or not target.is_file():
+        clean = _validate_resume_name(name)
         raise ValueError(f"简历文件不存在: {clean}")
 
     try:
         os.startfile(str(target.resolve()))
-        return {"status": "ok", "name": clean, "path": str(target.resolve())}
+        return {"status": "ok", "name": target.name, "path": str(target.resolve())}
     except Exception as e:
         log.warning("调起原生软件打开失败: %s", e)
         raise RuntimeError(f"无法用系统默认程序打开: {e}")
 
 
 def get_resume_content(name: str, resume_dir: Path | None = None) -> dict:
-    """读取指定简历文件内容，返回 Base64 Data URL 及提取文本（针对 Word 等格式）。"""
+    """读取指定简历文件内容，返回 Base64 Data URL 及提取文本（支持 PDF / Word 等格式）。"""
     import base64
 
     base = _ensure_dir(resume_dir)
-    clean = _validate_resume_name(name)
-    target = base / clean
-    if not target.is_file():
+    target = _find_resume_file(name, base)
+    if not target or not target.is_file():
+        clean = _validate_resume_name(name)
         raise ValueError(f"简历文件不存在: {clean}")
 
     raw = target.read_bytes()
@@ -180,10 +208,12 @@ def get_resume_content(name: str, resume_dir: Path | None = None) -> dict:
     text = ""
     if suffix in (".docx", ".doc"):
         text = _extract_word_text(target)
+    elif suffix == ".pdf":
+        text = _extract_pdf_text(target)
 
     return {
         "status": "ok",
-        "name": clean,
+        "name": target.name,
         "ext": suffix,
         "mime": mime,
         "size": len(raw),
@@ -192,7 +222,10 @@ def get_resume_content(name: str, resume_dir: Path | None = None) -> dict:
     }
 
 
-from boss_zhipin.gui.resume_extractor import extract_word_text as _extract_word_text
+from boss_zhipin.gui.resume_extractor import (
+    extract_pdf_text as _extract_pdf_text,
+    extract_word_text as _extract_word_text,
+)
 
 
 def _ensure_dir(resume_dir: Path | None) -> Path:
@@ -212,4 +245,3 @@ def _validate_resume_name(name: str) -> str:
     if path.suffix.lower() not in RESUME_EXTENSIONS:
         raise ValueError(f"不支持的简历类型: {path.suffix or '(无扩展名)'}")
     return clean
-
