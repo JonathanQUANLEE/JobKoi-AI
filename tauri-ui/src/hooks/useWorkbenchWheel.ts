@@ -52,7 +52,7 @@ export function useWorkbenchWheel({
     const isReduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
-    if (isChattingOrHasHistory || isReduced || isMobile) {
+    if (isReduced || isMobile) {
       [heroStage, hub, profile].forEach((el) => {
         if (el) {
           el.style.transform = "none";
@@ -235,12 +235,24 @@ export function useWorkbenchWheel({
   // 滚轮与触控板事件监听（细腻连续圆柱旋转 + 闲置平滑自动吸附）
   useEffect(() => {
     const scrollEl = mainScrollRef.current;
-    if (!scrollEl || isChattingOrHasHistory) return;
+    if (!scrollEl) return;
 
     const onWheel = (e: WheelEvent) => {
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === "TEXTAREA" || target.tagName === "INPUT" || target.isContentEditable)) {
         if (target.scrollHeight > target.clientHeight) return;
+      }
+
+      // 允许对话实录内部滚动：若在可滚动子容器内且未触及边界，优先内部滚动
+      const scrollableParent = target?.closest(".overflow-y-auto") as HTMLElement | null;
+      if (scrollableParent && scrollableParent.scrollHeight > scrollableParent.clientHeight) {
+        const isUp = e.deltaY < 0;
+        const isDown = e.deltaY > 0;
+        const atTop = scrollableParent.scrollTop <= 2;
+        const atBottom = scrollableParent.scrollTop + scrollableParent.clientHeight >= scrollableParent.scrollHeight - 3;
+        if ((isUp && !atTop) || (isDown && !atBottom)) {
+          return;
+        }
       }
 
       e.preventDefault();
@@ -280,14 +292,14 @@ export function useWorkbenchWheel({
       if (stageWheelTimerRef.current) clearTimeout(stageWheelTimerRef.current);
       if (stageRafRef.current != null) cancelAnimationFrame(stageRafRef.current);
     };
-  }, [isChattingOrHasHistory, applyStageTarget, renderStageTransforms]);
+  }, [applyStageTarget, renderStageTransforms]);
 
   // 监听导航切换：保持当前目标站台，渲染对应姿态，不再生硬重置为 0
   useEffect(() => {
-    if (activeNav === "workbench" && !isChattingOrHasHistory) {
+    if (activeNav === "workbench") {
       renderStageTransforms(stagePosRef.current);
     }
-  }, [activeNav, isChattingOrHasHistory, renderStageTransforms]);
+  }, [activeNav, renderStageTransforms]);
 
   // Pointer 拖拽处理（支持鼠标光标按住上下拖动 3D 轮盘卡片）
   const handleStagePointerDown = useCallback((e: PointerEvent<HTMLDivElement>) => {
