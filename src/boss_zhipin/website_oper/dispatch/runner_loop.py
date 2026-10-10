@@ -1,6 +1,7 @@
 """主投递巡航循环（DOM 推荐流与搜索流调度）。
 
 Facade 与调度中枢：
+- 运行时配置解析拆至 loop_config
 - 交互动作拆至 loop_actions
 - 模式分支拆至 loop_modes
 - 翻页与加载恢复拆至 loop_navigator
@@ -15,6 +16,10 @@ from boss_zhipin.website_oper.dispatch.loop_actions import (
     click_contact_and_send_response,
     compose_greeting,
     send_response_and_go_back,
+)
+from boss_zhipin.website_oper.dispatch.loop_config import (
+    LoopConfig,
+    is_limit_reached,
 )
 from boss_zhipin.website_oper.dispatch.loop_modes import (
     handle_auto_send_job,
@@ -43,43 +48,7 @@ async def send_job_descriptions_to_chat(
     """主循环（async）。"""
     from boss_zhipin.website_oper import finding_jobs, write_response
 
-    scan_only = write_response._scan_only_enabled()
-    page_filters = write_response._page_filters()
-    profile_filters = write_response._merge_boss_active_filter(
-        write_response._profile_filters(), page_filters
-    )
-    boss_active_filter_enabled = write_response._boss_active_filter_enabled(page_filters)
-    scan_groups = write_response._scan_groups() if scan_only else []
-    scan_max_jobs = write_response._scan_max_jobs() if scan_only else None
-    scan_required_terms = write_response._scan_required_terms() if scan_only else []
-    auto_send_fixed_greeting = write_response._auto_send_fixed_greeting_enabled()
-    auto_send_max_sent = write_response._auto_send_max_sent() if auto_send_fixed_greeting else None
-    auto_send_daily_limit = (
-        write_response._auto_send_daily_limit() if auto_send_fixed_greeting else None
-    )
-    auto_send_delay_min, auto_send_delay_max = (
-        write_response._auto_send_delay_range() if auto_send_fixed_greeting else (0.0, 0.0)
-    )
-    review_before_send = write_response._review_before_send_enabled()
-    gui_review = write_response._gui_review_enabled()
-    send_mode = write_response._send_mode_name(
-        scan_only=scan_only,
-        review_before_send=review_before_send,
-        auto_send_fixed_greeting=auto_send_fixed_greeting,
-    )
-    if send_mode == "unset":
-        raise RuntimeError("必须选择运行模式：scan、review 或 auto")
-    seen_jobs_path = write_response._state_path("BOSS_SEEN_JOBS_FILE")
-    sent_log_path = write_response._state_path("BOSS_SENT_LOG_FILE")
-    skipped_log_path = write_response._state_path("BOSS_SKIPPED_LOG_FILE")
-    stop_on_captcha = write_response._stop_on_captcha_enabled()
-    fixed_greeting = (
-        write_response._fixed_greeting() if (review_before_send or auto_send_fixed_greeting) else ""
-    )
-    review_required_terms = write_response._review_required_terms() if review_before_send else []
-    review_locations = write_response._review_locations() if review_before_send else []
-    if (review_before_send or auto_send_fixed_greeting) and not fixed_greeting:
-        raise RuntimeError("固定招呼语模式必须设置 BOSS_FIXED_GREETING")
+    cfg = LoopConfig.load()
 
     if use_current_page:
         await finding_jobs.ensure_current_tab()
@@ -98,15 +67,15 @@ async def send_job_descriptions_to_chat(
 
     if (
         write_response._use_search_api_flow(actual_url)
-        and not review_before_send
+        and not cfg.review_before_send
         and finding_jobs.get_tab() is not None
     ):
         await write_response._run_search_api_flow(
             usr_name=usr_name,
             url=actual_url,
             dry_run=dry_run,
-            scan_only=scan_only,
-            greeting=fixed_greeting,
+            scan_only=cfg.scan_only,
+            greeting=cfg.fixed_greeting,
         )
         return
 
@@ -121,10 +90,10 @@ async def send_job_descriptions_to_chat(
         log.info("使用当前 BOSS 页面运行，跳过自动页面筛选点击")
     else:
         await finding_jobs.apply_page_filters(
-            write_response._page_filters_for_click(page_filters),
+            write_response._page_filters_for_click(cfg.page_filters),
             emit_event=lambda payload: write_response._emit_progress("page_filter", **payload),
         )
-    if stop_on_captcha and await finding_jobs.captcha_visible():
+    if cfg.stop_on_captcha and await finding_jobs.captcha_visible():
         raise RuntimeError("检测到验证码/安全验证，已按 BOSS_STOP_ON_CAPTCHA 停止")
 
     start_job_index = (
@@ -151,9 +120,9 @@ async def send_job_descriptions_to_chat(
     barren_reloads = 0
     sent_count = 0
     daily_sent_count = write_response._sent_today_count(
-        sent_log_path, profile=write_response._profile_name()
+        cfg.sent_log_path, profile=write_response._profile_name()
     )
-    seen_job_keys: set[str] = write_response._read_seen_job_keys(seen_jobs_path)
+    seen_job_keys: set[str] = write_response._read_seen_job_keys(cfg.seen_jobs_path)
 
     if write_response._should_select_label(label, url, use_current_page):
         await finding_jobs.select_dropdown_option(label)
@@ -174,28 +143,13 @@ async def send_job_descriptions_to_chat(
 
     while True:
         try:
-            if auto_send_max_sent is not None and sent_count >= auto_send_max_sent:
-                log.info(
-                    "已发送 %d 条，达到 BOSS_AUTO_SEND_MAX_SENT 上限，结束", sent_count
-                )
-                write_response._emit_progress("feed_exhausted", total=job_index - 1)
-                break
-            if (
-                auto_send_daily_limit is not None
-                and daily_sent_count >= auto_send_daily_limit
+            if is_limit_reached(
+                cfg,
+                job_index=job_index,
+                start_job_index=start_job_index,
+                sent_count=sent_count,
+                daily_sent_count=daily_sent_count,
             ):
-                log.info(
-                    "今日已发送 %d 条，达到 BOSS_AUTO_SEND_DAILY_LIMIT 上限，结束",
-                    daily_sent_count,
-                )
-                write_response._emit_progress("feed_exhausted", total=job_index - 1)
-                break
-            if (
-                scan_max_jobs is not None
-                and job_index - start_job_index >= scan_max_jobs
-            ):
-                log.info("扫描达到 BOSS_SCAN_MAX_JOBS=%d，结束", scan_max_jobs)
-                write_response._emit_progress("feed_exhausted", total=job_index - 1)
                 break
 
             iteration += 1
@@ -225,10 +179,10 @@ async def send_job_descriptions_to_chat(
                         dedupe_key,
                     )
                     write_response._log_skipped(
-                        skipped_log_path,
+                        cfg.skipped_log_path,
                         job=job,
                         job_key=dedupe_key,
-                        send_mode=send_mode,
+                        send_mode=cfg.send_mode,
                         reason="duplicate",
                         details={
                             "stage": "history",
@@ -266,7 +220,7 @@ async def send_job_descriptions_to_chat(
                                 attempt=barren_reloads + 1,
                                 limit=MAX_FEED_RELOADS,
                             )
-                            if await reload_feed_and_restart(page_filters):
+                            if await reload_feed_and_restart(cfg.page_filters):
                                 barren_reloads += 1
                                 window_index = 1
                                 consecutive_misses = 0
@@ -286,7 +240,7 @@ async def send_job_descriptions_to_chat(
                 if dedupe_key:
                     seen_job_keys.add(dedupe_key)
                     write_response._log_seen(
-                        seen_jobs_path, job=job, job_key=dedupe_key, send_mode=send_mode
+                        cfg.seen_jobs_path, job=job, job_key=dedupe_key, send_mode=cfg.send_mode
                     )
                     barren_reloads = 0
                 consecutive_duplicates = 0
@@ -313,10 +267,10 @@ async def send_job_descriptions_to_chat(
                     )
                     log.info("⏭️ [联系状态跳过 #%d] %s", job_index, detail)
                     write_response._log_skipped(
-                        skipped_log_path,
+                        cfg.skipped_log_path,
                         job=job,
                         job_key=dedupe_key,
-                        send_mode=send_mode,
+                        send_mode=cfg.send_mode,
                         reason=skip_reason,
                         details={
                             "stage": "contact_status",
@@ -340,15 +294,15 @@ async def send_job_descriptions_to_chat(
                         job,
                         job_description,
                         job_title,
-                        profile_filters=profile_filters,
-                        boss_active_filter_enabled=boss_active_filter_enabled,
-                        scan_only=scan_only,
-                        scan_required_terms=scan_required_terms,
-                        scan_groups=scan_groups,
-                        auto_send_fixed_greeting=auto_send_fixed_greeting,
-                        review_before_send=review_before_send,
-                        review_required_terms=review_required_terms,
-                        review_locations=review_locations,
+                        profile_filters=cfg.profile_filters,
+                        boss_active_filter_enabled=cfg.boss_active_filter_enabled,
+                        scan_only=cfg.scan_only,
+                        scan_required_terms=cfg.scan_required_terms,
+                        scan_groups=cfg.scan_groups,
+                        auto_send_fixed_greeting=cfg.auto_send_fixed_greeting,
+                        review_before_send=cfg.review_before_send,
+                        review_required_terms=cfg.review_required_terms,
+                        review_locations=cfg.review_locations,
                     )
 
                     if not matched:
@@ -360,10 +314,10 @@ async def send_job_descriptions_to_chat(
                             job_title,
                         )
                         write_response._log_skipped(
-                            skipped_log_path,
+                            cfg.skipped_log_path,
                             job=job,
                             job_key=dedupe_key,
-                            send_mode=send_mode,
+                            send_mode=cfg.send_mode,
                             reason=stage_name,
                             details=details,
                         )
@@ -378,35 +332,35 @@ async def send_job_descriptions_to_chat(
                         await write_response.asyncio.sleep(3)
                         continue
 
-                    if scan_only:
+                    if cfg.scan_only:
                         await handle_scan_only_match(
                             job_index=job_index,
                             job=job,
                             job_description=job_description,
                             dedupe_key=dedupe_key,
-                            sent_log_path=sent_log_path,
-                            send_mode=send_mode,
+                            sent_log_path=cfg.sent_log_path,
+                            send_mode=cfg.send_mode,
                             details=details,
                         )
                         advance_position()
                         await write_response.asyncio.sleep(3)
                         continue
 
-                    if auto_send_fixed_greeting:
+                    if cfg.auto_send_fixed_greeting:
                         should_stop, sent_count, daily_sent_count = await handle_auto_send_job(
                             job_index=job_index,
                             job=job,
                             job_description=job_description,
                             dedupe_key=dedupe_key,
-                            fixed_greeting=fixed_greeting,
+                            fixed_greeting=cfg.fixed_greeting,
                             dry_run=dry_run,
-                            sent_log_path=sent_log_path,
-                            skipped_log_path=skipped_log_path,
-                            send_mode=send_mode,
+                            sent_log_path=cfg.sent_log_path,
+                            skipped_log_path=cfg.skipped_log_path,
+                            send_mode=cfg.send_mode,
                             details=details,
-                            auto_send_max_sent=auto_send_max_sent,
-                            delay_min=auto_send_delay_min,
-                            delay_max=auto_send_delay_max,
+                            auto_send_max_sent=cfg.auto_send_max_sent,
+                            delay_min=cfg.auto_send_delay_min,
+                            delay_max=cfg.auto_send_delay_max,
                             sent_count=sent_count,
                             daily_sent_count=daily_sent_count,
                         )
@@ -416,18 +370,18 @@ async def send_job_descriptions_to_chat(
                         await write_response.asyncio.sleep(3)
                         continue
 
-                    if review_before_send:
+                    if cfg.review_before_send:
                         status = await handle_review_send_job(
                             job_index=job_index,
                             job=job,
                             job_description=job_description,
                             dedupe_key=dedupe_key,
-                            fixed_greeting=fixed_greeting,
+                            fixed_greeting=cfg.fixed_greeting,
                             dry_run=dry_run,
-                            gui_review=gui_review,
-                            sent_log_path=sent_log_path,
-                            skipped_log_path=skipped_log_path,
-                            send_mode=send_mode,
+                            gui_review=cfg.gui_review,
+                            sent_log_path=cfg.sent_log_path,
+                            skipped_log_path=cfg.skipped_log_path,
+                            send_mode=cfg.send_mode,
                             details=details,
                         )
                         if status == "quit":
@@ -442,7 +396,7 @@ async def send_job_descriptions_to_chat(
                         window_index=window_index,
                         consecutive_misses=consecutive_misses,
                         barren_reloads=barren_reloads,
-                        page_filters=page_filters,
+                        page_filters=cfg.page_filters,
                         max_consecutive_misses=MAX_CONSECUTIVE_MISSES,
                         max_feed_reloads=MAX_FEED_RELOADS,
                     )
