@@ -25,6 +25,7 @@ export default function Dashboard() {
   const lang = useRunStore((s) => s.lang);
   const setLang = useRunStore((s) => s.setLang);
   const pushAgentMessage = useRunStore((s) => s.pushAgentMessage);
+  const setPendingResumePolish = useRunStore((s) => s.setPendingResumePolish);
 
   const [selectedPlatform, setSelectedPlatform] = useState<string>("boss");
   const [message, setMessage] = useState<string | null>(null);
@@ -291,6 +292,13 @@ export default function Dashboard() {
                     content: `请基于我的简历资料库中的「${resumeName}」来识别提取我的求职画像（目标岗位、意向城市、核心技能及排除方向）。${
                       text ? `\n\n简历内容参考：\n${text.slice(0, 1200)}` : ""
                     }`,
+                  });
+                  setActiveNav("copilot");
+                }}
+                onReviewResume={(resumeName, text) => {
+                  setPendingResumePolish({
+                    name: resumeName,
+                    text: text || "",
                   });
                   setActiveNav("copilot");
                 }}
