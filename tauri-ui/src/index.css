@@ -641,3 +641,17 @@
   color: #e4e4e7 !important;
 }
 
+/* 20 秒通知倒计时光带缓动动画 */
+@keyframes countdown-20s {
+  0% {
+    width: 100%;
+  }
+  100% {
+    width: 0%;
+  }
+}
+
+.animate-countdown-20s {
+  animation: countdown-20s 20s linear forwards;
+}
+
