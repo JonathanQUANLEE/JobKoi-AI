@@ -106,7 +106,7 @@ export default function WorkbenchView({
       className={
         !isChattingOrHasHistory
           ? "relative w-full h-[calc(100vh-3rem)] overflow-hidden flex items-center justify-center select-none"
-          : "space-y-8 mx-auto w-full max-w-5xl px-2 sm:px-6 py-6 transition-all"
+          : "space-y-8 mx-auto w-full max-w-7xl xl:max-w-[1440px] 2xl:max-w-[1640px] px-3 sm:px-6 lg:px-8 py-6 transition-all"
       }
     >
       <div
@@ -142,7 +142,7 @@ export default function WorkbenchView({
           ref={hubRef}
           className={
             !isChattingOrHasHistory
-              ? "absolute inset-x-0 mx-auto w-full max-w-5xl px-2 sm:px-6 will-change-transform perspective-layer"
+              ? "absolute inset-x-0 mx-auto w-full max-w-7xl xl:max-w-[1440px] 2xl:max-w-[1640px] px-3 sm:px-6 lg:px-8 will-change-transform perspective-layer"
               : "relative isolate overflow-visible w-full"
           }
           style={
@@ -160,7 +160,7 @@ export default function WorkbenchView({
 
         {/* 人工审核卡片（如果处于 review 暂停中） */}
         {reviewPending && (
-          <div className="w-full max-w-5xl mx-auto px-2 sm:px-6">
+          <div className="w-full max-w-7xl xl:max-w-[1440px] 2xl:max-w-[1640px] mx-auto px-3 sm:px-6 lg:px-8">
             <Panel title={t("panel.review")}>
               <ReviewCard
                 pending={reviewPending}

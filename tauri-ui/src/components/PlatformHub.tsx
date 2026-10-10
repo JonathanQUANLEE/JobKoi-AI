@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Circle,
   X,
+  ShieldCheck,
 } from "lucide-react";
 import { ipc, type PlatformItem } from "../lib/ipc";
 import type { Lang } from "../lib/i18n";
@@ -114,7 +115,7 @@ export default function PlatformHub({
 
   return (
     <MagicCard
-      className={`panel mb-6 ${className}`}
+      className={`panel mb-6 p-5 sm:p-6 lg:p-7 ${className}`}
       style={style}
       glowColor="245, 158, 11"
       enableTilt={false}
@@ -122,19 +123,19 @@ export default function PlatformHub({
       enableBorderGlow={true}
     >
       {/* 头部：专业 SaaS 矩阵 */}
-      <div className="flex items-center justify-between pb-4 mb-4 border-b border-stone-800">
-        <div className="flex items-center gap-3">
-          <div className="size-8 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center font-bold text-sm shadow-sm">
-            <Globe className="h-4.5 w-4.5 text-amber-400" />
+      <div className="flex items-center justify-between pb-4 mb-5 border-b border-stone-800">
+        <div className="flex items-center gap-3.5">
+          <div className="size-9 sm:size-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center font-bold text-sm shadow-sm">
+            <Globe className="h-5 w-5 text-amber-400" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-stone-100 tracking-tight flex items-center gap-2">
+            <h2 className="text-base sm:text-lg font-bold text-stone-100 tracking-tight flex items-center gap-2.5">
               <span>{lang === "en" ? "Job Platforms Center" : "招聘平台中心"}</span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-normal">
-                {lang === "en" ? "4 Platforms Grid" : "4 个平台矩阵"}
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-medium">
+                {lang === "en" ? `${platforms.length} Platforms Grid` : `${platforms.length} 个平台矩阵`}
               </span>
             </h2>
-            <p className="text-[11px] text-stone-400 mt-0.5">
+            <p className="text-xs sm:text-[13px] text-stone-400 mt-0.5">
               {lang === "en" ? "Click to switch active platform · Scan QR code to sync session" : "点击卡片切换当前工作平台 · 手机一键扫码绑定登录态"}
             </p>
           </div>
@@ -142,15 +143,15 @@ export default function PlatformHub({
 
         <button
           onClick={loadPlatforms}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-stone-800 bg-stone-900/60 hover:border-amber-500/40 text-xs text-stone-400 hover:text-stone-200 transition-all select-none cursor-pointer"
+          className="flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2 rounded-full border border-stone-800 bg-stone-900/60 hover:border-amber-500/40 text-xs sm:text-[13px] text-stone-400 hover:text-stone-200 transition-all select-none cursor-pointer"
         >
           <RefreshCw className="h-3.5 w-3.5" />
           <span>{lang === "en" ? "Refresh Session" : "刷新凭证状态"}</span>
         </button>
       </div>
 
-      {/* 便当盒卡片网格（Bento Grid 装备专属品牌荧光粒子效果） */}
-      <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+      {/* 便当盒卡片网格（自适应宽屏栅格，卡片加大加宽，清晰呈现每日限额） */}
+      <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-4">
         {platforms.map((p) => {
           const isSelected = selectedPlatform === p.id;
           const cardGlow = PLATFORM_GLOW_MAP[p.id] || "245, 158, 11";
@@ -164,7 +165,7 @@ export default function PlatformHub({
               enableStars={p.is_supported}
               clickEffect={p.is_supported}
               particleCount={8}
-              className={`group relative flex flex-col justify-between rounded-2xl border p-4.5 select-none ${
+              className={`group relative flex flex-col justify-between rounded-2xl border p-5 sm:p-6 select-none min-h-[230px] sm:min-h-[250px] transition-all ${
                 isSelected
                   ? "border-amber-500/70 bg-gradient-to-b from-stone-900 to-amber-950/20 shadow-lg shadow-amber-500/5 ring-1 ring-amber-500/30"
                   : p.is_supported
@@ -174,63 +175,72 @@ export default function PlatformHub({
             >
               <div>
                 {/* 卡片顶栏：图标徽标 + 状态 */}
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2.5">
+                <div className="flex items-center justify-between mb-3.5">
+                  <div className="flex items-center gap-3">
                     <div
-                      className="size-7 rounded-lg flex items-center justify-center font-bold text-xs text-stone-900 shadow-sm"
+                      className="size-9 sm:size-10 rounded-xl flex items-center justify-center font-bold text-sm text-stone-950 shadow-md"
                       style={{ backgroundColor: p.theme_color }}
                     >
                       {p.name.slice(0, 1)}
                     </div>
-                    <span className="font-bold text-sm text-stone-100 group-hover:text-white">
+                    <span className="font-bold text-base sm:text-lg text-stone-100 group-hover:text-white tracking-tight">
                       {p.name}
                     </span>
                   </div>
 
                   {p.is_supported ? (
                     <span
-                      className={`text-[10px] px-2.5 py-0.5 rounded-full font-medium ${
+                      className={`text-xs px-3 py-1 rounded-full font-semibold ${
                         p.is_logged_in
-                          ? "bg-emerald-950/60 text-emerald-400 border border-emerald-500/30"
-                          : "bg-amber-950/60 text-amber-300 border border-amber-500/30"
+                          ? "bg-emerald-950/70 text-emerald-400 border border-emerald-500/30"
+                          : "bg-amber-950/70 text-amber-300 border border-amber-500/30"
                       }`}
                     >
                       {p.is_logged_in ? "已就绪" : "待扫码"}
                     </span>
                   ) : (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-stone-800 text-stone-400">
+                    <span className="text-xs px-2.5 py-1 rounded-full bg-stone-850 text-stone-400 border border-stone-800">
                       即将接入
                     </span>
                   )}
                 </div>
 
                 {/* 描述信息 */}
-                <p className="text-xs text-stone-400 leading-relaxed mb-3 line-clamp-2">
+                <p className="text-xs sm:text-[13px] text-stone-300 leading-relaxed mb-3.5 line-clamp-2 min-h-[2.5rem]">
                   {p.tagline}
                 </p>
 
-                {/* 胶囊标签群 */}
-                <div className="flex flex-wrap gap-1 mb-3.5">
-                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-stone-950/60 text-stone-400 border border-stone-800 font-mono">
-                    上限: {p.daily_limit}/日
-                  </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-stone-950/60 text-stone-400 border border-stone-800">
-                    免密存储
+                {/* 高亮限额与功能标签栏 */}
+                <div className="flex flex-wrap items-center gap-2 mb-4">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-950/90 border border-stone-800/90 text-stone-200 shadow-inner">
+                    <span className="text-[11px] text-stone-400 font-medium">
+                      {lang === "en" ? "Daily Limit:" : "每日投递上限:"}
+                    </span>
+                    <span className="text-sm font-bold font-mono text-amber-300 tracking-tight">
+                      {p.daily_limit}
+                    </span>
+                    <span className="text-[11px] text-stone-400">
+                      {lang === "en" ? "/day" : "次/日"}
+                    </span>
+                  </div>
+                  <span className="text-[11px] px-2.5 py-1.5 rounded-xl bg-stone-950/60 text-stone-400 border border-stone-800/80 flex items-center gap-1 font-medium">
+                    <ShieldCheck className="size-3.5 text-emerald-400" />
+                    <span>{lang === "en" ? "Safe & Direct" : "免密安全直连"}</span>
                   </span>
                 </div>
               </div>
 
               {/* 卡片底栏：操作按钮 */}
-              <div className="pt-2.5 border-t border-stone-800/70 flex items-center justify-between">
-                <span className="text-[11px] text-stone-500 flex items-center gap-1.5">
+              <div className="pt-3.5 border-t border-stone-800/80 flex items-center justify-between">
+                <span className="text-xs sm:text-[13px] text-stone-400 flex items-center gap-1.5">
                   {isSelected ? (
                     <>
-                      <CheckCircle2 className="h-3 w-3 text-amber-400" />
-                      <span className="text-amber-400 font-medium">当前主平台</span>
+                      <CheckCircle2 className="h-3.5 w-3.5 text-amber-400" />
+                      <span className="text-amber-400 font-semibold">当前主平台</span>
                     </>
                   ) : (
                     <>
-                      <Circle className="h-3 w-3 text-stone-600" />
+                      <Circle className="h-3.5 w-3.5 text-stone-600" />
                       <span>点击选用</span>
                     </>
                   )}
@@ -240,9 +250,9 @@ export default function PlatformHub({
                   <button
                     onClick={(e) => handleLogin(e, p.id)}
                     disabled={busy}
-                    className="flex items-center gap-1 text-xs px-3 py-1 rounded-xl bg-stone-800 hover:bg-amber-500 hover:text-stone-950 text-stone-200 font-medium transition-all shadow-sm active:scale-95"
+                    className="flex items-center gap-1.5 text-xs sm:text-[13px] px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-stone-800 hover:bg-amber-500 hover:text-stone-950 text-stone-200 font-semibold transition-all shadow-sm active:scale-95"
                   >
-                    <ExternalLink className="h-3 w-3" />
+                    <ExternalLink className="h-3.5 w-3.5" />
                     <span>{p.is_logged_in ? "打开窗口" : "手机扫码"}</span>
                   </button>
                 )}

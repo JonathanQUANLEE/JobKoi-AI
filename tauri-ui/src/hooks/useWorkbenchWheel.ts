@@ -77,7 +77,7 @@ export function useWorkbenchWheel({
     // 紧凑 3D 折叠圆柱弧面：
     // stepY 控制相邻卡片在视口中的紧凑露头距离（约 300px ~ 330px），保证在招聘平台中心时，
     // 上方 AI 搜索页面与下方求职画像页面的实体卡片影像紧凑清晰可见，绝不推到屏幕外
-    const stepY = Math.min(330, Math.max(270, vh * 0.38));
+    const stepY = Math.min(360, Math.max(280, vh * 0.40));
 
     const stages = [
       { el: heroStage, index: 0 },
