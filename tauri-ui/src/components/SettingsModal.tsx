@@ -213,15 +213,19 @@ export default function SettingsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/75 backdrop-blur-md animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="relative flex flex-col md:flex-row items-center md:items-stretch gap-4 sm:gap-6 w-full max-w-4xl max-h-[90vh]"
+        className="relative flex flex-col md:flex-row items-center md:items-stretch gap-5 sm:gap-7 w-full max-w-4xl max-h-[90vh] bg-stone-950/75 backdrop-blur-3xl border border-white/10 rounded-3xl p-4 sm:p-6 shadow-2xl shadow-black/90 text-[var(--ink)] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 左侧：纯粹悬浮 3D 轮盘导航 */}
-        <aside className="w-full md:w-56 shrink-0 relative overflow-hidden h-44 md:h-[540px] flex items-center justify-center select-none">
+        {/* 背景氛围柔光，消除死板方框感 */}
+        <div className="absolute -top-24 -right-24 w-80 h-80 bg-amber-500/[0.07] rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-purple-500/[0.07] rounded-full blur-3xl pointer-events-none" />
+
+        {/* 左侧：纯粹悬浮 3D 轮盘导航，融入统一毛玻璃左翼 */}
+        <aside className="w-full md:w-56 shrink-0 relative overflow-hidden h-44 md:h-[530px] flex items-center justify-center select-none border-b md:border-b-0 md:border-r border-white/5 pr-0 md:pr-4">
           <OptionWheel<OptionWheelItemData>
             items={tabItems}
             selected={activeTabIndex}
@@ -247,11 +251,11 @@ export default function SettingsModal({
           />
         </aside>
 
-        {/* 右侧：独立浮岛 主设置内容区 */}
-        <main className="flex-1 w-full flex flex-col min-w-0 bg-[var(--panel)]/95 backdrop-blur-xl border border-[var(--grid)] rounded-2xl shadow-2xl shadow-black/80 overflow-hidden h-[480px] md:h-[580px] text-[var(--ink)]">
-          {/* 顶栏关闭按钮 */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--grid)]/70 shrink-0 bg-[var(--panel-2)]/50">
-            <h2 className="text-sm font-bold text-[var(--ink)] flex items-center gap-2">
+        {/* 右侧：去方框化、柔和雾化通透的主设置流 */}
+        <main className="flex-1 w-full flex flex-col min-w-0 h-[480px] md:h-[530px] overflow-hidden">
+          {/* 顶栏极简标题与关闭按钮，无生硬底边色块 */}
+          <div className="flex items-center justify-between pb-3.5 border-b border-white/10 shrink-0">
+            <h2 className="text-sm font-bold text-white flex items-center gap-2">
               <span className={isMonochrome ? "text-white" : "text-amber-400"}>
                 {activeTab === "general" && <Settings className="size-4" />}
                 {activeTab === "schedule" && <Clock className="size-4" />}
@@ -276,15 +280,15 @@ export default function SettingsModal({
             <button
               type="button"
               onClick={onClose}
-              className="p-1 rounded-lg text-stone-400 hover:text-white hover:bg-stone-800 transition-colors cursor-pointer"
+              className="p-1.5 rounded-full text-stone-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
               title="关闭 (Esc)"
             >
               <X className="size-4" />
             </button>
           </div>
 
-          {/* 内容面板 */}
-          <div className="p-6 space-y-6 text-xs flex-1 overflow-y-auto">
+          {/* 内容面板：无生硬外框，流畅滚动 */}
+          <div className="pt-4 pr-1 space-y-6 text-xs flex-1 overflow-y-auto">
             {activeTab === "general" && (
               <GeneralTab
                 notifyOnMatch={notifyOnMatch}

@@ -7,8 +7,10 @@
   place-items: center;
   overflow: hidden;
   isolation: isolate;
-  background: rgba(8, 10, 16, 0.45);
-  animation: overlay-fade-in 0.3s ease-out both;
+  background: rgba(6, 8, 14, 0.86);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  animation: overlay-fade-in 0.25s ease-out both;
 }
 
 @keyframes overlay-fade-in {
@@ -20,7 +22,7 @@
   }
 }
 
-/* 中央柔和雾化区域：无矩形方框，椭圆渐隐入虚空 */
+/* 中央柔和雾化区域：辅助外围光晕扩散 */
 .settings-mist {
   position: absolute;
   z-index: 0;
@@ -35,36 +37,26 @@
   );
   -webkit-backdrop-filter: blur(28px) saturate(135%);
   backdrop-filter: blur(28px) saturate(135%);
-  -webkit-mask-image: radial-gradient(
-    ellipse at center,
-    black 0%,
-    black 48%,
-    rgba(0, 0, 0, 0.7) 65%,
-    transparent 84%
-  );
-  mask-image: radial-gradient(
-    ellipse at center,
-    black 0%,
-    black 48%,
-    rgba(0, 0, 0, 0.7) 65%,
-    transparent 84%
-  );
   pointer-events: none;
 }
 
-/* 真正的设置内容：完全无硬外边框限制，文字与控件通透浮现 */
+/* 坚实清晰的设置面板：高不透明度 (98%) 扎实遮盖底部页面文字，杜绝文字重叠 */
 .settings-content {
   position: relative;
   z-index: 1;
-  width: min(820px, calc(100vw - 48px));
+  width: min(840px, calc(100vw - 48px));
   max-height: calc(88vh - 40px);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  padding: 36px 44px;
-  background: transparent;
-  border: none;
-  animation: settings-appear 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+  padding: 32px 40px;
+  background: rgba(18, 20, 28, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.95), 0 0 30px rgba(0, 0, 0, 0.7);
+  -webkit-backdrop-filter: blur(36px);
+  backdrop-filter: blur(36px);
+  animation: settings-appear 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* 内容从模糊状态中优雅渐显 (雾气浮现) */
