@@ -1,186 +1,305 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { type PetAction, type PetScheduleConfig } from "./types";
+import { type PetAction } from "./types";
 import { loadScheduleConfig } from "./PetSchedulePopover";
 import { useRunStore } from "../../store";
+import { usagiSound } from "./soundManager";
 
-const GREETING_POOL = [
-  "主人今天投了好多岗位喵~ 🌟",
-  "求职路上有我陪你，Offer 触手可及！",
-  "记得喝水休息一下眼睛哦~ 🍵",
-  "随时待命，今天也要元气满满！💪",
-  "点击我头上的时钟，快速定闹钟哦~ ⏰",
+const USAGI_LINES_ZH = [
+  "ヤハ！今天也要元气满满投递，拿下好 Offer！🌟",
+  "ウラ！乌萨奇特助在此，随时待命！💪",
+  "プルルルル！点击我上面的牌子可以开启定时巡航哦~ ⏰",
+  "记得喝杯水，活动一下脖子和眼睛哦~ 🍵",
+  "フゥン！每一份投递都在向目标靠近！✨",
 ];
 
-const POKE_RESPONSES = [
-  "呀！被你摸到头了喵~ (*^▽^*)",
-  "收到主人的拍拍，战斗力 +100！",
-  "本特助一直都在守护主人的求职！",
-  "嘻嘻，痒痒的喵~ (≧∇≦)",
+const USAGI_LINES_JA = [
+  "ヤハ！今日も元気に巡航して内定を勝ち取ろう！🌟",
+  "ウラ！ウサギ特助がいつでもサポートするよ！💪",
+  "プルルルル！看板をクリックして定時巡航をセットしてね⏰",
+  "水分補給とお茶休憩も忘れずにね🍵",
+  "フゥン！一歩ずつ希望の職場に近づいてるよ！✨",
+];
+
+const POKE_LINES_ZH = [
+  "ヤハッ！摸摸耳朵，求职锦鲤附体！(*^▽^*)",
+  "ウラララ！收到主人的拍拍，元气值爆表！💥",
+  "プルルルル！大风车甩手蓄力中！🌀",
+  "哈？（歪头晃耳朵）🐰",
+];
+
+const POKE_LINES_JA = [
+  "ヤハッ！耳をなでなで、内定運UP！(*^▽^*)",
+  "ウラララ！タップされて元気満タン！💥",
+  "プルルルル！ぐるぐる腕回しチャージ中！🌀",
+  "ハァ？（首をかしげる）🐰",
 ];
 
 interface UsePetControllerOptions {
   running: boolean;
   onStartRun?: () => void;
+  lang?: string;
 }
 
-export function usePetController({ running, onStartRun }: UsePetControllerOptions) {
+export function usePetController({ running, onStartRun, lang = "zh" }: UsePetControllerOptions) {
   const [action, setAction] = useState<PetAction>("idle");
   const [facing, setFacing] = useState<"left" | "right">("right");
   const [tilt, setTilt] = useState(0);
   const [speech, setSpeech] = useState("");
   const [speechVisible, setSpeechVisible] = useState(true);
-  const [isSleeping, setIsSleeping] = useState(false);
+  const [posX, setPosX] = useState(25); // 沿水平跑道的 X 坐标 (范围 5px - 120px)
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [signboardOpen, setSignboardOpen] = useState(false);
 
   const notify = useRunStore((s) => s.notify);
 
   const dragStartRef = useRef<{ mouseX: number; mouseY: number } | null>(null);
-  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const behaviorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const roamDirectionRef = useRef<"right" | "left">("right");
+  const roamStateRef = useRef<"walking" | "idle" | "special">("walking");
+  const pauseUntilRef = useRef<number>(0);
+  const animFrameRef = useRef<number | null>(null);
   const cruiseScheduleCheckerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastScheduledTriggerDateRef = useRef<string>("");
+  const doubleClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 1. 初始化气泡欢迎词
+  const isJa = lang === "ja";
+
+  // 1. 初始化乌萨奇问候语
   useEffect(() => {
-    setSpeech("主人好呀！我是您的求职贴心小特助喵~");
+    setSpeech(isJa ? "ヤハ！求人巡航ウサギ特助だよ！" : "ヤハ！我是你的求职特助乌萨奇！");
     const t = setTimeout(() => {
-      setSpeech(GREETING_POOL[0]);
-    }, 5000);
+      const pool = isJa ? USAGI_LINES_JA : USAGI_LINES_ZH;
+      setSpeech(pool[0]);
+    }, 4500);
     return () => clearTimeout(t);
-  }, []);
+  }, [isJa]);
 
-  // 2. 巡航运行状态联动
+  // 2. 自主漫步 (Autonomous Roaming) 物理与动画循环
+  // 乌萨奇自由在侧边栏底部轨道行走，碰壁转身，中途停下动耳朵发呆或甩手
+  useEffect(() => {
+    if (isDragging || signboardOpen) return;
+
+    let lastTimestamp = performance.now();
+
+    const roamLoop = (currentTimestamp: number) => {
+      const dt = Math.min(currentTimestamp - lastTimestamp, 100); // 限制单帧最大时间防跳帧
+      lastTimestamp = currentTimestamp;
+
+      if (!running) {
+        // 普通自主漫步模式
+        const now = Date.now();
+        if (now < pauseUntilRef.current) {
+          // 当前处于停顿休整状态 (动耳朵待机或特殊动作)
+          animFrameRef.current = requestAnimationFrame(roamLoop);
+          return;
+        }
+
+        if (roamStateRef.current !== "walking") {
+          // 停顿结束，恢复走动
+          roamStateRef.current = "walking";
+          setAction(roamDirectionRef.current === "right" ? "walk_right" : "walk_left");
+          setFacing(roamDirectionRef.current);
+        }
+
+        const speed = 0.045; // 像素/毫秒
+        const moveDist = speed * dt;
+
+        setPosX((prevX) => {
+          let nextX = prevX;
+          if (roamDirectionRef.current === "right") {
+            nextX += moveDist;
+            if (nextX >= 115) {
+              // 到达右边界，停下待机并掉头
+              nextX = 115;
+              roamDirectionRef.current = "left";
+              roamStateRef.current = "idle";
+              setAction("idle");
+              setFacing("left");
+              // 随机停顿 2.5 ~ 4.5 秒，其中 25% 几率随机触发甩手或蹦跳
+              const pauseDuration = 2500 + Math.random() * 2000;
+              pauseUntilRef.current = Date.now() + pauseDuration;
+
+              if (Math.random() < 0.25) {
+                setTimeout(() => {
+                  if (roamStateRef.current === "idle" && !isDragging) {
+                    setAction("roll");
+                    usagiSound.play("pululu");
+                  }
+                }, 1000);
+              }
+            } else {
+              setAction("walk_right");
+              setFacing("right");
+            }
+          } else {
+            nextX -= moveDist;
+            if (nextX <= 5) {
+              // 到达左边界，停下待机并掉头
+              nextX = 5;
+              roamDirectionRef.current = "right";
+              roamStateRef.current = "idle";
+              setAction("idle");
+              setFacing("right");
+              const pauseDuration = 2500 + Math.random() * 2000;
+              pauseUntilRef.current = Date.now() + pauseDuration;
+
+              if (Math.random() < 0.25) {
+                setTimeout(() => {
+                  if (roamStateRef.current === "idle" && !isDragging) {
+                    setAction("jump");
+                    usagiSound.play("yaha");
+                  }
+                }, 1000);
+              }
+            } else {
+              setAction("walk_left");
+              setFacing("left");
+            }
+          }
+          return nextX;
+        });
+      } else {
+        // 巡航全速奔跑模式 (更加热血欢快)
+        const cruiseSpeed = 0.09;
+        const moveDist = cruiseSpeed * dt;
+
+        setPosX((prevX) => {
+          let nextX = prevX;
+          if (roamDirectionRef.current === "right") {
+            nextX += moveDist;
+            if (nextX >= 115) {
+              roamDirectionRef.current = "left";
+              setAction("walk_left");
+              setFacing("left");
+            } else {
+              setAction("walk_right");
+              setFacing("right");
+            }
+          } else {
+            nextX -= moveDist;
+            if (nextX <= 5) {
+              roamDirectionRef.current = "right";
+              setAction("walk_right");
+              setFacing("right");
+            } else {
+              setAction("walk_left");
+              setFacing("left");
+            }
+          }
+          return nextX;
+        });
+      }
+
+      animFrameRef.current = requestAnimationFrame(roamLoop);
+    };
+
+    animFrameRef.current = requestAnimationFrame(roamLoop);
+    return () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    };
+  }, [isDragging, signboardOpen, running]);
+
+  // 3. 巡航状态改变时的语音和动作反馈
   useEffect(() => {
     if (running) {
-      setAction("run");
-      setSpeech("正在全速为您巡航投递中喵！🚀");
-      setIsSleeping(false);
+      setAction("running");
+      setSpeech(isJa ? "ヤハ！全速力で求人巡航中！🚀" : "ヤハ！正在全速巡航投递中！🚀");
+      usagiSound.play("yaha");
     } else {
-      if (action === "run") {
-        // 巡航刚停止，切换庆祝动作
-        setAction("celebrate");
-        setSpeech("太棒啦！本次巡航圆满完成🎉");
+      if (action === "running" || action === "walk_right" || action === "walk_left") {
+        setAction("jump");
+        setSpeech(isJa ? "ウラ！本次巡航完了！🎉" : "太棒啦！本次巡航圆满完成🎉");
+        usagiSound.play("celebrate");
         const t = setTimeout(() => {
           setAction("idle");
-          setSpeech(GREETING_POOL[Math.floor(Math.random() * GREETING_POOL.length)]);
-        }, 4000);
+        }, 3000);
         return () => clearTimeout(t);
       }
     }
-  }, [running]);
+  }, [running, isJa]);
 
-  // 3. 闲置瞌睡状态机 (90秒无鼠标动静进入睡眠状态)
-  const resetSleepTimer = useCallback(() => {
-    if (isSleeping) {
-      setIsSleeping(false);
-      setAction("waving");
-      setSpeech("主人你回来啦！精神抖擞~ ☀️");
-      setTimeout(() => setAction("idle"), 2500);
-    }
-
-    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-    idleTimerRef.current = setTimeout(() => {
-      if (!running && !isDragging) {
-        setIsSleeping(true);
-        setAction("sleep");
-        setSpeech("呼噜呼噜... Zzz 💤");
-      }
-    }, 90000); // 90 秒无交互进入睡眠
-  }, [isSleeping, running, isDragging]);
-
-  useEffect(() => {
-    resetSleepTimer();
-    return () => {
-      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-    };
-  }, [resetSleepTimer]);
-
-  // 4. 自然随机日常动作轮巡 (发呆、偶尔招手、坐下)
-  useEffect(() => {
-    if (running || isSleeping || isDragging) return;
-
-    const scheduleNextBehavior = () => {
-      const delay = 15000 + Math.random() * 15000; // 15 - 30 秒
-      behaviorTimerRef.current = setTimeout(() => {
-        if (!running && !isSleeping && !isDragging) {
-          const rand = Math.random();
-          if (rand < 0.35) {
-            // 招手
-            setAction("waving");
-            setTimeout(() => setAction("idle"), 2400);
-          } else if (rand < 0.6) {
-            // 坐下休息
-            setAction("sit");
-            setTimeout(() => setAction("idle"), 4000);
-          } else {
-            // 换个提示语
-            const msg = GREETING_POOL[Math.floor(Math.random() * GREETING_POOL.length)];
-            setSpeech(msg);
-          }
-        }
-        scheduleNextBehavior();
-      }, delay);
-    };
-
-    scheduleNextBehavior();
-    return () => {
-      if (behaviorTimerRef.current) clearTimeout(behaviorTimerRef.current);
-    };
-  }, [running, isSleeping, isDragging]);
-
-  // 5. 点击/戳一戳互动反馈
+  // 4. 单击乌萨奇：欢快蹦跳 + 播放“ヤハ！”语音 + 弹起定时小木牌
   const handlePetClick = useCallback(() => {
-    resetSleepTimer();
     if (isDragging) return;
 
-    setAction("celebrate");
-    const reply = POKE_RESPONSES[Math.floor(Math.random() * POKE_RESPONSES.length)];
-    setSpeech(reply);
+    // 清理可能存在的双击计时
+    if (doubleClickTimeoutRef.current) {
+      clearTimeout(doubleClickTimeoutRef.current);
+    }
+
+    // 动作与音效
+    setAction("jump");
+    usagiSound.play("yaha");
+
+    const pool = isJa ? POKE_LINES_JA : POKE_LINES_ZH;
+    setSpeech(pool[Math.floor(Math.random() * pool.length)]);
+    setSpeechVisible(true);
+
+    // 弹出定时告示牌
+    setSignboardOpen(true);
 
     setTimeout(() => {
-      setAction("idle");
-    }, 2000);
-  }, [isDragging, resetSleepTimer]);
+      if (!isDragging) {
+        setAction("idle");
+      }
+    }, 600);
+  }, [isDragging, isJa]);
 
-  // 6. 侧边栏内部约束拖拽 (严守约束#7：严格限制在侧边栏内部，不溢出桌面)
+  // 5. 双击乌萨奇：乌萨奇标志性经典“高速大风车甩手旋转” (Usagi Roll) + “プルルルル！”
+  const handlePetDoubleClick = useCallback(() => {
+    if (isDragging) return;
+
+    setAction("roll");
+    usagiSound.play("pululu");
+    setSpeech(isJa ? "プルルルルルル！🌀💥" : "プルルルルルル！🌀💥");
+    setSpeechVisible(true);
+
+    pauseUntilRef.current = Date.now() + 2500;
+
+    setTimeout(() => {
+      if (!isDragging) {
+        setAction("idle");
+      }
+    }, 2400);
+  }, [isDragging, isJa]);
+
+  // 6. 拖拽逻辑 (约束在侧边栏内部)
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setIsDragging(true);
-    setAction("drag");
-    setSpeech("哇！被抓起来啦喵~ 🎈");
+    setAction("jump");
+    usagiSound.play("ura");
+    setSpeech(isJa ? "ウラ！持ち上げられた！🎈" : "哇！被抓起来啦！🎈");
     dragStartRef.current = { mouseX: e.clientX, mouseY: e.clientY };
-  }, []);
+  }, [isJa]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
-    resetSleepTimer();
-
     if (isDragging && dragStartRef.current) {
       const dx = e.clientX - dragStartRef.current.mouseX;
       const dy = e.clientY - dragStartRef.current.mouseY;
 
-      // 严格约束在侧边栏卡片范围内: X [-30, 30], Y [-45, 10]
-      const clampedX = Math.max(-30, Math.min(30, dx));
-      const clampedY = Math.max(-45, Math.min(10, dy));
+      // 允许在侧边栏内部拖拽：X [-40, 40], Y [-60, 15]
+      const clampedX = Math.max(-40, Math.min(40, dx));
+      const clampedY = Math.max(-60, Math.min(15, dy));
       setDragOffset({ x: clampedX, y: clampedY });
     }
-  }, [isDragging, resetSleepTimer]);
+  }, [isDragging]);
 
   const handleMouseUp = useCallback(() => {
     if (!isDragging) return;
 
     setIsDragging(false);
     dragStartRef.current = null;
+    setDragOffset({ x: 0, y: 0 });
 
-    // 落地反馈动画
-    setAction("land");
-    setDragOffset({ x: 0, y: 0 }); // 柔和弹性回弹到底座
+    setAction("jump");
+    usagiSound.play("yaha");
+    setSpeech(isJa ? "すとんと着地！🐾" : "稳稳落地！🐾");
 
     setTimeout(() => {
       setAction("idle");
-      setSpeech("稳稳落地！好玩~ (*^▽^*)");
-    }, 600);
-  }, [isDragging]);
+    }, 500);
+  }, [isDragging, isJa]);
 
   useEffect(() => {
     if (isDragging) {
@@ -193,30 +312,7 @@ export function usePetController({ running, onStartRun }: UsePetControllerOption
     }
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  // 7. 鼠标游弋视线跟随微动 (Look-at Tracking)
-  const handleContainerMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    resetSleepTimer();
-    if (isDragging) return;
-
-    const rect = e.currentTarget.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const diffX = e.clientX - centerX;
-
-    if (diffX < -15) {
-      setFacing("left");
-    } else if (diffX > 15) {
-      setFacing("right");
-    }
-
-    const calculatedTilt = Math.max(-6, Math.min(6, diffX * 0.08));
-    setTilt(calculatedTilt);
-  }, [isDragging, resetSleepTimer]);
-
-  const handleContainerMouseLeave = useCallback(() => {
-    setTilt(0);
-  }, []);
-
-  // 8. 双轨定时巡航后台轮询触发器 (按分钟校验并自动触发巡航)
+  // 7. 定时巡航后台检查器 (每 30 秒核验一次)
   useEffect(() => {
     const checkCruiseSchedule = () => {
       const schedule = loadScheduleConfig();
@@ -237,9 +333,11 @@ export function usePetController({ running, onStartRun }: UsePetControllerOption
 
         notify({
           type: "info",
-          text: `⏰ 定时巡航已到达指定时间 (${schedule.time})，正在自动为您启动巡航！`,
+          text: `⏰ 定时巡航时间已到达 (${schedule.time})，特助乌萨奇正在自动为您开启巡航！`,
           source: "定时巡航系统",
         });
+
+        usagiSound.play("celebrate");
 
         if (schedule.autoRun && onStartRun && !running) {
           onStartRun();
@@ -247,8 +345,8 @@ export function usePetController({ running, onStartRun }: UsePetControllerOption
       }
     };
 
-    checkCruiseSchedule(); // 挂载时立即核验一次当前时间
-    cruiseScheduleCheckerRef.current = setInterval(checkCruiseSchedule, 30000); // 每 30 秒核验一次
+    checkCruiseSchedule();
+    cruiseScheduleCheckerRef.current = setInterval(checkCruiseSchedule, 30000);
     return () => {
       if (cruiseScheduleCheckerRef.current) clearInterval(cruiseScheduleCheckerRef.current);
     };
@@ -258,17 +356,17 @@ export function usePetController({ running, onStartRun }: UsePetControllerOption
     action,
     facing,
     tilt,
+    posX,
     speech,
     speechVisible,
-    isSleeping,
     isDragging,
     dragOffset,
+    signboardOpen,
     handlePetClick,
+    handlePetDoubleClick,
     handleMouseDown,
-    handleContainerMouseMove,
-    handleContainerMouseLeave,
+    setSignboardOpen,
     setSpeechVisible,
-    resetSleepTimer,
   };
 }
 

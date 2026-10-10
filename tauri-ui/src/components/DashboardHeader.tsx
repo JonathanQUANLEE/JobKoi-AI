@@ -15,6 +15,25 @@ interface DashboardHeaderProps {
   onOpenSettingsModal: (tab?: any) => void;
 }
 
+// 统一解析 Tauri 窗口句柄（优先使用全局 withGlobalTauri 句柄，回退动态引入）
+async function getTauriWindow() {
+  try {
+    const tauri = (window as unknown as { __TAURI__?: { window?: { getCurrentWindow?: () => unknown } } }).__TAURI__;
+    if (tauri?.window?.getCurrentWindow) {
+      return tauri.window.getCurrentWindow() as {
+        minimize: () => Promise<void>;
+        toggleMaximize: () => Promise<void>;
+        close: () => Promise<void>;
+      };
+    }
+    const { getCurrentWindow } = await import("@tauri-apps/api/window");
+    return getCurrentWindow();
+  } catch (err) {
+    console.warn("Unable to acquire Tauri window handle:", err);
+    return null;
+  }
+}
+
 export default function DashboardHeader({
   sidebarCollapsed,
   expandRipple,
@@ -28,13 +47,44 @@ export default function DashboardHeader({
 }: DashboardHeaderProps) {
   const isMonochrome = useRunStore((s) => s.theme === "monochrome");
 
+  const handleMinimize = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const win = await getTauriWindow();
+      if (win) await win.minimize();
+    } catch (err) {
+      console.warn("Minimize error:", err);
+    }
+  };
+
+  const handleToggleMaximize = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const win = await getTauriWindow();
+      if (win) await win.toggleMaximize();
+    } catch (err) {
+      console.warn("Maximize error:", err);
+    }
+  };
+
+  const handleClose = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const win = await getTauriWindow();
+      if (win) await win.close();
+    } catch (err) {
+      console.warn("Close error:", err);
+    }
+  };
+
   return (
-    <header
-      data-tauri-drag-region
-      className="h-12 shrink-0 border-b border-[var(--grid)] bg-[var(--sidebar-bg)]/90 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between z-20 select-none"
-    >
-      <div className="flex items-center gap-2 text-xs" data-tauri-drag-region>
-        {/* WorkBuddy 风格：展开侧边栏入口按钮（侧边栏收起时呈现，如水露凝结浮现；点击触发雨滴涟漪） */}
+    <header className="h-12 shrink-0 border-b border-[var(--grid)] bg-[var(--sidebar-bg)]/90 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between z-20 select-none">
+      {/* 左侧功能与面包屑区域 */}
+      <div className="flex items-center gap-2 text-xs shrink-0">
+        {/* WorkBuddy 风格：展开侧边栏入口按钮 */}
         {sidebarCollapsed && (
           <button
             type="button"
@@ -69,7 +119,11 @@ export default function DashboardHeader({
         </span>
       </div>
 
-      <div className="flex items-center gap-3">
+      {/* 中间自由拖拽区（专用透明拖拽槽，绝不遮盖按钮点击） */}
+      <div data-tauri-drag-region className="flex-1 h-full min-w-8 cursor-default" />
+
+      {/* 右侧操作栏与窗口原生控制按钮 */}
+      <div className="flex items-center gap-3 shrink-0 relative z-30">
         {dryRun && (
           <span className="flex items-center gap-1 rounded-full bg-cyan-950/60 border border-cyan-500/30 px-2 py-0.5 text-[10px] font-semibold text-cyan-300">
             <FlaskConical className="h-3 w-3" />
@@ -78,7 +132,7 @@ export default function DashboardHeader({
         )}
         <button
           type="button"
-          onClick={onOpenSettingsModal}
+          onClick={() => onOpenSettingsModal?.("general")}
           className={`btn-ghost !py-1 !px-2.5 text-xs flex items-center gap-1.5 rounded-lg border border-[var(--grid)] cursor-pointer transition-all ${
             isMonochrome
               ? "hover:border-white/50 text-zinc-200 hover:text-white"
@@ -98,43 +152,34 @@ export default function DashboardHeader({
         </span>
 
         {/* Windows 现代化沉浸无边框窗口控制器（最小化、最大化、关闭） */}
-        <div className="flex items-center ml-2 border-l border-[var(--grid)] pl-2 space-x-1">
+        <div
+          className="flex items-center ml-2 border-l border-[var(--grid)] pl-2 space-x-1 relative z-50 pointer-events-auto"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           <button
             type="button"
-            onClick={async () => {
-              try {
-                const { getCurrentWindow } = await import("@tauri-apps/api/window");
-                await getCurrentWindow().minimize();
-              } catch {}
-            }}
-            title="最小化"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-stone-400 hover:bg-stone-800 hover:text-stone-200 transition-colors cursor-pointer"
+            onClick={handleMinimize}
+            title="最小化窗口"
+            aria-label="最小化"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-stone-400 hover:bg-white/10 hover:text-white active:bg-white/20 transition-all cursor-pointer"
           >
             <Minus className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
-            onClick={async () => {
-              try {
-                const { getCurrentWindow } = await import("@tauri-apps/api/window");
-                await getCurrentWindow().toggleMaximize();
-              } catch {}
-            }}
+            onClick={handleToggleMaximize}
             title="最大化 / 还原"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-stone-400 hover:bg-stone-800 hover:text-stone-200 transition-colors cursor-pointer"
+            aria-label="最大化或还原"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-stone-400 hover:bg-white/10 hover:text-white active:bg-white/20 transition-all cursor-pointer"
           >
             <Square className="h-3 w-3" />
           </button>
           <button
             type="button"
-            onClick={async () => {
-              try {
-                const { getCurrentWindow } = await import("@tauri-apps/api/window");
-                await getCurrentWindow().close();
-              } catch {}
-            }}
+            onClick={handleClose}
             title="关闭软件"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-stone-400 hover:bg-red-600 hover:text-white transition-colors cursor-pointer"
+            aria-label="关闭"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-stone-400 hover:bg-red-600 hover:text-white active:bg-red-700 transition-all cursor-pointer"
           >
             <X className="h-3.5 w-3.5" />
           </button>

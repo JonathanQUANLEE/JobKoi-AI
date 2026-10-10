@@ -14,30 +14,32 @@ interface PetSpriteProps {
   scale?: number;
   interactive?: boolean;
   onClick?: (e: MouseEvent<HTMLDivElement>) => void;
+  onDoubleClick?: (e: MouseEvent<HTMLDivElement>) => void;
   onMouseDown?: (e: MouseEvent<HTMLDivElement>) => void;
   className?: string;
 }
 
-// 不同动作专属帧间隔 (ms)，营造逼真节奏
+// 乌萨奇各动作专属帧率 (ms)，呈现经典魔性与灵动节奏
 const ACTION_FRAME_DELAYS: Record<PetAction, number> = {
   idle: 130,
-  walk: 110,
-  run: 90,
-  sit: 160,
-  sleep: 220,
-  drag: 120,
-  land: 100,
-  celebrate: 100,
-  waving: 120,
+  walk_right: 95,
+  walk_left: 95,
+  running: 75,
+  jump: 100,
+  waving: 110,
+  failed: 130,
+  waiting: 140,
+  roll: 70, // 乌萨奇标志性高速大风车甩手
 };
 
 export const PetSprite: FC<PetSpriteProps> = ({
   action,
   facing = "right",
   tilt = 0,
-  scale = 0.46, // 192 * 0.46 ≈ 88px, 208 * 0.46 ≈ 95px
+  scale = 0.38, // 192 * 0.38 ≈ 73px, 208 * 0.38 ≈ 79px
   interactive = true,
   onClick,
+  onDoubleClick,
   onMouseDown,
   className = "",
 }) => {
@@ -46,17 +48,17 @@ export const PetSprite: FC<PetSpriteProps> = ({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [frameIndex, setFrameIndex] = useState(0);
 
-  // 1. 预加载雪碧图
+  // 1. 预加载乌萨奇官方 Codex 雪碧图 (来自 OhMyChiikawa)
   useEffect(() => {
     const img = new Image();
-    img.src = "/pets/tater/spritesheet.webp";
+    img.src = "/pets/usagi/spritesheet.webp";
     img.onload = () => {
       imgRef.current = img;
       setImageLoaded(true);
     };
     img.onerror = () => {
-      if (!img.src.includes("./pets/tater/spritesheet.webp")) {
-        img.src = "./pets/tater/spritesheet.webp";
+      if (!img.src.includes("./pets/usagi/spritesheet.webp")) {
+        img.src = "./pets/usagi/spritesheet.webp";
       }
     };
     return () => {
@@ -93,8 +95,8 @@ export const PetSprite: FC<PetSpriteProps> = ({
 
     ctx.save();
 
-    // 翻转朝向处理
-    if (facing === "left") {
+    // 翻转朝向处理：walk_right (Row 1) 与 walk_left (Row 2) 在雪碧图中已预置方向，其余正面动作按需镜像
+    if (facing === "left" && action !== "walk_left" && action !== "walk_right") {
       ctx.translate(PET_FRAME_WIDTH, 0);
       ctx.scale(-1, 1);
     }
@@ -120,6 +122,7 @@ export const PetSprite: FC<PetSpriteProps> = ({
   return (
     <div
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       onMouseDown={onMouseDown}
       style={{
         width: displayWidth,

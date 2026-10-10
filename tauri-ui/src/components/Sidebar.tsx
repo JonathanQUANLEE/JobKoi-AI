@@ -237,11 +237,12 @@ export default function Sidebar({
       {/* ================= 侧边栏专属联动通知坞 (Notification Dock - 装备 React Bits SwipeRow & 平铺/折叠) ================= */}
       <NotificationDock />
 
-      {/* ================= 侧边栏萌宠小土豆与快捷定时巡航微板块 ================= */}
+      {/* ================= 侧边栏特助乌萨奇与快捷定时巡航木牌 ================= */}
       <SidebarPet
         running={running}
         onStartRun={onStartRun}
         onOpenSettingsModal={onOpenSettingsModal}
+        lang={lang}
       />
 
       {/* 左下角用户与设置菜单触发器（WorkBuddy 架构） */}
