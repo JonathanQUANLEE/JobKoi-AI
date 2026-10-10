@@ -107,11 +107,7 @@ def save_resume_file(name: str, content_b64: str, resume_dir: Path | None = None
     target.write_bytes(raw_bytes)
     stat = target.stat()
 
-    # 如果当前没有默认简历，自动将首份上传的简历设为默认
-    current_default = get_default_resume_name(base)
-    if not current_default or not (base / current_default).is_file():
-        set_default_resume(clean, base)
-
+    # 严格遵循用户手动选择原则：上传新文件不自动设为默认，等待用户显式选择
     return {
         "status": "saved",
         "name": clean,

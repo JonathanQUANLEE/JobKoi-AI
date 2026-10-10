@@ -632,7 +632,71 @@ async def click_filter_value(group_name: str, value: str, timeout: float = 5) ->
         return True
     except Exception as e:
         log.warning("页面筛选值点击失败：%s=%s，%s", group_name, value, e)
+# BOSS 直聘等主流平台单次允许勾选的城市上限
+BOSS_MAX_CITIES_PER_BATCH = 4
+
+_city_rotation_state: dict[str, Any] = {
+    "current_batch_index": 0,
+    "active_batch": [],
+}
+
+
+def get_platform_city_chunks(cities: list[str], chunk_size: int = BOSS_MAX_CITIES_PER_BATCH) -> list[list[str]]:
+    """将城市列表切分为符合招聘平台单次勾选限制的批次（如 BOSS 直聘单次最多 4 个）。"""
+    if not cities:
+        return []
+    return [cities[i : i + chunk_size] for i in range(0, len(cities), chunk_size)]
+
+
+async def rotate_next_city_batch(
+    filters: dict | None,
+    emit_event: Callable[[dict], None] | None = None,
+) -> bool:
+    """轮换到下一批意向城市并重新应用页面筛选。
+
+    若城市未超限（<= 4）则无需切批，返回 False。
+    若存在多批城市，推进到下一批并在页面重新点击，返回 True。
+    """
+    if not isinstance(filters, dict):
         return False
+    city_cfg = filters.get("city")
+    if not isinstance(city_cfg, dict):
+        return False
+    raw_cities = [str(item).strip() for item in city_cfg.get("values") or [] if str(item).strip()]
+    chunks = get_platform_city_chunks(raw_cities, BOSS_MAX_CITIES_PER_BATCH)
+    if len(chunks) <= 1:
+        return False
+
+    _city_rotation_state["current_batch_index"] = (
+        _city_rotation_state["current_batch_index"] + 1
+    ) % len(chunks)
+    next_idx = _city_rotation_state["current_batch_index"]
+    next_batch = chunks[next_idx]
+    _city_rotation_state["active_batch"] = next_batch
+
+    log.info(
+        "【城市多平台轮询】切换至第 %d/%d 批城市: %s",
+        next_idx + 1,
+        len(chunks),
+        ", ".join(next_batch),
+    )
+    if emit_event:
+        emit_event(
+            {
+                "group": "city_rotation",
+                "batch_index": next_idx + 1,
+                "total_batches": len(chunks),
+                "cities": next_batch,
+                "status": "rotated",
+                "message": f"城市轮询切批：已自动轮换为第 {next_idx + 1}/{len(chunks)} 批 [{', '.join(next_batch)}]",
+            }
+        )
+
+    # 刷新页面清空上一批勾选状态并重新加载应用新一批城市
+    await reload_current_page()
+    await asyncio.sleep(2.5)
+    await apply_page_filters(filters, emit_event=emit_event)
+    return True
 
 
 async def apply_page_filters(
@@ -653,7 +717,36 @@ async def apply_page_filters(
             continue
         if not bool(config.get("enabled", True)):
             continue
-        values = [str(item).strip() for item in config.get("values") or [] if str(item).strip()]
+        raw_values = [str(item).strip() for item in config.get("values") or [] if str(item).strip()]
+        if str(group_name) == "city":
+            chunks = get_platform_city_chunks(raw_values, BOSS_MAX_CITIES_PER_BATCH)
+            if len(chunks) > 1:
+                batch_idx = _city_rotation_state["current_batch_index"] % len(chunks)
+                values = chunks[batch_idx]
+                log.info(
+                    "意向城市数量(%d)超过单次上限(%d)，启用轮询模式：当前选取第 %d/%d 批：%s",
+                    len(raw_values),
+                    BOSS_MAX_CITIES_PER_BATCH,
+                    batch_idx + 1,
+                    len(chunks),
+                    ", ".join(values),
+                )
+                if emit_event:
+                    emit_event(
+                        {
+                            "group": "city_rotation",
+                            "batch_index": batch_idx + 1,
+                            "total_batches": len(chunks),
+                            "cities": values,
+                            "status": "info",
+                            "message": f"意向城市多批次轮询生效：当前选取第 {batch_idx + 1}/{len(chunks)} 批 [{', '.join(values)}]",
+                        }
+                    )
+            else:
+                values = raw_values[:BOSS_MAX_CITIES_PER_BATCH]
+        else:
+            values = raw_values
+
         for value in values:
             ok = await click_filter_value(str(group_name), value)
             if ok:

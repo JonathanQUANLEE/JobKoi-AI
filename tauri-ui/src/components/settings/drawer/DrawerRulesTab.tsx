@@ -136,6 +136,16 @@ export default function DrawerRulesTab({
             onChange={(e) => setCityValues(e.target.value)}
             placeholder="选填或手动逗号分隔，如：深圳,广州"
           />
+          {(() => {
+            const count = cityValues ? cityValues.split(",").map((s) => s.trim()).filter(Boolean).length : 0;
+            if (count <= 4) return null;
+            return (
+              <p className="mt-1.5 text-[11px] text-amber-400 flex items-center gap-1">
+                <span>⚡</span>
+                <span>已输入 {count} 个意向城市：BOSS 直聘等平台单次上限 4 个，将按每批 4 个自动轮换填入投递。</span>
+              </p>
+            );
+          })()}
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">

@@ -27,6 +27,8 @@ interface HeroStageProps {
   isChattingOrHasHistory: boolean;
   heroChatMessages: AgentChatMessage[];
   heroChatting: boolean;
+  chatStartTime?: number | null;
+  chatPhaseText?: string;
   heroProfileResult: Record<string, unknown> | null;
   onChatSubmit: (text: string) => void;
   onResetChat: () => void;
@@ -45,6 +47,8 @@ export default function HeroStage({
   isChattingOrHasHistory,
   heroChatMessages,
   heroChatting,
+  chatStartTime,
+  chatPhaseText,
   heroProfileResult,
   onChatSubmit,
   onResetChat,
@@ -120,13 +124,10 @@ export default function HeroStage({
     try {
       const b64 = await readFileAsBase64(file);
       await ipc.saveResumeFile(file.name, b64);
-      try {
-        await ipc.setDefaultResume(file.name);
-      } catch {}
-
       useRunStore.getState().notify({
         type: "success",
-        text: `已同步导入简历资料库并设为生效简历：${file.name}`,
+        text: `已成功导入简历资料库：${file.name}`,
+        source: "资料档案",
       });
 
       setUploadStatusText(`正在解析简历「${file.name}」文本内容...`);
@@ -205,6 +206,8 @@ export default function HeroStage({
           dialogueScrollRef={dialogueScrollRef}
           heroChatMessages={heroChatMessages}
           heroChatting={heroChatting}
+          chatStartTime={chatStartTime}
+          chatPhaseText={chatPhaseText}
           heroProfileResult={heroProfileResult}
           heroProfilePreview={heroProfilePreview}
           onResetChat={onResetChat}

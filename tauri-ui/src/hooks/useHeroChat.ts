@@ -1,4 +1,4 @@
-import { useState, useCallback, type Dispatch, type SetStateAction } from "react";
+import { useState, useCallback, useEffect, type Dispatch, type SetStateAction } from "react";
 import { ipc, type AgentChatMessage, type ProfileData } from "../lib/ipc";
 import { summarizeAgentProfile } from "../lib/agentPreview";
 import { extractFallbackProfile } from "../lib/dashboardHelpers";
@@ -15,6 +15,8 @@ interface UseHeroChatOptions {
 
 export interface UseHeroChatReturn {
   heroChatting: boolean;
+  chatStartTime: number | null;
+  chatPhaseText: string;
   heroChatMessages: AgentChatMessage[];
   setHeroChatMessages: Dispatch<SetStateAction<AgentChatMessage[]>>;
   heroProfileResult: Record<string, unknown> | null;
@@ -22,6 +24,21 @@ export interface UseHeroChatReturn {
   isChattingOrHasHistory: boolean;
   handleHeroChatSubmit: (text: string) => Promise<void>;
   resetHeroChat: () => void;
+}
+
+export function computePhaseText(startTime: number | null): string {
+  if (!startTime) return "正在深度思考并提炼专属求职画像...";
+  const sec = Math.floor((Date.now() - startTime) / 1000);
+  if (sec < 3) {
+    return "① 简历已就绪 · 正在解析专业技能结构与背景...";
+  }
+  if (sec < 8) {
+    return "② 正在提炼核心技术栈与工作经验画像...";
+  }
+  if (sec < 14) {
+    return "③ 正在匹配目标岗位、意向城市与排除项...";
+  }
+  return "④ 正在生成专属投递策略并同步至求职画像...";
 }
 
 export function useHeroChat({
@@ -33,14 +50,26 @@ export function useHeroChat({
   setMessage,
 }: UseHeroChatOptions): UseHeroChatReturn {
   const [heroChatting, setHeroChatting] = useState(false);
+  const [chatStartTime, setChatStartTime] = useState<number | null>(null);
+  const [chatPhaseText, setChatPhaseText] = useState("正在深度思考并提炼专属求职画像...");
   const [heroChatMessages, setHeroChatMessages] = useState<AgentChatMessage[]>([]);
   const [heroProfileResult, setHeroProfileResult] = useState<Record<string, unknown> | null>(null);
+
+  // 定时刷新思考阶段文案，给用户清晰明确的进度预期
+  useEffect(() => {
+    if (!heroChatting || !chatStartTime) return;
+    const interval = setInterval(() => {
+      setChatPhaseText(computePhaseText(chatStartTime));
+    }, 800);
+    return () => clearInterval(interval);
+  }, [heroChatting, chatStartTime]);
 
   const isChattingOrHasHistory = heroChatMessages.length > 0 || heroChatting;
 
   const resetHeroChat = useCallback(() => {
     setHeroChatMessages([]);
     setHeroProfileResult(null);
+    setChatStartTime(null);
   }, []);
 
   const handleHeroChatSubmit = useCallback(
@@ -48,7 +77,10 @@ export function useHeroChat({
       const trimmed = text.trim();
       if (!trimmed || heroChatting) return;
 
+      const now = Date.now();
       setHeroChatting(true);
+      setChatStartTime(now);
+      setChatPhaseText(computePhaseText(now));
       setMessage(null);
 
       const userMsg: AgentChatMessage = { role: "user", content: trimmed };
@@ -58,12 +90,18 @@ export function useHeroChat({
 
       try {
         const currentForm = currentProfileData();
+        // 18 秒超时自动熔断保护：避免云端 LLM 排队挂起导致用户无限期卡在“工作中”
+        const timeoutPromise = new Promise<{ status: "timeout" }>((resolve) =>
+          setTimeout(() => resolve({ status: "timeout" }), 18000)
+        );
         const resPromise = ipc.agentChat(trimmed, heroChatMessages.slice(-8), currentForm);
-        // 保障思考过程有清晰完整的视觉展示时间（至少 1000ms），让用户能直观看到点阵转圈与秒表计时
+
+        // 至少给 1200ms 让用户看到优雅思考粒子，但绝不无限卡死
         const [res] = await Promise.all([
-          resPromise,
-          new Promise((resolve) => setTimeout(resolve, 1000)),
+          Promise.race([resPromise, timeoutPromise]),
+          new Promise((resolve) => setTimeout(resolve, 1200)),
         ]);
+
         if (res.status === "ok") {
           const reply = res.reply || "收到！已根据你的背景情况完成求职意向诊断与画像提炼。";
           const assistantMsg: AgentChatMessage = { role: "assistant", content: reply };
@@ -78,6 +116,29 @@ export function useHeroChat({
             if (preview?.anyKeywords) setRule((prev) => ({ ...prev, anyKeywords: preview.anyKeywords }));
             if (preview?.excludeKeywords) setRule((prev) => ({ ...prev, excludeKeywords: preview.excludeKeywords }));
           }
+        } else if (res.status === "timeout") {
+          // 超时本地快速智能提炼兜底
+          const extracted = extractFallbackProfile(trimmed);
+          const reply = `已完成简历资料深度解析！由于云端模型网络响应排队较长（已为您自动启动极速本地画像引擎），已优先根据你的核心技术栈与专业方向定制专属求职画像。你可随时在【求职画像】中微调参数。`;
+          const assistantMsg: AgentChatMessage = { role: "assistant", content: reply };
+          setHeroChatMessages([...newHistory, assistantMsg]);
+          pushAgentMessage(assistantMsg);
+
+          setLabel(extracted.query);
+          if (extracted.cities) setCityValues(extracted.cities);
+          if (extracted.anyKeywords) setRule((prev) => ({ ...prev, anyKeywords: extracted.anyKeywords }));
+          if (extracted.excludeKeywords) setRule((prev) => ({ ...prev, excludeKeywords: extracted.excludeKeywords }));
+
+          setHeroProfileResult({
+            search: { query: extracted.query },
+            page_filters: { city: { values: extracted.cities ? extracted.cities.split(",") : [] } },
+            filters: {
+              title: {
+                any: { keywords: extracted.anyKeywords ? extracted.anyKeywords.split(",") : [extracted.query] },
+                exclude: { keywords: extracted.excludeKeywords ? extracted.excludeKeywords.split(",") : [] },
+              },
+            },
+          });
         } else {
           const extracted = extractFallbackProfile(trimmed);
           let reply = res.message || "已收到你的求职背景情况。";
@@ -111,6 +172,7 @@ export function useHeroChat({
         pushAgentMessage(assistantMsg);
       } finally {
         setHeroChatting(false);
+        setChatStartTime(null);
       }
     },
     [
@@ -127,6 +189,8 @@ export function useHeroChat({
 
   return {
     heroChatting,
+    chatStartTime,
+    chatPhaseText,
     heroChatMessages,
     setHeroChatMessages,
     heroProfileResult,

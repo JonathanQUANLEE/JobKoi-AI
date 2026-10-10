@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { ipc, type ResumeItem, type ResumeContentResult } from "../lib/ipc";
 import { useT, useRunStore } from "../store";
 import { createBlobUrl, readFileAsBase64 } from "../lib/resumeUtils";
@@ -72,10 +72,15 @@ export function useResumeVault() {
     });
   }, [resumes, contentsCache, loadingCache]);
 
-  // 组件卸载时释放所有已生成的 Blob URL
+  const blobUrlsRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    blobUrlsRef.current = blobCache;
+  }, [blobCache]);
+
+  // 仅在组件彻底卸载时释放所有已生成的 Blob URL，绝不在状态局部更新时误注销其它文件的有效 URL
   useEffect(() => {
     return () => {
-      Object.values(blobCache).forEach((url) => {
+      Object.values(blobUrlsRef.current).forEach((url: string) => {
         try {
           URL.revokeObjectURL(url);
         } catch {
@@ -83,7 +88,7 @@ export function useResumeVault() {
         }
       });
     };
-  }, [blobCache]);
+  }, []);
 
   // 设为默认简历
   const handleSetDefault = useCallback(async (name: string) => {
@@ -115,26 +120,44 @@ export function useResumeVault() {
     try {
       await ipc.deleteResumeFile(name);
       notify({ type: "success", text: `已安全销毁并移出资料库: 「${name}」`, source: "资料档案" });
-      setContentsCache((prev) => {
-        const copy = { ...prev };
-        delete copy[name];
-        return copy;
+
+      // 1. 若当前选中的正是被删除项，平滑切换选中目标至下一项
+      setSelectedName((prev) => {
+        if (prev === name) {
+          const remaining = resumes.filter((r) => r.name !== name);
+          const defaultItem = remaining.find((r) => r.is_default);
+          return defaultItem ? defaultItem.name : remaining[0]?.name || null;
+        }
+        return prev;
       });
+
+      // 2. 仅安全注销被删除文件专属的单条 Blob URL，严禁影响其它文件
       if (blobCache[name]) {
-        URL.revokeObjectURL(blobCache[name]);
+        try {
+          URL.revokeObjectURL(blobCache[name]);
+        } catch {
+          // ignore
+        }
         setBlobCache((prev) => {
           const copy = { ...prev };
           delete copy[name];
           return copy;
         });
       }
+
+      setContentsCache((prev) => {
+        const copy = { ...prev };
+        delete copy[name];
+        return copy;
+      });
+
       await refresh();
     } catch (err) {
       notify({ type: "error", text: `删除失败: ${String(err)}`, source: "资料档案" });
     } finally {
       setBusy(false);
     }
-  }, [blobCache, refresh, notify]);
+  }, [blobCache, resumes, refresh, notify]);
 
   // 触发能量胶囊充盈入库特效动画
   const triggerEnergyCharge = useCallback(async (task: () => Promise<void>) => {
