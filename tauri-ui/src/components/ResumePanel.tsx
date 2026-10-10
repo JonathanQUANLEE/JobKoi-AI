@@ -22,6 +22,7 @@ import {
   Maximize,
   RotateCw,
   Layers,
+  LayoutGrid,
   FolderOpen,
   ShieldCheck,
   FileSpreadsheet,
@@ -73,6 +74,26 @@ export default function ResumePanel({
   // 专注阅读模式状态（点击正文预览框时锁定，仅供滚轮浏览正文；点击外部恢复抽屉切卡）
   const [isReadingMode, setIsReadingMode] = useState(false);
   const isMonochrome = useRunStore((s) => s.theme === "monochrome");
+
+  // 视图呈现模式：3D 书架抽屉层叠视图 ("3d") vs 纯净平铺模式 ("flat")
+  const [viewMode, setViewMode] = useState<"3d" | "flat">(() => {
+    try {
+      return (localStorage.getItem("boss_resumes_view_mode") as "3d" | "flat") || "3d";
+    } catch {
+      return "3d";
+    }
+  });
+
+  // 平铺模式下：单份沉浸标签直读 (false) vs 多份全部网格展开 (true)
+  const [flatSpreadAll, setFlatSpreadAll] = useState(false);
+
+  const handleViewModeChange = (mode: "3d" | "flat") => {
+    setViewMode(mode);
+    setIsReadingMode(false);
+    try {
+      localStorage.setItem("boss_resumes_view_mode", mode);
+    } catch {}
+  };
 
   // 按下 Esc 键随时退出正文阅读锁定
   useEffect(() => {
@@ -297,11 +318,301 @@ export default function ResumePanel({
     }
   }
 
-  // 点击左侧紧凑列表项切换文件时，联动将 CardSwap 抽到最前，并重置阅读状态
+  // 点击左侧紧凑列表项切换文件时，联动切换文件，3D 模式抽到最前，并重置阅读状态
   const handleItemSelect = (name: string, index: number) => {
     setIsReadingMode(false);
     setSelectedName(name);
-    cardSwapRef.current?.bringToFront(index);
+    if (viewMode === "3d") {
+      cardSwapRef.current?.bringToFront(index);
+    }
+  };
+
+  // 渲染单份简历卡片内部主体（3D 卡片与 2D 平铺卡片共用）
+  const renderCardInner = (item: ResumeItem, isFlat: boolean = false) => {
+    const content = contentsCache[item.name];
+    const blobUrl = blobCache[item.name];
+    const ext = getExtension(item.name);
+    const isImg = isImageExt(item.name);
+    const isWord = ext === "docx" || ext === "doc";
+    const isPdf = ext === "pdf";
+
+    return (
+      <>
+        {/* 卡片顶栏：文件核心元信息 + 原版直开 + 提炼画像 + 默认与删除 */}
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-stone-800/80 bg-stone-900/60 shrink-0 cursor-default"
+          onClick={() => {
+            if (!isFlat && isReadingMode) setIsReadingMode(false);
+          }}
+        >
+          {/* 文件名与格式徽章 */}
+          <div className="min-w-0 flex items-center gap-2.5">
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+              {isImg ? (
+                <ImageIcon className="size-4 text-purple-400" />
+              ) : isPdf ? (
+                <FileText className="size-4 text-red-400" />
+              ) : (
+                <FileText className="size-4 text-blue-400" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-stone-100 truncate max-w-[240px] sm:max-w-[360px]">
+                  {item.name}
+                </h3>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold uppercase bg-stone-800 text-stone-300 border border-stone-700">
+                  {ext}
+                </span>
+              </div>
+              <p className="text-[11px] text-stone-400 mt-0.5">
+                {item.mtime} · {formatSize(item.size)}
+              </p>
+            </div>
+          </div>
+
+          {/* 快捷操作动作组 */}
+          <div
+            className="flex items-center gap-2 shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 1. 一键系统原版直开（直接调起 Windows 关联的本地 WPS / Word / 照片） */}
+            <button
+              type="button"
+              onClick={() => handleOpenNative(item.name)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-800/90 hover:bg-stone-700 border border-stone-700 text-stone-200 text-xs font-semibold shadow-sm cursor-pointer active:scale-95 transition-all"
+              title="使用 Windows 默认关联软件（如 WPS / Office / 系统照片）直接打开原版文件"
+            >
+              <ExternalLink className="size-3.5 text-amber-400" />
+              <span>原版直开</span>
+            </button>
+
+            {/* 2. 一键基于此资料提炼求职画像 */}
+            <button
+              type="button"
+              onClick={() => {
+                if (onExtractProfile) {
+                  onExtractProfile(item.name, content?.text);
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 text-xs font-bold shadow-md shadow-amber-500/15 cursor-pointer active:scale-95 transition-all"
+              title="呼唤 AI 顾问根据此资料提炼求职画像"
+            >
+              <Sparkles className="size-3.5" />
+              <span>提炼画像</span>
+            </button>
+
+            {/* 3. 设为默认 / 当前默认 */}
+            {!item.is_default ? (
+              <button
+                type="button"
+                onClick={() => handleSetDefault(item.name)}
+                disabled={busy}
+                className="flex items-center gap-1 text-xs py-1.5 px-2.5 rounded-xl border border-stone-800 hover:border-amber-500/40 text-stone-400 hover:text-stone-200 cursor-pointer transition-all"
+                title="设为投递时优先使用的默认文件"
+              >
+                <Star className="size-3.5 text-stone-400" />
+                <span>设默认</span>
+              </button>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-xl">
+                <Star className="size-3 fill-amber-400 text-amber-400" />
+                <span>默认</span>
+              </span>
+            )}
+
+            {/* 4. 按住删除按钮 (React Bits 液态波纹进度长按确认，防误触物理安全销毁) */}
+            <HoldButton
+              icon={<Trash2 className="size-3.5" />}
+              doneIcon={<Trash2 className="size-3.5 text-white" />}
+              children="按住删除"
+              doneLabel="已安全删除"
+              backgroundColor="rgba(28, 25, 23, 0.9)"
+              fillColor="#ef4444"
+              textColor="#78716c"
+              fillTextColor="#ffffff"
+              size="sm"
+              radius={12}
+              holdTime={1400}
+              releaseTime={200}
+              wave={true}
+              waveAmplitude={6}
+              glow={true}
+              disabled={busy}
+              onHold={() => handleDeleteConfirmed(item.name)}
+              className="border border-stone-800 hover:border-red-500/40 hover:text-red-400 !h-8 !px-2.5 !text-xs !font-medium"
+            />
+          </div>
+        </div>
+
+        {/* 卡片主体：真实高清内容视窗 (100% 留给文件本身，支持内层独立平滑滚动) */}
+        <div className="flex-1 min-h-0 w-full p-4 overflow-hidden flex flex-col items-stretch justify-start bg-[#110f0e] relative">
+          {/* 1. 图片格式 (简历原图、学信网报告、技能证书) */}
+          {isImg && (
+            <div
+              className="w-full h-full flex flex-col items-center justify-center relative group"
+              onClick={(e) => {
+                if (!isFlat) {
+                  e.stopPropagation();
+                  if (!isReadingMode) setIsReadingMode(true);
+                }
+              }}
+            >
+              {/* 悬浮缩放控制栏 */}
+              <div
+                className="absolute top-2 right-2 flex items-center gap-1 bg-stone-900/90 backdrop-blur border border-stone-700/60 rounded-xl p-1 z-20"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  onClick={() => setImgZoom((z) => Math.max(0.5, z - 0.2))}
+                  className="p-1 hover:text-amber-400 text-stone-400 cursor-pointer"
+                  title="缩小"
+                >
+                  <ZoomOut className="size-3.5" />
+                </button>
+                <span className="text-[10px] text-stone-400 font-mono px-1">
+                  {Math.round(imgZoom * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setImgZoom((z) => Math.min(2.5, z + 0.2))}
+                  className="p-1 hover:text-amber-400 text-stone-400 cursor-pointer"
+                  title="放大"
+                >
+                  <ZoomIn className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImgZoom(1)}
+                  className="p-1 hover:text-amber-400 text-stone-400 cursor-pointer"
+                  title="适应窗口"
+                >
+                  <Maximize className="size-3.5" />
+                </button>
+              </div>
+
+              <div className="w-full h-full flex items-center justify-center overflow-auto p-2">
+                <img
+                  src={blobUrl || content?.data_url}
+                  alt={item.name}
+                  style={{ transform: `scale(${imgZoom})`, transformOrigin: "center center" }}
+                  className="max-w-full max-h-[490px] object-contain rounded-xl shadow-2xl border border-stone-800/80 transition-transform duration-150 select-none pointer-events-auto"
+                />
+              </div>
+              <p className="text-[11px] text-stone-500 mt-1 flex items-center gap-1.5 shrink-0">
+                <ImageIcon className="size-3 text-purple-400" />
+                <span>原图高清预览 · 可点击右上角「原版直开」在系统照片查看器全屏核对</span>
+              </p>
+            </div>
+          )}
+
+          {/* 2. Word 文档提取预览 (.docx / .doc) */}
+          {isWord && (
+            <div className="w-full h-full min-h-0 flex flex-col text-left">
+              {/* Word 排版温馨引导横条 */}
+              <div
+                className="flex items-center justify-between px-3.5 py-2 mb-2.5 rounded-xl border border-blue-500/20 bg-blue-950/20 text-xs text-blue-300 shrink-0"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <span className="flex items-center gap-2">
+                  <FileText className="size-4 text-blue-400" />
+                  <span>纯文本提取视图（如需查看 100% 原始矢量双栏排版与表格，请点击右侧）</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleOpenNative(item.name)}
+                  className="px-2.5 py-1 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-200 text-[11px] font-semibold border border-blue-500/30 cursor-pointer"
+                >
+                  在 WPS/Word 打开原版 ↗
+                </button>
+              </div>
+
+              <div
+                onClick={(e) => {
+                  if (!isFlat) {
+                    e.stopPropagation();
+                    if (!isReadingMode) setIsReadingMode(true);
+                  }
+                }}
+                className={`flex-1 min-h-0 overflow-y-auto rounded-xl border p-5 leading-relaxed text-stone-200 select-text allow-inner-scroll reading-content-zone transition-all ${
+                  isFlat
+                    ? "border-stone-800 bg-[#161412]/80 hover:border-stone-700"
+                    : isReadingMode
+                    ? isMonochrome
+                      ? "border-white/60 ring-2 ring-white/15 bg-[#09090b] shadow-inner"
+                      : "border-amber-500/70 ring-2 ring-amber-500/20 bg-[#161412] shadow-inner"
+                    : "border-stone-800 bg-[#161412]/80 hover:border-stone-700 cursor-text"
+                }`}
+                title={
+                  isFlat
+                    ? "平铺阅读：滚轮或触控板双指上下滚动浏览全文"
+                    : isReadingMode
+                    ? "正在专注阅读中：滚轮或触控板上下浏览正文（点击卡片外部恢复抽换）"
+                    : "点击正文区域进入专注阅读模式（滚轮仅滚动文档内容）"
+                }
+              >
+                {content?.text ? (
+                  <pre className="whitespace-pre-wrap font-sans text-xs leading-6 text-stone-300">
+                    {content.text}
+                  </pre>
+                ) : (
+                  <div className="py-20 text-center text-stone-500 text-xs space-y-2">
+                    <RefreshCw className="mx-auto size-6 animate-spin text-amber-500/40" />
+                    <p>正在读取并提取 Word 文档内容...</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 3. PDF 预览 */}
+          {isPdf && (
+            <div
+              className="w-full h-full flex flex-col"
+              onClick={(e) => {
+                if (!isFlat) {
+                  e.stopPropagation();
+                  if (!isReadingMode) setIsReadingMode(true);
+                }
+              }}
+            >
+              <iframe
+                src={blobUrl || content?.data_url}
+                className="w-full h-[510px] rounded-xl border border-stone-800 bg-[#2b2b2b] shadow-inner"
+                title={item.name}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* 卡片底栏交互提示 */}
+        <div
+          className="px-5 py-2.5 bg-stone-900/80 border-t border-stone-800 text-[11px] text-stone-400 flex items-center justify-between shrink-0 cursor-default"
+          onClick={() => {
+            if (!isFlat && isReadingMode) setIsReadingMode(false);
+          }}
+        >
+          <span className="flex items-center gap-1.5">
+            {isFlat ? (
+              <LayoutGrid className="size-3 text-amber-400" />
+            ) : (
+              <Layers className="size-3 text-amber-400" />
+            )}
+            <span>
+              {isFlat
+                ? "2D 纯平模式 · 滚轮自由浏览全文 · 无 3D 景深与倾角"
+                : isReadingMode
+                ? "📜 正文阅读中 · 滚轮/双指平滑滚动 · 点击空白或右上角恢复抽屉轮换"
+                : "3D 书架抽屉层叠 · 滚轮滚动、拖动或点击卡片均可抽拉切换 · 点击正文阅读"}
+            </span>
+          </span>
+          <span className="text-stone-500 font-mono text-[10px]">
+            {item.is_default ? "★ 默认投递简历" : "备用投递资料"}
+          </span>
+        </div>
+      </>
+    );
   };
 
   return (
@@ -496,50 +807,134 @@ export default function ResumePanel({
           }}
         >
           {/* 右侧舞台操作条 */}
-          <div className="w-full flex items-center justify-between pb-3 px-1 text-xs text-stone-400">
+          <div className="w-full flex flex-wrap items-center justify-between gap-2.5 pb-3 px-1 text-xs text-stone-400">
             <div className="flex items-center gap-2">
               <span className="font-semibold text-stone-200 flex items-center gap-1.5">
-                <Layers className="size-3.5 text-amber-400" />
-                <span>3D 书架抽屉层叠视图</span>
+                {viewMode === "3d" ? (
+                  <>
+                    <Layers className="size-3.5 text-amber-400" />
+                    <span>3D 书架抽屉层叠视图</span>
+                  </>
+                ) : (
+                  <>
+                    <LayoutGrid className="size-3.5 text-amber-400" />
+                    <span>经典纯净平铺模式</span>
+                  </>
+                )}
               </span>
 
-              {isReadingMode ? (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 text-[11px] font-semibold animate-in fade-in">
-                  <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span>📜 阅读模式：滚轮浏览正文 · 点击外部恢复抽换</span>
-                </span>
+              {viewMode === "3d" ? (
+                isReadingMode ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 text-[11px] font-semibold animate-in fade-in">
+                    <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>📜 阅读模式：滚轮浏览正文 · 点击外部恢复抽换</span>
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-stone-500 hidden sm:inline">
+                    · 鼠标滚轮上下滚动或点击卡片即可持续轮换 · 点击正文进入阅读
+                  </span>
+                )
               ) : (
                 <span className="text-[11px] text-stone-500 hidden sm:inline">
-                  · 鼠标滚轮上下滚动或点击卡片即可持续轮换 · 点击正文进入阅读
+                  · 2D 纯平面直读 · 滚轮随心滑动长文档 · 零倾角无景深
                 </span>
               )}
             </div>
 
             <div className="flex items-center gap-2">
-              {isReadingMode && (
+              {/* 核心功能：3D 抽屉 vs 平铺模式 视图切换胶囊 */}
+              <div className="flex items-center p-0.5 rounded-xl bg-stone-900 border border-stone-800 shadow-inner">
                 <button
                   type="button"
-                  onClick={() => setIsReadingMode(false)}
-                  className="px-2.5 py-1 rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-300 text-xs transition-colors cursor-pointer"
-                  title="退出正文阅读模式，恢复滚轮抽卡"
+                  onClick={() => handleViewModeChange("3d")}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    viewMode === "3d"
+                      ? isMonochrome
+                        ? "bg-white text-black shadow-md font-bold"
+                        : "bg-amber-500 text-stone-950 shadow-md font-bold"
+                      : "text-stone-400 hover:text-stone-200"
+                  }`}
+                  title="切换至 3D 书架抽屉层叠视图（立体景深，滚轮抽拉切换）"
                 >
-                  退出阅读模式
+                  <Layers className="size-3.5" />
+                  <span>3D 抽屉</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => handleViewModeChange("flat")}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    viewMode === "flat"
+                      ? isMonochrome
+                        ? "bg-white text-black shadow-md font-bold"
+                        : "bg-amber-500 text-stone-950 shadow-md font-bold"
+                      : "text-stone-400 hover:text-stone-200"
+                  }`}
+                  title="切换至纯净平铺模式（2D 平面无透视，适合沉浸直接阅读文档）"
+                >
+                  <LayoutGrid className="size-3.5" />
+                  <span>平铺模式</span>
+                </button>
+              </div>
+
+              {/* 3D 专属控制 */}
+              {viewMode === "3d" && (
+                <>
+                  {isReadingMode && (
+                    <button
+                      type="button"
+                      onClick={() => setIsReadingMode(false)}
+                      className="px-2.5 py-1 rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200 text-xs transition-colors cursor-pointer"
+                      title="退出正文阅读模式，恢复滚轮抽卡"
+                    >
+                      退出阅读模式
+                    </button>
+                  )}
+
+                  {resumes.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsReadingMode(false);
+                        cardSwapRef.current?.swap();
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 hover:bg-amber-500/25 text-xs font-semibold shadow-sm transition-all cursor-pointer active:scale-95"
+                      title="像拉抽屉一样切换下一张"
+                    >
+                      <RotateCw className="size-3.5 text-amber-400" />
+                      <span>抽换下一份 (Swap)</span>
+                    </button>
+                  )}
+                </>
               )}
 
-              {resumes.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsReadingMode(false);
-                    cardSwapRef.current?.swap();
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 hover:bg-amber-500/25 text-xs font-semibold shadow-sm transition-all cursor-pointer active:scale-95"
-                  title="像拉抽屉一样切换下一张"
-                >
-                  <RotateCw className="size-3.5 text-amber-400" />
-                  <span>抽换下一份 (Swap)</span>
-                </button>
+              {/* 平铺模式专属控制：单份直读 vs 全部展开 */}
+              {viewMode === "flat" && resumes.length > 1 && (
+                <div className="flex items-center p-0.5 rounded-xl bg-stone-900 border border-stone-800">
+                  <button
+                    type="button"
+                    onClick={() => setFlatSpreadAll(false)}
+                    className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                      !flatSpreadAll
+                        ? "bg-stone-800 text-stone-200 border border-stone-700 shadow-sm"
+                        : "text-stone-400 hover:text-stone-300"
+                    }`}
+                    title="单份大视窗直读"
+                  >
+                    单份直读
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFlatSpreadAll(true)}
+                    className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                      flatSpreadAll
+                        ? "bg-stone-800 text-stone-200 border border-stone-700 shadow-sm"
+                        : "text-stone-400 hover:text-stone-300"
+                    }`}
+                    title="全部并排网格平铺"
+                  >
+                    全部平铺
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -552,10 +947,11 @@ export default function ResumePanel({
               <FolderOpen className="size-16 text-stone-600 mb-3" />
               <h3 className="text-base font-bold text-stone-200">资料库尚无文件</h3>
               <p className="text-xs text-stone-500 mt-1 max-w-sm">
-                点击左侧「上传资料 +」或拖拽文件入库，即刻体验 3D 书架层叠大视窗
+                点击左侧「上传资料 +」或拖拽文件入库，即刻体验资料大视窗
               </p>
             </div>
-          ) : (
+          ) : viewMode === "3d" ? (
+            /* ================= 3D 书架抽屉层叠视图 ================= */
             <div className="w-full flex justify-center items-center pt-8 pb-6 overflow-visible">
               <CardSwap
                 ref={cardSwapRef}
@@ -575,280 +971,102 @@ export default function ResumePanel({
                   }
                 }}
               >
-                {resumes.map((item) => {
-                  const content = contentsCache[item.name];
-                  const blobUrl = blobCache[item.name];
-                  const ext = getExtension(item.name);
-                  const isImg = isImageExt(item.name);
-                  const isWord = ext === "docx" || ext === "doc";
-                  const isPdf = ext === "pdf";
-
-                  return (
-                    <Card
-                      key={item.name}
-                      className="w-full h-[630px] rounded-3xl border border-stone-800/80 bg-[#171513] shadow-2xl flex flex-col overflow-hidden select-none"
-                    >
-                      {/* 卡片顶栏：文件核心元信息 + 原版直开 + 提炼画像 + 默认与删除 */}
-                      <div
-                        className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-stone-800/80 bg-stone-900/60 shrink-0 cursor-default"
-                        onClick={() => {
-                          if (isReadingMode) setIsReadingMode(false);
-                        }}
-                      >
-                        {/* 文件名与格式徽章 */}
-                        <div className="min-w-0 flex items-center gap-2.5">
-                          <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
-                            {isImg ? (
-                              <ImageIcon className="size-4 text-purple-400" />
-                            ) : isPdf ? (
-                              <FileText className="size-4 text-red-400" />
-                            ) : (
-                              <FileText className="size-4 text-blue-400" />
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <h3 className="text-sm font-bold text-stone-100 truncate max-w-[240px] sm:max-w-[360px]">
-                                {item.name}
-                              </h3>
-                              <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold uppercase bg-stone-800 text-stone-300 border border-stone-700">
-                                {ext}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-stone-400 mt-0.5">
-                              {item.mtime} · {formatSize(item.size)}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* 快捷操作动作组 */}
-                        <div
-                          className="flex items-center gap-2 shrink-0"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {/* 1. 一键系统原版直开（直接调起 Windows 关联的本地 WPS / Word / 照片） */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenNative(item.name)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-800/90 hover:bg-stone-700 border border-stone-700 text-stone-200 text-xs font-semibold shadow-sm cursor-pointer active:scale-95 transition-all"
-                            title="使用 Windows 默认关联软件（如 WPS / Office / 系统照片）直接打开原版文件"
-                          >
-                            <ExternalLink className="size-3.5 text-amber-400" />
-                            <span>原版直开</span>
-                          </button>
-
-                          {/* 2. 一键基于此资料提炼求职画像 */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (onExtractProfile) {
-                                onExtractProfile(item.name, content?.text);
-                              }
-                            }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 text-xs font-bold shadow-md shadow-amber-500/15 cursor-pointer active:scale-95 transition-all"
-                            title="呼唤 AI 顾问根据此资料提炼求职画像"
-                          >
-                            <Sparkles className="size-3.5" />
-                            <span>提炼画像</span>
-                          </button>
-
-                          {/* 3. 设为默认 / 当前默认 */}
-                          {!item.is_default ? (
-                            <button
-                              type="button"
-                              onClick={() => handleSetDefault(item.name)}
-                              disabled={busy}
-                              className="flex items-center gap-1 text-xs py-1.5 px-2.5 rounded-xl border border-stone-800 hover:border-amber-500/40 text-stone-400 hover:text-stone-200 cursor-pointer transition-all"
-                              title="设为投递时优先使用的默认文件"
-                            >
-                              <Star className="size-3.5 text-stone-400" />
-                              <span>设默认</span>
-                            </button>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-xl">
-                              <Star className="size-3 fill-amber-400 text-amber-400" />
-                              <span>默认</span>
-                            </span>
-                          )}
-
-                          {/* 4. 按住删除按钮 (React Bits 液态波纹进度长按确认，防误触物理安全销毁) */}
-                          <HoldButton
-                            icon={<Trash2 className="size-3.5" />}
-                            doneIcon={<Trash2 className="size-3.5 text-white" />}
-                            children="按住删除"
-                            doneLabel="已安全删除"
-                            backgroundColor="rgba(28, 25, 23, 0.9)"
-                            fillColor="#ef4444"
-                            textColor="#78716c"
-                            fillTextColor="#ffffff"
-                            size="sm"
-                            radius={12}
-                            holdTime={1400}
-                            releaseTime={200}
-                            wave={true}
-                            waveAmplitude={6}
-                            glow={true}
-                            disabled={busy}
-                            onHold={() => handleDeleteConfirmed(item.name)}
-                            className="border border-stone-800 hover:border-red-500/40 hover:text-red-400 !h-8 !px-2.5 !text-xs !font-medium"
-                          />
-                        </div>
-                      </div>
-
-                      {/* 卡片主体：真实高清内容视窗 (100% 留给文件本身，支持内层独立平滑滚动) */}
-                      <div className="flex-1 min-h-0 w-full p-4 overflow-hidden flex flex-col items-stretch justify-start bg-[#110f0e] relative">
-                        {/* 1. 图片格式 (简历原图、学信网报告、技能证书) */}
-                        {isImg && (
-                          <div
-                            className="w-full h-full flex flex-col items-center justify-center relative group"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!isReadingMode) setIsReadingMode(true);
-                            }}
-                          >
-                            {/* 悬浮缩放控制栏 */}
-                            <div
-                              className="absolute top-2 right-2 flex items-center gap-1 bg-stone-900/90 backdrop-blur border border-stone-700/60 rounded-xl p-1 z-20"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <button
-                                type="button"
-                                onClick={() => setImgZoom((z) => Math.max(0.5, z - 0.2))}
-                                className="p-1 hover:text-amber-400 text-stone-400"
-                                title="缩小"
-                              >
-                                <ZoomOut className="size-3.5" />
-                              </button>
-                              <span className="text-[10px] text-stone-400 font-mono px-1">
-                                {Math.round(imgZoom * 100)}%
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => setImgZoom((z) => Math.min(2.5, z + 0.2))}
-                                className="p-1 hover:text-amber-400 text-stone-400"
-                                title="放大"
-                              >
-                                <ZoomIn className="size-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setImgZoom(1)}
-                                className="p-1 hover:text-amber-400 text-stone-400"
-                                title="适应窗口"
-                              >
-                                <Maximize className="size-3.5" />
-                              </button>
-                            </div>
-
-                            <div className="w-full h-full flex items-center justify-center overflow-auto p-2">
-                              <img
-                                src={blobUrl || content?.data_url}
-                                alt={item.name}
-                                style={{ transform: `scale(${imgZoom})`, transformOrigin: "center center" }}
-                                className="max-w-full max-h-[490px] object-contain rounded-xl shadow-2xl border border-stone-800/80 transition-transform duration-150 select-none pointer-events-auto"
-                              />
-                            </div>
-                            <p className="text-[11px] text-stone-500 mt-1 flex items-center gap-1.5 shrink-0">
-                              <ImageIcon className="size-3 text-purple-400" />
-                              <span>原图高清预览 · 可点击右上角「原版直开」在系统照片查看器全屏核对</span>
-                            </p>
-                          </div>
-                        )}
-
-                        {/* 2. Word 文档提取预览 (.docx / .doc) */}
-                        {isWord && (
-                          <div className="w-full h-full min-h-0 flex flex-col text-left">
-                            {/* Word 排版温馨引导横条 */}
-                            <div
-                              className="flex items-center justify-between px-3.5 py-2 mb-2.5 rounded-xl border border-blue-500/20 bg-blue-950/20 text-xs text-blue-300 shrink-0"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <span className="flex items-center gap-2">
-                                <FileText className="size-4 text-blue-400" />
-                                <span>纯文本提取视图（如需查看 100% 原始矢量双栏排版与表格，请点击右侧）</span>
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleOpenNative(item.name)}
-                                className="px-2.5 py-1 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-200 text-[11px] font-semibold border border-blue-500/30 cursor-pointer"
-                              >
-                                在 WPS/Word 打开原版 ↗
-                              </button>
-                            </div>
-
-                            <div
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (!isReadingMode) setIsReadingMode(true);
-                              }}
-                              className={`flex-1 min-h-0 overflow-y-auto rounded-xl border p-5 leading-relaxed text-stone-200 select-text allow-inner-scroll reading-content-zone transition-all ${
-                                isReadingMode
-                                  ? isMonochrome
-                                    ? "border-white/60 ring-2 ring-white/15 bg-[#09090b] shadow-inner"
-                                    : "border-amber-500/70 ring-2 ring-amber-500/20 bg-[#161412] shadow-inner"
-                                  : "border-stone-800 bg-[#161412]/80 hover:border-stone-700 cursor-text"
-                              }`}
-                              title={
-                                isReadingMode
-                                  ? "正在专注阅读中：滚轮或触控板上下浏览正文（点击卡片外部恢复抽换）"
-                                  : "点击正文区域进入专注阅读模式（滚轮仅滚动文档内容）"
-                              }
-                            >
-                              {content?.text ? (
-                                <pre className="whitespace-pre-wrap font-sans text-xs leading-6 text-stone-300">
-                                  {content.text}
-                                </pre>
-                              ) : (
-                                <div className="py-20 text-center text-stone-500 text-xs space-y-2">
-                                  <RefreshCw className="mx-auto size-6 animate-spin text-amber-500/40" />
-                                  <p>正在读取并提取 Word 文档内容...</p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* 3. PDF 预览 */}
-                        {isPdf && (
-                          <div
-                            className="w-full h-full flex flex-col"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!isReadingMode) setIsReadingMode(true);
-                            }}
-                          >
-                            <iframe
-                              src={blobUrl || content?.data_url}
-                              className="w-full h-[510px] rounded-xl border border-stone-800 bg-[#2b2b2b] shadow-inner"
-                              title={item.name}
-                            />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* 卡片底栏交互提示 */}
-                      <div
-                        className="px-5 py-2.5 bg-stone-900/80 border-t border-stone-800 text-[11px] text-stone-400 flex items-center justify-between shrink-0 cursor-default"
-                        onClick={() => {
-                          if (isReadingMode) setIsReadingMode(false);
-                        }}
-                      >
-                        <span className="flex items-center gap-1.5">
-                          <Layers className="size-3 text-amber-400" />
-                          <span>
-                            {isReadingMode
-                              ? "📜 正文阅读中 · 滚轮/双指平滑滚动 · 点击空白或右上角恢复抽屉轮换"
-                              : "3D 书架抽屉层叠 · 滚轮滚动、拖动或点击卡片均可抽拉切换 · 点击正文阅读"}
-                          </span>
-                        </span>
-                        <span className="text-stone-500 font-mono text-[10px]">
-                          {item.is_default ? "★ 默认投递简历" : "备用投递资料"}
-                        </span>
-                      </div>
-                    </Card>
-                  );
-                })}
+                {resumes.map((item) => (
+                  <Card
+                    key={item.name}
+                    className="w-full h-[630px] rounded-3xl border border-stone-800/80 bg-[#171513] shadow-2xl flex flex-col overflow-hidden select-none"
+                  >
+                    {renderCardInner(item, false)}
+                  </Card>
+                ))}
               </CardSwap>
+            </div>
+          ) : (
+            /* ================= 2D 纯净平铺模式视图 ================= */
+            <div className="w-full space-y-4 pt-1 pb-6 animate-in fade-in duration-150">
+              {/* 平铺模式：横向文件快捷切换标签栏 */}
+              {!flatSpreadAll && resumes.length > 1 && (
+                <div className="w-full flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                  {resumes.map((item) => {
+                    const isSelected = item.name === selectedName;
+                    const isImg = isImageExt(item.name);
+                    const isPdf = item.name.endsWith(".pdf");
+                    return (
+                      <button
+                        key={item.name}
+                        type="button"
+                        onClick={() => setSelectedName(item.name)}
+                        className={`group flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium transition-all shrink-0 cursor-pointer border ${
+                          isSelected
+                            ? isMonochrome
+                              ? "bg-white text-black border-white shadow-md font-bold"
+                              : "bg-amber-500/20 text-amber-200 border-amber-500/60 shadow-sm shadow-amber-500/10 font-bold"
+                            : "bg-stone-900/80 text-stone-400 border-stone-800 hover:text-stone-200 hover:border-stone-700"
+                        }`}
+                      >
+                        {isImg ? (
+                          <ImageIcon className="size-3.5 text-purple-400 shrink-0" />
+                        ) : isPdf ? (
+                          <FileText className="size-3.5 text-red-400 shrink-0" />
+                        ) : (
+                          <FileSpreadsheet className="size-3.5 text-blue-400 shrink-0" />
+                        )}
+                        <span className="truncate max-w-[160px]">{item.name}</span>
+                        <span className="text-[10px] opacity-60 font-mono">
+                          {formatSize(item.size)}
+                        </span>
+                        {item.is_default && (
+                          <span
+                            className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
+                              isSelected
+                                ? isMonochrome
+                                  ? "bg-black text-white"
+                                  : "bg-amber-500 text-stone-950"
+                                : "bg-amber-500/20 text-amber-400"
+                            }`}
+                          >
+                            默认
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* 平铺主体区 */}
+              {flatSpreadAll ? (
+                /* 多份全部网格平铺 */
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 w-full">
+                  {resumes.map((item) => (
+                    <div
+                      key={item.name}
+                      className={`w-full h-[640px] rounded-3xl border shadow-xl flex flex-col overflow-hidden transition-all ${
+                        item.name === selectedName
+                          ? isMonochrome
+                            ? "border-white/40 ring-1 ring-white/20 bg-[#141416]"
+                            : "border-amber-500/50 ring-1 ring-amber-500/20 bg-[#161414]"
+                          : "border-stone-800/80 bg-[#151312]"
+                      }`}
+                      onClick={() => setSelectedName(item.name)}
+                    >
+                      {renderCardInner(item, true)}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                /* 单份 2D 纯平大视窗 */
+                (() => {
+                  const activeItem =
+                    resumes.find((r) => r.name === selectedName) || resumes[0];
+                  if (!activeItem) return null;
+                  return (
+                    <div className="w-full h-[650px] rounded-3xl border border-stone-800/80 bg-[#151312] shadow-2xl flex flex-col overflow-hidden">
+                      {renderCardInner(activeItem, true)}
+                    </div>
+                  );
+                })()
+              )}
             </div>
           )}
         </div>
