@@ -1,6 +1,7 @@
 import { useState, useEffect, type FC, type WheelEvent } from "react";
 import { Clock, Sliders, ChevronUp, ChevronDown, Check, Power } from "lucide-react";
 import { type PetScheduleConfig, DEFAULT_SCHEDULE_CONFIG } from "./types";
+import { ipc } from "../../lib/ipc";
 
 interface PetSchedulePopoverProps {
   visible: boolean;
@@ -104,7 +105,24 @@ export const PetSchedulePopover: FC<PetSchedulePopoverProps> = ({
   };
 
   const toggleEnabled = () => {
-    setConfig((prev) => ({ ...prev, enabled: !prev.enabled }));
+    setConfig((prev) => {
+      // 点「开启」即视为开启自动巡航（autoRun 兜底为 true），
+      // 同步写成 Windows 系统计划任务：App 关掉也到点自动投递
+      const next: PetScheduleConfig = {
+        ...prev,
+        enabled: !prev.enabled,
+        autoRun: prev.enabled ? prev.autoRun : true,
+      };
+      ipc
+        .saveSchedule({
+          time: next.time,
+          enabled: next.enabled,
+          repeatDays: next.repeatDays,
+          autoRun: next.autoRun,
+        })
+        .catch(() => {});
+      return next;
+    });
   };
 
   return (

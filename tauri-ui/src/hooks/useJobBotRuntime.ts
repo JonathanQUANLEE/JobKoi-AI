@@ -10,6 +10,20 @@ import {
   formatLocalTime,
 } from "../lib/dashboardHelpers";
 
+/** 读取平台中心勾选的巡航平台（localStorage 由 PlatformHub 写入）。 */
+function loadEnabledPlatforms(): string[] {
+  try {
+    const saved = localStorage.getItem("jobhunter_enabled_platforms");
+    const parsed = saved ? JSON.parse(saved) : null;
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed.filter((item) => typeof item === "string");
+    }
+  } catch {
+    /* ignore */
+  }
+  return ["boss"];
+}
+
 interface UseJobBotRuntimeOptions {
   t: (key: string, vars?: Record<string, string | number>) => string;
   busy: boolean;
@@ -200,6 +214,7 @@ export function useJobBotRuntime({
         dryRun,
         profile: profileName.trim(),
         useCurrentPage: false,
+        platforms: loadEnabledPlatforms(),
       };
       await ipc.startRun(config, progressChannel, logChannel);
     } catch (err) {

@@ -8,6 +8,7 @@ import {
   loadScheduleConfig,
   saveScheduleConfig,
 } from "../../pet/PetSchedulePopover";
+import { ipc } from "../../../lib/ipc";
 
 interface ScheduleTabProps {
   isMonochrome: boolean;
@@ -62,8 +63,24 @@ export default function ScheduleTab({ isMonochrome, busy = false }: ScheduleTabP
 
   const handleSave = () => {
     saveScheduleConfig(config);
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2000);
+    // 升级：同步写成 Windows 系统计划任务——App 关掉也到点自动巡航
+    ipc
+      .saveSchedule({
+        time: config.time,
+        enabled: config.enabled,
+        repeatDays: config.repeatDays,
+        autoRun: config.autoRun,
+      })
+      .then((res) => {
+        if (res.status === "ok" && res.task) {
+          setSavedSuccess(true);
+          setTimeout(() => setSavedSuccess(false), 2000);
+        }
+      })
+      .catch(() => {
+        setSavedSuccess(true);
+        setTimeout(() => setSavedSuccess(false), 2000);
+      });
   };
 
   return (
