@@ -1,6 +1,7 @@
 """llm_client 单测：mock urllib，不发真请求。"""
 from __future__ import annotations
 
+import http.client
 import io
 import json
 import urllib.error
@@ -36,6 +37,18 @@ class _FakeResponse:
 
     def __exit__(self, *args):
         return False
+
+
+class _FlakyResponse(_FakeResponse):
+    """模拟"响应读一半被服务端掐断"：body 读到中途抛 IncompleteRead。"""
+
+    def __init__(self, partial: bytes, expected: int | None = None):
+        super().__init__("")
+        self._partial = partial
+        self._expected = expected
+
+    def read(self) -> bytes:
+        raise http.client.IncompleteRead(self._partial, self._expected)
 
 
 def _http_error(code: int, body: str = '{"error": "boom"}') -> urllib.error.HTTPError:
@@ -206,3 +219,42 @@ def test_chat_completion_network_error_is_retryable(monkeypatch):
 def test_extract_content_rejects_empty():
     with pytest.raises(LLMClientError):
         extract_content({"choices": [{"message": {"content": "   "}}]})
+
+
+def test_chat_completion_incomplete_read_is_retryable(monkeypatch):
+    """响应读一半断流（IncompleteRead）必须归类为可重试网络错误，不得裸抛。"""
+    monkeypatch.setattr(
+        llm_client.urllib.request,
+        "urlopen",
+        lambda request, timeout=None: _FlakyResponse(partial=b'{"choices":'),
+    )
+    with pytest.raises(LLMRetryableError) as exc_info:
+        chat_completion(
+            [{"role": "user", "content": "hi"}],
+            base_url="https://example.test/v1",
+            api_key="sk",
+            model="m1",
+        )
+    assert exc_info.value.code == "network"
+
+
+def test_chat_completion_incomplete_read_retries(monkeypatch):
+    """断流错误要通过 chat_completion_with_retry 的指数退避重试（默认 3 次）。"""
+    calls = {"n": 0}
+
+    def fake_urlopen(request, timeout=None):
+        calls["n"] += 1
+        return _FlakyResponse(partial=b'{"choices":', expected=4096)
+
+    monkeypatch.setattr(llm_client.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setenv("BOSS_RETRY_BASE_DELAY", "0.01")
+    monkeypatch.setenv("BOSS_RETRY_MAX_DELAY", "0.02")
+
+    with pytest.raises(LLMRetryableError):
+        chat_completion_with_retry(
+            [{"role": "user", "content": "hi"}],
+            base_url="https://example.test/v1",
+            api_key="sk",
+            model="m1",
+        )
+    assert calls["n"] == 3
