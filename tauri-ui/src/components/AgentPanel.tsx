@@ -668,7 +668,10 @@ export default function AgentPanel({ getCurrentForm, onApply, onRun, onOpenSetti
                       <span>正在执行诊断流水线 ({progressPercent}%)</span>
                     </span>
                     <span className="text-[11px] font-mono text-amber-400">
-                      已耗时 {elapsedSeconds}s · 预计还需 ~{estimatedSeconds}s
+                      已耗时 {elapsedSeconds}s ·{" "}
+                      {elapsedSeconds > 15
+                        ? "云端免费模型正在排队生成中，即将就绪..."
+                        : `预计还需 ~${estimatedSeconds}s`}
                     </span>
                   </div>
 
