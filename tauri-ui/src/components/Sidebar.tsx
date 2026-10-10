@@ -257,7 +257,7 @@ export default function Sidebar({
                   </span>
                 </div>
                 <div className="text-[10px] text-[var(--muted-fg)] mt-0.5">
-                  {lang === "en" ? `Quota: ${dailySentCount}/${dailyLimit}` : `今日额度: ${dailySentCount}/${dailyLimit}`}
+                  {lang === "en" ? "Local Direct Connect · Active" : "本地安全直连 · 已就绪"}
                 </div>
               </div>
             </div>

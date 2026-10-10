@@ -177,6 +177,9 @@ export type PlatformItem = {
   is_supported: boolean;
   is_logged_in: boolean;
   status_text: string;
+  today_sent?: number;
+  total_sent?: number;
+  remaining?: number;
 };
 
 export type PlatformListResult = {

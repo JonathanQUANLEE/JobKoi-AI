@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type RefObject } from "react";
+import { useState, useEffect, useMemo, useRef, type RefObject } from "react";
 import {
   RotateCw,
   Sparkles,
@@ -8,8 +8,13 @@ import {
   User,
   UserCheck,
   CheckCircle2,
+  Paperclip,
+  FileText,
 } from "lucide-react";
-import type { AgentChatMessage } from "../../lib/ipc";
+import { ipc, type AgentChatMessage } from "../../lib/ipc";
+import { useRunStore } from "../../store";
+import { readFileAsBase64 } from "../../lib/resumeUtils";
+import LatticeLoader from "../core/LatticeLoader";
 import type { RuleForm } from "../../lib/profileForm";
 import type { Lang } from "../../lib/i18n";
 import { TextEffect } from "../core/text-effect";
@@ -56,6 +61,50 @@ export default function HeroStage({
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [recBatchIndex, setRecBatchIndex] = useState(0);
   const [isRotatingRec, setIsRotatingRec] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [isUploadingResume, setIsUploadingResume] = useState(false);
+  const [uploadStatusText, setUploadStatusText] = useState("");
+
+  async function handleResumeUpload(file?: File | null) {
+    if (!file) return;
+    setIsUploadingResume(true);
+    setUploadStatusText(`正在同步「${file.name}」到资料库...`);
+    try {
+      const b64 = await readFileAsBase64(file);
+      await ipc.saveResumeFile(file.name, b64);
+      try {
+        await ipc.setDefaultResume(file.name);
+      } catch {}
+
+      useRunStore.getState().notify({
+        type: "success",
+        text: `已同步导入简历资料库并设为生效简历：${file.name}`,
+      });
+
+      setUploadStatusText(`正在解析简历「${file.name}」文本内容...`);
+      let parsedText = "";
+      try {
+        const contentRes = await ipc.getResumeContent(file.name);
+        parsedText = contentRes.text?.trim() || "";
+      } catch {}
+
+      const prompt = parsedText
+        ? `【已同步导入简历: ${file.name}】\n提取简历主要信息:\n${parsedText.slice(0, 1200)}\n\n请根据以上简历内容，分析我的技术栈与求职意向，定制匹配的求职画像（目标岗位、城市、必须与偏好技能、排除方向）。`
+        : `【已同步导入简历资料: ${file.name}】\n请为我规划专属的求职岗位偏好与技能画像。`;
+
+      onChatSubmit(prompt);
+    } catch (err) {
+      useRunStore.getState().notify({
+        type: "error",
+        text: `简历同步导入失败: ${String(err)}`,
+      });
+    } finally {
+      setIsUploadingResume(false);
+      setUploadStatusText("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
 
   // 占位词轮播定时器
   useEffect(() => {
@@ -192,8 +241,58 @@ export default function HeroStage({
                 setHeroInputText("");
               }
             }}
-            className="beam w-full rounded-[1.75rem] border border-white/10 bg-[#181614]/95 text-left shadow-2xl backdrop-blur-xl transition-all focus-within:border-[#ff5722]/60 focus-within:ring-2 focus-within:ring-[#ff5722]/20"
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDragOver(true);
+            }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDragOver(false);
+              const dropped = e.dataTransfer.files?.[0];
+              if (dropped) {
+                handleResumeUpload(dropped);
+              }
+            }}
+            className={`beam w-full rounded-[1.75rem] border bg-[#181614]/95 text-left shadow-2xl backdrop-blur-xl transition-all ${
+              isDragOver
+                ? "border-amber-400 bg-amber-500/10 ring-4 ring-amber-500/20"
+                : "border-white/10 focus-within:border-[#ff5722]/60 focus-within:ring-2 focus-within:ring-[#ff5722]/20"
+            }`}
           >
+            {/* 隐藏的本地文件输入，支持 pdf/doc/docx/png/jpg/jpeg */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleResumeUpload(f);
+              }}
+            />
+
+            {/* 正在上传并同步到简历资料库的 LatticeLoader 加载态 */}
+            {isUploadingResume && (
+              <div className="flex items-center justify-between px-6 pt-4 pb-1 border-b border-amber-500/20">
+                <LatticeLoader
+                  status="working"
+                  label={uploadStatusText || "简历资料同步与解析中..."}
+                  doneLabel="简历同步完成"
+                  cellSize={5}
+                  gap={2}
+                  fontSize={12}
+                  glow={true}
+                  glowColor="#f59e0b"
+                  color="#f59e0b"
+                  showTimer={true}
+                />
+                <span className="text-[11px] text-amber-400/90 font-medium">
+                  ★ 已自动存储至本地「简历资料库」
+                </span>
+              </div>
+            )}
+
             <div className="relative px-6 pt-5 sm:px-8 sm:pt-6">
               <textarea
                 rows={2}
@@ -208,13 +307,33 @@ export default function HeroStage({
                     }
                   }
                 }}
-                placeholder={PLACEHOLDERS[placeholderIndex]}
+                placeholder={
+                  isDragOver
+                    ? "松开鼠标即可导入该文件并自动同步至简历资料库..."
+                    : PLACEHOLDERS[placeholderIndex]
+                }
                 className="block min-h-[4.2rem] sm:min-h-[5rem] w-full resize-none bg-transparent text-base sm:text-[18px] leading-7 text-stone-100 outline-none placeholder:text-stone-500"
               />
             </div>
 
             <div className="flex items-center gap-3 px-5 pb-4 pt-1 sm:px-6">
               <div className="flex min-w-0 flex-1 items-center gap-2.5 overflow-x-auto [scrollbar-width:none] py-1">
+                {/* 简历一键导入按钮（支持 PDF、Word、图片） */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingResume || heroChatting}
+                  className="flex shrink-0 items-center gap-1.5 rounded-full bg-white/[0.08] hover:bg-white/[0.15] border border-white/20 hover:border-amber-400/60 px-3 py-1.5 text-xs text-stone-200 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95 whitespace-nowrap"
+                  title={
+                    lang === "en"
+                      ? "Import Resume (PDF/Word/Images) - auto sync to Vault"
+                      : "导入简历/证明材料 (PDF/Word/图片) · 自动同步至简历库并提炼画像"
+                  }
+                >
+                  <Paperclip className="size-3.5 text-amber-400" />
+                  <span>{lang === "en" ? "Import Resume" : "导入简历同步"}</span>
+                </button>
+
                 <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-[#ff5722]/20 to-[#ff2a55]/20 border border-[#ff5722]/40 px-3.5 py-1.5 text-xs font-semibold text-[#ff5722] shadow-sm">
                   <Bot className="size-3.5" />
                   {lang === "en" ? "Tell AI" : "告诉顾问"}
@@ -342,14 +461,27 @@ export default function HeroStage({
               ))}
 
               {heroChatting && (
-                <div className="flex items-start gap-2.5">
-                  <div className="grid size-7 shrink-0 place-items-center rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                    <Bot className="size-3.5 animate-pulse" />
-                  </div>
-                  <div className="rounded-2xl bg-stone-900/90 border border-stone-800 px-4 py-2.5 text-xs sm:text-[13px] text-stone-400 flex items-center gap-2">
-                    <span className="size-2 rounded-full bg-amber-400 animate-ping" />
-                    <span>AI 顾问正在为您分析背景与规划画像...</span>
-                  </div>
+                <div className="flex items-center justify-between rounded-2xl bg-stone-900/90 border border-amber-500/30 px-5 py-3 shadow-xl backdrop-blur-md">
+                  <LatticeLoader
+                    status="working"
+                    label={lang === "en" ? "AI Thinking & Analyzing Background" : "AI 深度思考与求职画像规划中"}
+                    doneLabel={lang === "en" ? "Profile Crafted in" : "专属求职画像规划完成"}
+                    pattern="orbit"
+                    grid={3}
+                    shape="round"
+                    cellSize={6}
+                    gap={2.5}
+                    fontSize={13}
+                    glow={true}
+                    glowColor="#f59e0b"
+                    color="#f59e0b"
+                    doneColor="#10b981"
+                    errorColor="#ef4444"
+                    showTimer={true}
+                  />
+                  <span className="text-xs text-stone-400 hidden sm:inline">
+                    已关联简历与意向 · 正在提炼字段
+                  </span>
                 </div>
               )}
             </div>
@@ -363,10 +495,22 @@ export default function HeroStage({
                 particleCount={6}
               >
                 <div className="flex items-center justify-between mb-3.5">
-                  <span className="text-xs sm:text-sm font-bold text-amber-300 flex items-center gap-1.5">
-                    <Sparkles className="size-3.5 text-[#ff5722]" />
-                    <span>{lang === "en" ? "AI Job Profile Generated" : "AI 专属求职画像已就绪"}</span>
-                  </span>
+                  <LatticeLoader
+                    status="done"
+                    label="AI 顾问规划中"
+                    doneLabel={lang === "en" ? "AI Job Profile Generated in" : "AI 专属求职画像已就绪"}
+                    pattern="orbit"
+                    grid={3}
+                    shape="round"
+                    cellSize={5}
+                    gap={2}
+                    fontSize={13}
+                    color="#10b981"
+                    doneColor="#10b981"
+                    glow={true}
+                    glowColor="#10b981"
+                    showTimer={false}
+                  />
                   <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-950/70 border border-emerald-500/30 text-emerald-300 font-medium">
                     ● {lang === "en" ? "Ready" : "策略就绪"}
                   </span>
