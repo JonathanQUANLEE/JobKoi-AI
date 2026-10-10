@@ -5,24 +5,19 @@ import {
   type ChangeEvent,
   type DragEvent,
 } from "react";
-import {
-  UploadCloud,
-  FolderOpen,
-  Image as ImageIcon,
-  FileText,
-  FileSpreadsheet,
-} from "lucide-react";
+import { UploadCloud, FolderOpen } from "lucide-react";
 import { useRunStore } from "../store";
 import type { ResumeItem } from "../lib/ipc";
-import { isImageExt, formatSize } from "../lib/resumeUtils";
 import { useResumeVault } from "../hooks/useResumeVault";
 import { useResumeHeightResize } from "../hooks/useResumeHeightResize";
+import type { CardSwapHandle } from "./core/CardSwap";
 import EnergyCapsule from "./core/EnergyCapsule";
-import CardSwap, { Card, type CardSwapHandle } from "./core/CardSwap";
 import ResumeSidebar from "./resume/ResumeSidebar";
 import ResumeCardViewer from "./resume/ResumeCardViewer";
 import ResumeStageControls from "./resume/ResumeStageControls";
 import ResumeHeightHandle from "./resume/ResumeHeightHandle";
+import ResumeFlatView from "./resume/ResumeFlatView";
+import Resume3DView from "./resume/Resume3DView";
 
 interface ResumePanelProps {
   onExtractProfile?: (resumeName: string, text?: string) => void;
@@ -127,15 +122,15 @@ export default function ResumePanel({
   const handleFlatWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement | null;
 
-    // 1. 如果光标位于正文阅读区域，或者处于专注阅读模式：100% 留给正文原生平滑滚动
     if (
       isReadingMode ||
-      target?.closest(".reading-content-zone, .allow-inner-scroll, [data-allow-scroll], textarea, input, pre")
+      target?.closest(
+        ".reading-content-zone, .allow-inner-scroll, [data-allow-scroll], textarea, input, pre"
+      )
     ) {
       return;
     }
 
-    // 2. 如果是全部展开网格平铺，或者资料只有 1 份，不拦截
     if (flatSpreadAll || resumes.length <= 1) {
       return;
     }
@@ -153,11 +148,9 @@ export default function ResumePanel({
     const validIndex = currentIndex >= 0 ? currentIndex : 0;
 
     if (e.deltaY > 0) {
-      // 往下滚：换下一份
       const nextIdx = (validIndex + 1) % resumes.length;
       setSelectedName(resumes[nextIdx].name);
     } else if (e.deltaY < 0) {
-      // 往上滚：换上一份
       const prevIdx = (validIndex - 1 + resumes.length) % resumes.length;
       setSelectedName(resumes[prevIdx].name);
     }
@@ -281,132 +274,26 @@ export default function ResumePanel({
           ) : (
             <div className="w-full flex flex-col items-center justify-start">
               {viewMode === "3d" ? (
-                /* 3D 书架抽屉层叠视图 */
-                <div
-                  className="w-full flex justify-center items-center pt-8 pb-4 overflow-visible"
-                  style={{ minHeight: `${cardHeight + 20}px` }}
-                >
-                  <CardSwap
-                    ref={cardSwapRef}
-                    width="100%"
-                    height={cardHeight}
-                    cardDistance={32}
-                    verticalDistance={26}
-                    skewAmount={1.8}
-                    autoPlay={false}
-                    pauseOnHover={true}
-                    isReadingMode={isReadingMode}
-                    onFrontChange={(frontIdx) => {
-                      setIsReadingMode(false);
-                      const frontItem = resumes[frontIdx];
-                      if (frontItem) {
-                        setSelectedName(frontItem.name);
-                      }
-                    }}
-                  >
-                    {resumes.map((item) => (
-                      <Card
-                        key={item.name}
-                        className="w-full rounded-3xl border border-stone-800/80 bg-[#171513] shadow-2xl flex flex-col overflow-hidden select-none"
-                        style={{ height: `${cardHeight}px` }}
-                      >
-                        {renderViewer(item, false)}
-                      </Card>
-                    ))}
-                  </CardSwap>
-                </div>
+                <Resume3DView
+                  cardSwapRef={cardSwapRef}
+                  cardHeight={cardHeight}
+                  resumes={resumes}
+                  isReadingMode={isReadingMode}
+                  setIsReadingMode={setIsReadingMode}
+                  setSelectedName={setSelectedName}
+                  renderViewer={renderViewer}
+                />
               ) : (
-                /* 2D 纯净平铺模式视图 */
-                <div
+                <ResumeFlatView
+                  resumes={resumes}
+                  selectedName={selectedName}
+                  setSelectedName={setSelectedName}
+                  flatSpreadAll={flatSpreadAll}
+                  cardHeight={cardHeight}
+                  isMonochrome={isMonochrome}
                   onWheel={handleFlatWheel}
-                  className="w-full space-y-4 pt-1 pb-4 animate-in fade-in duration-150"
-                >
-                  {/* 横向快捷切换标签栏 */}
-                  {!flatSpreadAll && resumes.length > 1 && (
-                    <div className="w-full flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-                      {resumes.map((item) => {
-                        const isSelected = item.name === selectedName;
-                        const isImg = isImageExt(item.name);
-                        const isPdf = item.name.endsWith(".pdf");
-                        return (
-                          <button
-                            key={item.name}
-                            type="button"
-                            onClick={() => setSelectedName(item.name)}
-                            className={`group flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium transition-all shrink-0 cursor-pointer border ${
-                              isSelected
-                                ? isMonochrome
-                                  ? "bg-white text-black border-white shadow-md font-bold"
-                                  : "bg-amber-500/20 text-amber-200 border-amber-500/60 shadow-sm shadow-amber-500/10 font-bold"
-                                : "bg-stone-900/80 text-stone-400 border-stone-800 hover:text-stone-200 hover:border-stone-700"
-                            }`}
-                          >
-                            {isImg ? (
-                              <ImageIcon className="size-3.5 text-purple-400 shrink-0" />
-                            ) : isPdf ? (
-                              <FileText className="size-3.5 text-red-400 shrink-0" />
-                            ) : (
-                              <FileSpreadsheet className="size-3.5 text-blue-400 shrink-0" />
-                            )}
-                            <span className="truncate max-w-[160px]">{item.name}</span>
-                            <span className="text-[10px] opacity-60 font-mono">
-                              {formatSize(item.size)}
-                            </span>
-                            {item.is_default && (
-                              <span
-                                className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
-                                  isSelected
-                                    ? isMonochrome
-                                      ? "bg-black text-white"
-                                      : "bg-amber-500 text-stone-950"
-                                    : "bg-amber-500/20 text-amber-400"
-                                }`}
-                              >
-                                默认
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* 平铺主体区 */}
-                  {flatSpreadAll ? (
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 w-full">
-                      {resumes.map((item) => (
-                        <div
-                          key={item.name}
-                          className={`w-full rounded-3xl border shadow-xl flex flex-col overflow-hidden transition-all ${
-                            item.name === selectedName
-                              ? isMonochrome
-                                ? "border-white/40 ring-1 ring-white/20 bg-[#141416]"
-                                : "border-amber-500/50 ring-1 ring-amber-500/20 bg-[#161414]"
-                              : "border-stone-800/80 bg-[#151312]"
-                          }`}
-                          style={{ height: `${cardHeight}px` }}
-                          onClick={() => setSelectedName(item.name)}
-                        >
-                          {renderViewer(item, true)}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    (() => {
-                      const activeItem =
-                        resumes.find((r) => r.name === selectedName) || resumes[0];
-                      if (!activeItem) return null;
-                      return (
-                        <div
-                          className="w-full rounded-3xl border border-stone-800/80 bg-[#151312] shadow-2xl flex flex-col overflow-hidden"
-                          style={{ height: `${cardHeight}px` }}
-                        >
-                          {renderViewer(activeItem, true)}
-                        </div>
-                      );
-                    })()
-                  )}
-                </div>
+                  renderViewer={renderViewer}
+                />
               )}
 
               {/* 底部拉伸物理手柄 */}
