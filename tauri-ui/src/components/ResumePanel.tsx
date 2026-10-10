@@ -75,14 +75,8 @@ export default function ResumePanel({
   const [isReadingMode, setIsReadingMode] = useState(false);
   const isMonochrome = useRunStore((s) => s.theme === "monochrome");
 
-  // 视图呈现模式：3D 书架抽屉层叠视图 ("3d") vs 纯净平铺模式 ("flat")
-  const [viewMode, setViewMode] = useState<"3d" | "flat">(() => {
-    try {
-      return (localStorage.getItem("boss_resumes_view_mode") as "3d" | "flat") || "3d";
-    } catch {
-      return "3d";
-    }
-  });
+  // 视图呈现模式：系统打开默认 3D 书架抽屉模式 ("3d")
+  const [viewMode, setViewMode] = useState<"3d" | "flat">("3d");
 
   // 平铺模式下：单份沉浸标签直读 (false) vs 多份全部网格展开 (true)
   const [flatSpreadAll, setFlatSpreadAll] = useState(false);
@@ -90,9 +84,90 @@ export default function ResumePanel({
   const handleViewModeChange = (mode: "3d" | "flat") => {
     setViewMode(mode);
     setIsReadingMode(false);
+  };
+
+  const DEFAULT_CARD_HEIGHT = 640;
+  const MIN_CARD_HEIGHT = 480;
+
+  // 用户自定义视窗垂直拉伸高度（仅支持向下/向上垂直拖拽，不影响横向宽度与全局布局）
+  const [cardHeight, setCardHeight] = useState<number>(() => {
     try {
-      localStorage.setItem("boss_resumes_view_mode", mode);
-    } catch {}
+      const saved = parseInt(localStorage.getItem("boss_resumes_card_height") || "", 10);
+      return saved >= MIN_CARD_HEIGHT ? saved : DEFAULT_CARD_HEIGHT;
+    } catch {
+      return DEFAULT_CARD_HEIGHT;
+    }
+  });
+
+  const [isResizingHeight, setIsResizingHeight] = useState(false);
+  const [isExceedingMax, setIsExceedingMax] = useState(false);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const warnedRef = useRef(false);
+
+  // 底部手柄向下/向上拖拽调整高度（受应用软件界面最大底边边界约束，超出时告警并在松手后贴底）
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startY = e.clientY;
+    const startHeight = cardHeight;
+    setIsResizingHeight(true);
+    setIsExceedingMax(false);
+    warnedRef.current = false;
+
+    // 计算当前视口可用最大高度边界
+    const rect = stageRef.current?.getBoundingClientRect();
+    const stageTop = rect ? rect.top : 140;
+    // 留出 40px 底部安全间隙，不能超出整个软件主视窗
+    const maxAllowed = Math.max(MIN_CARD_HEIGHT + 100, window.innerHeight - stageTop - 40);
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      moveEvent.preventDefault();
+      const deltaY = moveEvent.clientY - startY;
+      const rawHeight = startHeight + deltaY;
+
+      if (rawHeight > maxAllowed) {
+        setIsExceedingMax(true);
+        if (!warnedRef.current) {
+          warnedRef.current = true;
+          notify({
+            type: "warning",
+            text: "已达应用软件界面最大拉伸边界，松手后将自动贴齐窗口底端",
+            source: "视窗调整",
+          });
+        }
+        // 允许拉伸过程中视觉稍微有一点阻尼超出提示，但不能无限拖大
+        setCardHeight(Math.round(maxAllowed + Math.min(20, (rawHeight - maxAllowed) * 0.1)));
+      } else {
+        setIsExceedingMax(false);
+        warnedRef.current = false;
+        const clamped = Math.max(MIN_CARD_HEIGHT, Math.min(maxAllowed, rawHeight));
+        setCardHeight(Math.round(clamped));
+      }
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      setIsResizingHeight(false);
+
+      setCardHeight((current) => {
+        let finalHeight = current;
+        if (current > maxAllowed) {
+          finalHeight = Math.round(maxAllowed);
+        } else if (current < MIN_CARD_HEIGHT) {
+          finalHeight = MIN_CARD_HEIGHT;
+        }
+        try {
+          localStorage.setItem("boss_resumes_card_height", finalHeight.toString());
+        } catch {}
+        return finalHeight;
+      });
+      setIsExceedingMax(false);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
   };
 
   // 按下 Esc 键随时退出正文阅读锁定
@@ -342,7 +417,7 @@ export default function ResumePanel({
         <div
           className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-stone-800/80 bg-stone-900/60 shrink-0 cursor-default"
           onClick={() => {
-            if (!isFlat && isReadingMode) setIsReadingMode(false);
+            if (isReadingMode) setIsReadingMode(false);
           }}
         >
           {/* 文件名与格式徽章 */}
@@ -452,10 +527,8 @@ export default function ResumePanel({
             <div
               className="w-full h-full flex flex-col items-center justify-center relative group"
               onClick={(e) => {
-                if (!isFlat) {
-                  e.stopPropagation();
-                  if (!isReadingMode) setIsReadingMode(true);
-                }
+                e.stopPropagation();
+                if (!isReadingMode) setIsReadingMode(true);
               }}
             >
               {/* 悬浮缩放控制栏 */}
@@ -497,7 +570,7 @@ export default function ResumePanel({
                   src={blobUrl || content?.data_url}
                   alt={item.name}
                   style={{ transform: `scale(${imgZoom})`, transformOrigin: "center center" }}
-                  className="max-w-full max-h-[490px] object-contain rounded-xl shadow-2xl border border-stone-800/80 transition-transform duration-150 select-none pointer-events-auto"
+                  className="max-w-full max-h-full object-contain rounded-xl shadow-2xl border border-stone-800/80 transition-transform duration-150 select-none pointer-events-auto"
                 />
               </div>
               <p className="text-[11px] text-stone-500 mt-1 flex items-center gap-1.5 shrink-0">
@@ -530,26 +603,20 @@ export default function ResumePanel({
 
               <div
                 onClick={(e) => {
-                  if (!isFlat) {
-                    e.stopPropagation();
-                    if (!isReadingMode) setIsReadingMode(true);
-                  }
+                  e.stopPropagation();
+                  if (!isReadingMode) setIsReadingMode(true);
                 }}
                 className={`flex-1 min-h-0 overflow-y-auto rounded-xl border p-5 leading-relaxed text-stone-200 select-text allow-inner-scroll reading-content-zone transition-all ${
-                  isFlat
-                    ? "border-stone-800 bg-[#161412]/80 hover:border-stone-700"
-                    : isReadingMode
+                  isReadingMode
                     ? isMonochrome
                       ? "border-white/60 ring-2 ring-white/15 bg-[#09090b] shadow-inner"
                       : "border-amber-500/70 ring-2 ring-amber-500/20 bg-[#161412] shadow-inner"
-                    : "border-stone-800 bg-[#161412]/80 hover:border-stone-700 cursor-text"
+                    : "border-stone-800 bg-[#161412]/80 hover:border-stone-700 cursor-pointer"
                 }`}
                 title={
-                  isFlat
-                    ? "平铺阅读：滚轮或触控板双指上下滚动浏览全文"
-                    : isReadingMode
-                    ? "正在专注阅读中：滚轮或触控板上下浏览正文（点击卡片外部恢复抽换）"
-                    : "点击正文区域进入专注阅读模式（滚轮仅滚动文档内容）"
+                  isReadingMode
+                    ? "正在专注阅读中：滚轮或触控板双指上下浏览正文（点击卡片外部恢复）"
+                    : "点击正文区域进入专注阅读模式（滚轮浏览文档内容）"
                 }
               >
                 {content?.text ? (
@@ -571,15 +638,13 @@ export default function ResumePanel({
             <div
               className="w-full h-full flex flex-col"
               onClick={(e) => {
-                if (!isFlat) {
-                  e.stopPropagation();
-                  if (!isReadingMode) setIsReadingMode(true);
-                }
+                e.stopPropagation();
+                if (!isReadingMode) setIsReadingMode(true);
               }}
             >
               <iframe
                 src={blobUrl || content?.data_url}
-                className="w-full h-[510px] rounded-xl border border-stone-800 bg-[#2b2b2b] shadow-inner"
+                className="w-full h-full min-h-[460px] rounded-xl border border-stone-800 bg-[#2b2b2b] shadow-inner"
                 title={item.name}
               />
             </div>
@@ -590,7 +655,7 @@ export default function ResumePanel({
         <div
           className="px-5 py-2.5 bg-stone-900/80 border-t border-stone-800 text-[11px] text-stone-400 flex items-center justify-between shrink-0 cursor-default"
           onClick={() => {
-            if (!isFlat && isReadingMode) setIsReadingMode(false);
+            if (isReadingMode) setIsReadingMode(false);
           }}
         >
           <span className="flex items-center gap-1.5">
@@ -799,8 +864,10 @@ export default function ResumePanel({
         </div>
 
         {/* ================= 右侧：核心主体 3D 书架抽屉 CardSwap 大舞台 ================= */}
+        {/* ================= 右侧：核心主体 3D 书架抽屉 CardSwap 大舞台 ================= */}
         {/* 顶部完全无遮挡，充足净空高度，支持滚轮滚动连续切卡 */}
         <div
+          ref={stageRef}
           className="flex-1 min-w-0 w-full flex flex-col items-center justify-start relative overflow-visible"
           onClick={() => {
             if (isReadingMode) setIsReadingMode(false);
@@ -823,20 +890,16 @@ export default function ResumePanel({
                 )}
               </span>
 
-              {viewMode === "3d" ? (
-                isReadingMode ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 text-[11px] font-semibold animate-in fade-in">
-                    <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <span>📜 阅读模式：滚轮浏览正文 · 点击外部恢复抽换</span>
-                  </span>
-                ) : (
-                  <span className="text-[11px] text-stone-500 hidden sm:inline">
-                    · 鼠标滚轮上下滚动或点击卡片即可持续轮换 · 点击正文进入阅读
-                  </span>
-                )
+              {isReadingMode ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 text-[11px] font-semibold animate-in fade-in">
+                  <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>📜 正在专注阅读中 · 滚轮/双指浏览文档 · 点击外部恢复</span>
+                </span>
               ) : (
                 <span className="text-[11px] text-stone-500 hidden sm:inline">
-                  · 2D 纯平面直读 · 滚轮随心滑动长文档 · 零倾角无景深
+                  {viewMode === "3d"
+                    ? "· 鼠标滚轮上下滚动或点击卡片即可轮换 · 点击正文进入阅读"
+                    : "· 2D 纯平面直读 · 点击正文进入专注阅读 · 零倾角无景深"}
                 </span>
               )}
             </div>
@@ -876,35 +939,32 @@ export default function ResumePanel({
                 </button>
               </div>
 
-              {/* 3D 专属控制 */}
-              {viewMode === "3d" && (
-                <>
-                  {isReadingMode && (
-                    <button
-                      type="button"
-                      onClick={() => setIsReadingMode(false)}
-                      className="px-2.5 py-1 rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200 text-xs transition-colors cursor-pointer"
-                      title="退出正文阅读模式，恢复滚轮抽卡"
-                    >
-                      退出阅读模式
-                    </button>
-                  )}
+              {/* 阅读模式退出按钮（3D 与平铺模式通用） */}
+              {isReadingMode && (
+                <button
+                  type="button"
+                  onClick={() => setIsReadingMode(false)}
+                  className="px-2.5 py-1 rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200 text-xs transition-colors cursor-pointer"
+                  title="退出正文阅读模式"
+                >
+                  退出阅读模式 (Esc)
+                </button>
+              )}
 
-                  {resumes.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsReadingMode(false);
-                        cardSwapRef.current?.swap();
-                      }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 hover:bg-amber-500/25 text-xs font-semibold shadow-sm transition-all cursor-pointer active:scale-95"
-                      title="像拉抽屉一样切换下一张"
-                    >
-                      <RotateCw className="size-3.5 text-amber-400" />
-                      <span>抽换下一份 (Swap)</span>
-                    </button>
-                  )}
-                </>
+              {/* 3D 模式抽换按钮 */}
+              {viewMode === "3d" && resumes.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsReadingMode(false);
+                    cardSwapRef.current?.swap();
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 hover:bg-amber-500/25 text-xs font-semibold shadow-sm transition-all cursor-pointer active:scale-95"
+                  title="像拉抽屉一样切换下一张"
+                >
+                  <RotateCw className="size-3.5 text-amber-400" />
+                  <span>抽换下一份 (Swap)</span>
+                </button>
               )}
 
               {/* 平铺模式专属控制：单份直读 vs 全部展开 */}
@@ -950,123 +1010,172 @@ export default function ResumePanel({
                 点击左侧「上传资料 +」或拖拽文件入库，即刻体验资料大视窗
               </p>
             </div>
-          ) : viewMode === "3d" ? (
-            /* ================= 3D 书架抽屉层叠视图 ================= */
-            <div className="w-full flex justify-center items-center pt-8 pb-6 overflow-visible">
-              <CardSwap
-                ref={cardSwapRef}
-                width="100%"
-                height={640}
-                cardDistance={32}
-                verticalDistance={26}
-                skewAmount={1.8}
-                autoPlay={false}
-                pauseOnHover={true}
-                isReadingMode={isReadingMode}
-                onFrontChange={(frontIdx) => {
-                  setIsReadingMode(false);
-                  const frontItem = resumes[frontIdx];
-                  if (frontItem) {
-                    setSelectedName(frontItem.name);
-                  }
-                }}
-              >
-                {resumes.map((item) => (
-                  <Card
-                    key={item.name}
-                    className="w-full h-[630px] rounded-3xl border border-stone-800/80 bg-[#171513] shadow-2xl flex flex-col overflow-hidden select-none"
-                  >
-                    {renderCardInner(item, false)}
-                  </Card>
-                ))}
-              </CardSwap>
-            </div>
           ) : (
-            /* ================= 2D 纯净平铺模式视图 ================= */
-            <div className="w-full space-y-4 pt-1 pb-6 animate-in fade-in duration-150">
-              {/* 平铺模式：横向文件快捷切换标签栏 */}
-              {!flatSpreadAll && resumes.length > 1 && (
-                <div className="w-full flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-                  {resumes.map((item) => {
-                    const isSelected = item.name === selectedName;
-                    const isImg = isImageExt(item.name);
-                    const isPdf = item.name.endsWith(".pdf");
-                    return (
-                      <button
+            <div className="w-full flex flex-col items-center justify-start">
+              {viewMode === "3d" ? (
+                /* ================= 3D 书架抽屉层叠视图 ================= */
+                <div
+                  className="w-full flex justify-center items-center pt-8 pb-4 overflow-visible"
+                  style={{ minHeight: `${cardHeight + 20}px` }}
+                >
+                  <CardSwap
+                    ref={cardSwapRef}
+                    width="100%"
+                    height={cardHeight}
+                    cardDistance={32}
+                    verticalDistance={26}
+                    skewAmount={1.8}
+                    autoPlay={false}
+                    pauseOnHover={true}
+                    isReadingMode={isReadingMode}
+                    onFrontChange={(frontIdx) => {
+                      setIsReadingMode(false);
+                      const frontItem = resumes[frontIdx];
+                      if (frontItem) {
+                        setSelectedName(frontItem.name);
+                      }
+                    }}
+                  >
+                    {resumes.map((item) => (
+                      <Card
                         key={item.name}
-                        type="button"
-                        onClick={() => setSelectedName(item.name)}
-                        className={`group flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium transition-all shrink-0 cursor-pointer border ${
-                          isSelected
-                            ? isMonochrome
-                              ? "bg-white text-black border-white shadow-md font-bold"
-                              : "bg-amber-500/20 text-amber-200 border-amber-500/60 shadow-sm shadow-amber-500/10 font-bold"
-                            : "bg-stone-900/80 text-stone-400 border-stone-800 hover:text-stone-200 hover:border-stone-700"
-                        }`}
+                        className="w-full rounded-3xl border border-stone-800/80 bg-[#171513] shadow-2xl flex flex-col overflow-hidden select-none"
+                        style={{ height: `${cardHeight}px` }}
                       >
-                        {isImg ? (
-                          <ImageIcon className="size-3.5 text-purple-400 shrink-0" />
-                        ) : isPdf ? (
-                          <FileText className="size-3.5 text-red-400 shrink-0" />
-                        ) : (
-                          <FileSpreadsheet className="size-3.5 text-blue-400 shrink-0" />
-                        )}
-                        <span className="truncate max-w-[160px]">{item.name}</span>
-                        <span className="text-[10px] opacity-60 font-mono">
-                          {formatSize(item.size)}
-                        </span>
-                        {item.is_default && (
-                          <span
-                            className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
+                        {renderCardInner(item, false)}
+                      </Card>
+                    ))}
+                  </CardSwap>
+                </div>
+              ) : (
+                /* ================= 2D 纯净平铺模式视图 ================= */
+                <div className="w-full space-y-4 pt-1 pb-4 animate-in fade-in duration-150">
+                  {/* 平铺模式：横向文件快捷切换标签栏 */}
+                  {!flatSpreadAll && resumes.length > 1 && (
+                    <div className="w-full flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                      {resumes.map((item) => {
+                        const isSelected = item.name === selectedName;
+                        const isImg = isImageExt(item.name);
+                        const isPdf = item.name.endsWith(".pdf");
+                        return (
+                          <button
+                            key={item.name}
+                            type="button"
+                            onClick={() => setSelectedName(item.name)}
+                            className={`group flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium transition-all shrink-0 cursor-pointer border ${
                               isSelected
                                 ? isMonochrome
-                                  ? "bg-black text-white"
-                                  : "bg-amber-500 text-stone-950"
-                                : "bg-amber-500/20 text-amber-400"
+                                  ? "bg-white text-black border-white shadow-md font-bold"
+                                  : "bg-amber-500/20 text-amber-200 border-amber-500/60 shadow-sm shadow-amber-500/10 font-bold"
+                                : "bg-stone-900/80 text-stone-400 border-stone-800 hover:text-stone-200 hover:border-stone-700"
                             }`}
                           >
-                            默认
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
+                            {isImg ? (
+                              <ImageIcon className="size-3.5 text-purple-400 shrink-0" />
+                            ) : isPdf ? (
+                              <FileText className="size-3.5 text-red-400 shrink-0" />
+                            ) : (
+                              <FileSpreadsheet className="size-3.5 text-blue-400 shrink-0" />
+                            )}
+                            <span className="truncate max-w-[160px]">{item.name}</span>
+                            <span className="text-[10px] opacity-60 font-mono">
+                              {formatSize(item.size)}
+                            </span>
+                            {item.is_default && (
+                              <span
+                                className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
+                                  isSelected
+                                    ? isMonochrome
+                                      ? "bg-black text-white"
+                                      : "bg-amber-500 text-stone-950"
+                                    : "bg-amber-500/20 text-amber-400"
+                                }`}
+                              >
+                                默认
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* 平铺主体区 */}
+                  {flatSpreadAll ? (
+                    /* 多份全部网格平铺 */
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 w-full">
+                      {resumes.map((item) => (
+                        <div
+                          key={item.name}
+                          className={`w-full rounded-3xl border shadow-xl flex flex-col overflow-hidden transition-all ${
+                            item.name === selectedName
+                              ? isMonochrome
+                                ? "border-white/40 ring-1 ring-white/20 bg-[#141416]"
+                                : "border-amber-500/50 ring-1 ring-amber-500/20 bg-[#161414]"
+                              : "border-stone-800/80 bg-[#151312]"
+                          }`}
+                          style={{ height: `${cardHeight}px` }}
+                          onClick={() => setSelectedName(item.name)}
+                        >
+                          {renderCardInner(item, true)}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    /* 单份 2D 纯平大视窗 */
+                    (() => {
+                      const activeItem =
+                        resumes.find((r) => r.name === selectedName) || resumes[0];
+                      if (!activeItem) return null;
+                      return (
+                        <div
+                          className="w-full rounded-3xl border border-stone-800/80 bg-[#151312] shadow-2xl flex flex-col overflow-hidden"
+                          style={{ height: `${cardHeight}px` }}
+                        >
+                          {renderCardInner(activeItem, true)}
+                        </div>
+                      );
+                    })()
+                  )}
                 </div>
               )}
 
-              {/* 平铺主体区 */}
-              {flatSpreadAll ? (
-                /* 多份全部网格平铺 */
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 w-full">
-                  {resumes.map((item) => (
-                    <div
-                      key={item.name}
-                      className={`w-full h-[640px] rounded-3xl border shadow-xl flex flex-col overflow-hidden transition-all ${
-                        item.name === selectedName
-                          ? isMonochrome
-                            ? "border-white/40 ring-1 ring-white/20 bg-[#141416]"
-                            : "border-amber-500/50 ring-1 ring-amber-500/20 bg-[#161414]"
-                          : "border-stone-800/80 bg-[#151312]"
-                      }`}
-                      onClick={() => setSelectedName(item.name)}
-                    >
-                      {renderCardInner(item, true)}
-                    </div>
-                  ))}
+              {/* 底部高度自定义拉伸手柄 (受整个软件窗口底部边界约束，超出时告警并在松手后贴底) */}
+              <div className="w-full flex flex-col items-center justify-center pt-2 pb-1 select-none">
+                <div
+                  onMouseDown={handleResizeStart}
+                  className={`group flex items-center justify-center gap-2.5 py-1.5 px-6 rounded-full border transition-all cursor-ns-resize shadow-sm ${
+                    isResizingHeight
+                      ? isExceedingMax
+                        ? "border-red-500 bg-red-500/15 text-red-300 shadow-red-500/20 animate-pulse"
+                        : isMonochrome
+                        ? "border-white bg-white/10 text-white shadow-white/10 ring-2 ring-white/20"
+                        : "border-amber-400 bg-amber-500/20 text-amber-200 shadow-amber-500/20 ring-2 ring-amber-500/20"
+                      : "border-stone-800/90 bg-stone-900/90 text-stone-500 hover:text-stone-300 hover:border-stone-600 hover:bg-stone-800/90"
+                  }`}
+                  title="向下拖动可拉长视窗高度，向上拖动可缩小（双击重置默认高度 640px）"
+                  onDoubleClick={() => {
+                    setCardHeight(DEFAULT_CARD_HEIGHT);
+                    try {
+                      localStorage.setItem("boss_resumes_card_height", DEFAULT_CARD_HEIGHT.toString());
+                    } catch {}
+                    notify({ type: "info", text: "已重置视窗为默认高度 (640px)", source: "视窗调整" });
+                  }}
+                >
+                  <div className="w-6 h-0.5 rounded-full bg-current opacity-40 group-hover:opacity-80 transition-opacity" />
+                  <span className="text-[11px] font-mono font-medium flex items-center gap-1.5">
+                    {isExceedingMax ? (
+                      <span className="text-red-400 font-bold flex items-center gap-1">
+                        <AlertCircle className="size-3.5" />
+                        <span>已超出界面最大限制 (松手自动贴底)</span>
+                      </span>
+                    ) : (
+                      <span>↕ 拖拽调整视窗高度 ({cardHeight}px)</span>
+                    )}
+                  </span>
+                  <div className="w-6 h-0.5 rounded-full bg-current opacity-40 group-hover:opacity-80 transition-opacity" />
                 </div>
-              ) : (
-                /* 单份 2D 纯平大视窗 */
-                (() => {
-                  const activeItem =
-                    resumes.find((r) => r.name === selectedName) || resumes[0];
-                  if (!activeItem) return null;
-                  return (
-                    <div className="w-full h-[650px] rounded-3xl border border-stone-800/80 bg-[#151312] shadow-2xl flex flex-col overflow-hidden">
-                      {renderCardInner(activeItem, true)}
-                    </div>
-                  );
-                })()
-              )}
+              </div>
             </div>
           )}
         </div>
