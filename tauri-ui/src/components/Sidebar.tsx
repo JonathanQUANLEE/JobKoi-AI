@@ -27,6 +27,7 @@ import { LANGS, type Lang } from "../lib/i18n";
 import { useRunStore } from "../store";
 import PillNavButton from "./core/PillNavButton";
 import NotificationDock from "./NotificationDock";
+import SidebarPet from "./pet/SidebarPet";
 
 export type NavItem = "workbench" | "profile" | "resumes" | "copilot" | "analytics";
 
@@ -114,7 +115,10 @@ export default function Sidebar({
       {/* 内部固定宽度容器，防止侧边栏展开/收起时内容被挤压变形 */}
       <div className="w-60 min-w-[15rem] h-full flex flex-col justify-between overflow-hidden">
         {/* 顶部 Logo 与品牌标 + 收起侧边栏按钮 */}
-        <div className="flex items-center justify-between px-3.5 py-3.5 border-b border-[var(--grid)]/60 shrink-0">
+        <div
+          data-tauri-drag-region
+          className="flex items-center justify-between px-3.5 py-3.5 border-b border-[var(--grid)]/60 shrink-0 select-none"
+        >
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="relative shrink-0">
               <img
@@ -232,6 +236,13 @@ export default function Sidebar({
 
       {/* ================= 侧边栏专属联动通知坞 (Notification Dock - 装备 React Bits SwipeRow & 平铺/折叠) ================= */}
       <NotificationDock />
+
+      {/* ================= 侧边栏萌宠小土豆与快捷定时巡航微板块 ================= */}
+      <SidebarPet
+        running={running}
+        onStartRun={onStartRun}
+        onOpenSettingsModal={onOpenSettingsModal}
+      />
 
       {/* 左下角用户与设置菜单触发器（WorkBuddy 架构） */}
       <div className="relative border-t border-[var(--grid)]/80 p-2.5 bg-[var(--sidebar-bg)]" ref={menuRef}>

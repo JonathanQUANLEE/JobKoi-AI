@@ -17,6 +17,8 @@
         "title": "JobHunter · 智能求职锦鲤助手",
         "label": "main",
         "theme": "Dark",
+        "decorations": false,
+        "shadow": true,
         "width": 1240,
         "height": 820,
         "minWidth": 900,
