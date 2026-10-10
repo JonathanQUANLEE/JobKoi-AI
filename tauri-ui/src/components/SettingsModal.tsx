@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import {
   X,
   Settings,
@@ -11,9 +10,7 @@ import {
   Bell,
 } from "lucide-react";
 import { type Lang } from "../lib/i18n";
-import { ipc, type LLMConfig, type LLMPreset } from "../lib/ipc";
 import { useRunStore } from "../store";
-import { auditDb, type AuditLogItem } from "../lib/auditDb";
 import OptionWheel, { type OptionWheelItemData } from "./OptionWheel";
 import GeneralTab from "./settings/tabs/GeneralTab";
 import ScheduleTab from "./settings/tabs/ScheduleTab";
@@ -23,6 +20,7 @@ import ShortcutsTab from "./settings/tabs/ShortcutsTab";
 import ModelTab from "./settings/tabs/ModelTab";
 import NotificationsTab from "./settings/tabs/NotificationsTab";
 import AboutTab from "./settings/tabs/AboutTab";
+import { useSettingsModalState } from "./settings/useSettingsModalState";
 
 export type SettingsTab =
   | "general"
@@ -63,95 +61,42 @@ export default function SettingsModal({
   onSaveConfig,
   busy = false,
 }: SettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
-
-  // Appearance state - synced with global store
   const appTheme = useRunStore((s) => s.theme);
   const setAppTheme = useRunStore((s) => s.setTheme);
   const isMonochrome = appTheme === "monochrome";
 
-  // General settings
-  const [notifyOnMatch, setNotifyOnMatch] = useState(true);
-
-  // Model settings
-  const [llmConfig, setLlmConfig] = useState<LLMConfig | null>(null);
-  const [selectedPreset, setSelectedPreset] = useState<string>("deepseek");
-  const [apiKeyInput, setApiKeyInput] = useState("");
-  const [baseUrlInput, setBaseUrlInput] = useState("https://api.deepseek.com");
-  const [modelInput, setModelInput] = useState("deepseek-chat");
-  const [modelStatusMsg, setModelStatusMsg] = useState<string | null>(null);
-  const [savedSuccess, setSavedSuccess] = useState(false);
-
-  // 本地操作审计日志状态
-  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
-  const [logSearchQuery, setLogSearchQuery] = useState("");
-  const [logTypeFilter, setLogTypeFilter] = useState<string>("all");
-
-  useEffect(() => {
-    if (isOpen || activeTab === "notifications") {
-      setAuditLogs(auditDb.getAll());
-    }
-  }, [isOpen, activeTab]);
-
-  useEffect(() => {
-    if (initialTab) setActiveTab(initialTab);
-  }, [initialTab]);
-
-  // Load LLM Config
-  useEffect(() => {
-    if (isOpen) {
-      ipc.getLLMConfig().then((cfg) => {
-        setLlmConfig(cfg);
-        if (cfg.base_url) setBaseUrlInput(cfg.base_url);
-        if (cfg.model) setModelInput(cfg.model);
-        if (cfg.configured && cfg.api_key) setApiKeyInput(cfg.api_key);
-      }).catch(() => {});
-    }
-  }, [isOpen]);
-
-  // Handle ESC key
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen) {
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  const {
+    activeTab,
+    setActiveTab,
+    notifyOnMatch,
+    setNotifyOnMatch,
+    llmConfig,
+    selectedPreset,
+    apiKeyInput,
+    setApiKeyInput,
+    baseUrlInput,
+    setBaseUrlInput,
+    modelInput,
+    setModelInput,
+    modelStatusMsg,
+    savedSuccess,
+    auditLogs,
+    setAuditLogs,
+    logSearchQuery,
+    setLogSearchQuery,
+    logTypeFilter,
+    setLogTypeFilter,
+    handleSelectPreset,
+    handleSaveModel,
+    handleSaveAll,
+  } = useSettingsModalState({
+    isOpen,
+    initialTab,
+    onClose,
+    onSaveConfig,
+  });
 
   if (!isOpen) return null;
-
-  const handleSelectPreset = (p: LLMPreset) => {
-    setSelectedPreset(p.id);
-    setBaseUrlInput(p.base_url);
-    setModelInput(p.default_model);
-  };
-
-  const handleSaveModel = async () => {
-    setModelStatusMsg(null);
-    try {
-      const res = await ipc.saveLLMConfig(
-        baseUrlInput.trim(),
-        apiKeyInput.trim(),
-        modelInput.trim(),
-      );
-      if (res.status === "ok") {
-        setModelStatusMsg("AI 模型配置已成功保存！");
-        setTimeout(() => setModelStatusMsg(null), 3000);
-      } else {
-        setModelStatusMsg(`保存提示: ${res.status}`);
-      }
-    } catch (err) {
-      setModelStatusMsg(`保存失败: ${String(err)}`);
-    }
-  };
-
-  const handleSaveAll = async () => {
-    await onSaveConfig();
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2000);
-  };
 
   const isEn = lang === "en";
 
@@ -220,11 +165,11 @@ export default function SettingsModal({
         className="relative flex flex-col md:flex-row items-center md:items-stretch gap-5 sm:gap-7 w-full max-w-4xl max-h-[90vh] bg-stone-950/75 backdrop-blur-3xl border border-white/10 rounded-3xl p-4 sm:p-6 shadow-2xl shadow-black/90 text-[var(--ink)] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 背景氛围柔光，消除死板方框感 */}
+        {/* 背景氛围柔光 */}
         <div className={`absolute -top-24 -right-24 w-80 h-80 rounded-full blur-3xl pointer-events-none ${isMonochrome ? "bg-white/[0.04]" : "bg-amber-500/[0.07]"}`} />
         <div className={`absolute -bottom-24 -left-24 w-80 h-80 rounded-full blur-3xl pointer-events-none ${isMonochrome ? "bg-white/[0.03]" : "bg-purple-500/[0.07]"}`} />
 
-        {/* 左侧：纯粹悬浮 3D 轮盘导航，融入统一毛玻璃左翼 */}
+        {/* 左侧：纯粹悬浮 3D 轮盘导航 */}
         <aside className="w-full md:w-56 shrink-0 relative overflow-hidden h-44 md:h-[530px] flex items-center justify-center select-none border-b md:border-b-0 md:border-r border-white/5 pr-0 md:pr-4">
           <OptionWheel<OptionWheelItemData>
             items={tabItems}
@@ -251,9 +196,9 @@ export default function SettingsModal({
           />
         </aside>
 
-        {/* 右侧：去方框化、柔和雾化通透的主设置流 */}
+        {/* 右侧主设置面板 */}
         <main className="flex-1 w-full flex flex-col min-w-0 h-[480px] md:h-[530px] overflow-hidden">
-          {/* 顶栏极简标题与关闭按钮，无生硬底边色块 */}
+          {/* 顶栏标题与关闭按钮 */}
           <div className="flex items-center justify-between pb-3.5 border-b border-white/10 shrink-0">
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
               <span className={isMonochrome ? "text-white" : "text-amber-400"}>
@@ -287,7 +232,7 @@ export default function SettingsModal({
             </button>
           </div>
 
-          {/* 内容面板：无生硬外框，流畅滚动 */}
+          {/* 内容面板 */}
           <div className="pt-4 pr-1 space-y-6 text-xs flex-1 overflow-y-auto">
             {activeTab === "general" && (
               <GeneralTab
