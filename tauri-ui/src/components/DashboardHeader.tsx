@@ -12,7 +12,7 @@ interface DashboardHeaderProps {
   running: boolean;
   statusText: string;
   lang: Lang;
-  onOpenSettingsModal: () => void;
+  onOpenSettingsModal: (tab?: any) => void;
 }
 
 export default function DashboardHeader({

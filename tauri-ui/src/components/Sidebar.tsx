@@ -39,7 +39,7 @@ interface SidebarProps {
   onStopRun: () => void;
   busy: boolean;
   onOpenSettings: (tab?: "rules" | "policy" | "greeting" | "basic" | "model") => void;
-  onOpenSettingsModal?: () => void;
+  onOpenSettingsModal?: (tab?: any) => void;
   onOpenBrowser: () => void;
   onResetBrowser: () => void;
   lang: Lang;

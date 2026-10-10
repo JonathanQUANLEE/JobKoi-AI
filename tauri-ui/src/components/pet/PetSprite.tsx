@@ -54,6 +54,11 @@ export const PetSprite: FC<PetSpriteProps> = ({
       imgRef.current = img;
       setImageLoaded(true);
     };
+    img.onerror = () => {
+      if (!img.src.includes("./pets/tater/spritesheet.webp")) {
+        img.src = "./pets/tater/spritesheet.webp";
+      }
+    };
     return () => {
       imgRef.current = null;
     };
