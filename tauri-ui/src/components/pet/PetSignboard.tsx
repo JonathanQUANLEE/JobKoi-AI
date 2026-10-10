@@ -183,7 +183,7 @@ export const PetSignboard: FC<PetSignboardProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  usagiSound.play("yaha");
+                  usagiSound.speak(isJa ? "はい、時間をセットしてね！" : "好的，滑动滚轮设定时间吧！", "yaha");
                   setMode("picker");
                   updateConfig((prev) => ({ ...prev, enabled: true }));
                 }}
@@ -195,7 +195,7 @@ export const PetSignboard: FC<PetSignboardProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  usagiSound.play("ura");
+                  usagiSound.speak(isJa ? "またね！" : "好嘞，有需要随时点我！", "mock");
                   onClose();
                 }}
                 className="py-1.5 px-3 rounded-xl bg-stone-800/90 hover:bg-stone-700/90 text-stone-300 font-medium text-[11px] border border-stone-700/60 active:scale-95 transition-all cursor-pointer"
