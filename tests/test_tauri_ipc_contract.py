@@ -47,6 +47,14 @@ def test_tauri_ipc_commands_match_gui_v02_contract():
         # 多平台适配层（多平台选择与扫码登录）
         "list_platforms",
         "open_platform_login",
+        # 窗口控制
+        "window_minimize",
+        "window_toggle_maximize",
+        "window_close",
+        # 简历扩展
+        "open_resume_native",
+        "diagnose_resume",
+        "calculate_ats_score",
     }
 
 
