@@ -131,6 +131,44 @@ export const deliveryHistoryDb = {
   },
 
   /**
+   * 重置为 0 真实数据起步
+   */
+  resetToZero(): DayDeliveryRecord[] {
+    const list: DayDeliveryRecord[] = [];
+    const now = new Date();
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 86400000);
+      const dateStr = formatDateKey(d);
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      list.push({
+        date: dateStr,
+        label: `${m}-${day}`,
+        weekday: WEEKDAYS[d.getDay()],
+        bossSent: 0,
+        liepinSent: 0,
+        job51Sent: 0,
+        totalSent: 0,
+        bossReplies: 0,
+        liepinReplies: 0,
+        job51Replies: 0,
+        totalReplies: 0,
+      });
+    }
+    deliveryHistoryDb.saveRecords(list);
+    return list;
+  },
+
+  /**
+   * 恢复演示参考数据
+   */
+  restoreDemoData(): DayDeliveryRecord[] {
+    const seeded = generateSeedRecords();
+    deliveryHistoryDb.saveRecords(seeded);
+    return seeded;
+  },
+
+  /**
    * 追加或累加当天的投递数据
    */
   incrementToday(platformId: "boss" | "liepin" | "job51", count = 1): void {
