@@ -237,16 +237,16 @@ export default function Sidebar({
         <NavItemButton
           active={activeNav === "copilot"}
           onClick={() => onSelectNav("copilot")}
-          icon={<Sparkles className="h-4 w-4 shrink-0 text-amber-400" />}
+          icon={<Sparkles className={`h-4 w-4 shrink-0 ${isMonochrome ? "text-zinc-300" : "text-amber-400"}`} />}
           label={lang === "en" ? "Resume Polish" : "简历精修"}
           badge={lang === "en" ? "Skills" : "AI 诊断"}
-          badgeColor="bg-purple-500/15 text-purple-300 border border-purple-500/30"
+          badgeColor={isMonochrome ? "bg-white/10 text-zinc-300 border border-white/20" : "bg-purple-500/15 text-purple-300 border border-purple-500/30"}
         />
 
         <NavItemButton
           active={activeNav === "analytics"}
           onClick={() => onSelectNav("analytics")}
-          icon={<TrendingUp className="h-4 w-4 shrink-0 text-amber-400" />}
+          icon={<TrendingUp className={`h-4 w-4 shrink-0 ${isMonochrome ? "text-zinc-300" : "text-amber-400"}`} />}
           label={lang === "en" ? "Analytics & Brief" : "数据统计与早报"}
         />
       </nav>

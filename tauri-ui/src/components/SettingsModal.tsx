@@ -221,8 +221,8 @@ export default function SettingsModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* 背景氛围柔光，消除死板方框感 */}
-        <div className="absolute -top-24 -right-24 w-80 h-80 bg-amber-500/[0.07] rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-purple-500/[0.07] rounded-full blur-3xl pointer-events-none" />
+        <div className={`absolute -top-24 -right-24 w-80 h-80 rounded-full blur-3xl pointer-events-none ${isMonochrome ? "bg-white/[0.04]" : "bg-amber-500/[0.07]"}`} />
+        <div className={`absolute -bottom-24 -left-24 w-80 h-80 rounded-full blur-3xl pointer-events-none ${isMonochrome ? "bg-white/[0.03]" : "bg-purple-500/[0.07]"}`} />
 
         {/* 左侧：纯粹悬浮 3D 轮盘导航，融入统一毛玻璃左翼 */}
         <aside className="w-full md:w-56 shrink-0 relative overflow-hidden h-44 md:h-[530px] flex items-center justify-center select-none border-b md:border-b-0 md:border-r border-white/5 pr-0 md:pr-4">
