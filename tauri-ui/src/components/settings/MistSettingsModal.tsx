@@ -6,14 +6,14 @@ import {
   Comment01Icon,
   CpuIcon,
   Cancel01Icon,
-  CheckmarkCircle01Icon,
-  InformationCircleIcon,
-  AlertCircleIcon,
-  SparklesIcon,
 } from "@hugeicons/core-free-icons";
-import { ipc, type LLMConfig } from "../../lib/ipc";
+import { ipc } from "../../lib/ipc";
 import type { RuleForm } from "../../lib/profileForm";
 import { useRunStore } from "../../store";
+import RulesSettingsView from "./views/RulesSettingsView";
+import PolicySettingsView from "./views/PolicySettingsView";
+import GreetingSettingsView from "./views/GreetingSettingsView";
+import ModelSettingsView from "./views/ModelSettingsView";
 import "./MistSettingsModal.css";
 
 export type MistModalType = "rules" | "policy" | "greeting" | "model" | null;
@@ -21,7 +21,6 @@ export type MistModalType = "rules" | "policy" | "greeting" | "model" | null;
 interface MistSettingsModalProps {
   type: MistModalType;
   onClose: () => void;
-  // 表单与配置数据
   currentProfileData?: Record<string, unknown> | (() => Record<string, unknown>);
   onSaveProfileData?: (data: Record<string, unknown>) => void;
   rule?: string | RuleForm;
@@ -76,14 +75,14 @@ export default function MistSettingsModal({
   const [localDryRun, setLocalDryRun] = useState(dryRun);
   const [localGreeting, setLocalGreeting] = useState(greeting);
 
-  // 大模型设置状态（已彻底移除冗余无用的预设配置）
+  // 大模型设置状态
   const [baseUrl, setBaseUrl] = useState(llmConfig?.base_url || "https://openrouter.ai/api/v1");
   const [apiKey, setApiKey] = useState(llmConfig?.api_key || "");
   const [model, setModel] = useState(llmConfig?.model || "nvidia/nemotron-3.5-lightning:free");
   const [testingModel, setTestingModel] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  // ESC 键随时退出
+  // ESC 键退出
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -186,7 +185,6 @@ export default function MistSettingsModal({
     setTestingModel(true);
     setTestResult(null);
     try {
-      // 临时保存并测一次轻量请求
       await ipc.saveLLMConfig(baseUrl.trim(), apiKey.trim(), model.trim());
       const res = await ipc.agentChat("你好，测试连接是否畅通", [], {});
       if (res.status === "ok") {
@@ -210,10 +208,8 @@ export default function MistSettingsModal({
 
   return (
     <div className="settings-overlay" onClick={onClose}>
-      {/* 方案 A: 中央椭圆渐隐雾化背景（无矩形边框限制，偏透明质感） */}
       <div className="settings-mist" />
 
-      {/* 方案 A + B: 悬浮从雾气中平滑浮现的内容区 */}
       <div
         className="settings-content text-stone-100"
         onClick={(e) => e.stopPropagation()}
@@ -252,323 +248,57 @@ export default function MistSettingsModal({
           </button>
         </div>
 
-        {/* -------------------- 弹窗 1: 过滤规则设置 (通俗自然语言，文科生零门槛) -------------------- */}
+        {/* 弹窗 1: 过滤规则设置 */}
         {type === "rules" && (
-          <div className="py-4 space-y-5">
-            <div className="mist-setting-row">
-              <label className="text-xs font-semibold text-stone-200">
-                排除词 / 避坑标签 (包含这些词的岗位直接跳过)
-              </label>
-              <p className="text-[11px] text-stone-400 leading-relaxed">
-                用逗号或空格隔开。例如：<code className="text-amber-300 font-mono">外包 电话销售 培训 单休 大小周 夜班</code>
-              </p>
-              <textarea
-                rows={3}
-                value={localRule}
-                onChange={(e) => setLocalRule(e.target.value)}
-                placeholder="例如：外包, 催收, 兼职, 电话销售, 招转培, 单休, 大小周"
-                className="mist-input font-mono text-xs leading-relaxed"
-              />
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200/90 leading-relaxed flex items-start gap-2.5">
-              <HugeiconsIcon icon={InformationCircleIcon} size={16} className="text-amber-400 shrink-0 mt-0.5" />
-              <div>
-                <strong>贴心提示</strong>：目标岗位、期望城市与薪资范围已经在【求职画像】中由 AI 顾问为你自动打理，这里只需填写你“最不想去的公司类型或讨厌的关键词”即可，无需重复配置复杂专业条件。
-              </div>
-            </div>
-
-            <div className="pt-2 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 rounded-xl text-xs text-stone-400 hover:text-white transition-all cursor-pointer"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveRules}
-                className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs shadow-md transition-all cursor-pointer"
-              >
-                保存过滤偏好
-              </button>
-            </div>
-          </div>
+          <RulesSettingsView
+            localRule={localRule}
+            setLocalRule={setLocalRule}
+            onSave={handleSaveRules}
+            onClose={onClose}
+          />
         )}
 
-        {/* -------------------- 弹窗 2: 投递设置与安全 (通俗解释为什么需要防风控) -------------------- */}
+        {/* 弹窗 2: 投递设置与安全 */}
         {type === "policy" && (
-          <div className="py-4 space-y-5">
-            <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-200/90 leading-relaxed flex items-start gap-2.5">
-              <HugeiconsIcon icon={ShieldCheckIcon} size={16} className="text-blue-400 shrink-0 mt-0.5" />
-              <div>
-                <strong>为什么需要防风控保护？</strong><br />
-                各大招聘平台（BOSS直聘等）均部署有严格的机械人爬虫检测。本软件内置<strong>泊松过程拟人化等待与贝塞尔平滑轨迹</strong>，每次沟通间隔随机浮动，高度还原真实人类操作节奏，确保您的账号安全无忧。
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="mist-setting-row">
-                <label className="text-xs font-semibold text-stone-200">
-                  每日投递安全上限 (家/天)
-                </label>
-                <p className="text-[11px] text-stone-400">
-                  建议设为 50~100 次，避免过度频繁被平台限流
-                </p>
-                <input
-                  type="number"
-                  min="10"
-                  max="300"
-                  value={localDailyLimit}
-                  onChange={(e) => setLocalDailyLimit(e.target.value)}
-                  className="mist-input text-xs font-mono"
-                />
-              </div>
-
-              <div className="mist-setting-row">
-                <label className="text-xs font-semibold text-stone-200">
-                  拟人化等待时间区间 (秒)
-                </label>
-                <p className="text-[11px] text-stone-400">
-                  每次打招呼后的随机停留时间（推荐 3 ~ 6 秒）
-                </p>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min="1"
-                    max="10"
-                    value={localDelayMin}
-                    onChange={(e) => setLocalDelayMin(e.target.value)}
-                    className="mist-input text-xs font-mono text-center"
-                  />
-                  <span className="text-stone-500 text-xs">至</span>
-                  <input
-                    type="number"
-                    min="3"
-                    max="20"
-                    value={localDelayMax}
-                    onChange={(e) => setLocalDelayMax(e.target.value)}
-                    className="mist-input text-xs font-mono text-center"
-                  />
-                  <span className="text-stone-400 text-xs">秒</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="mist-setting-row flex-row items-center justify-between border-t border-white/10 pt-3">
-              <div>
-                <span className="text-xs font-semibold text-stone-200 block">
-                  演练试跑模式 (Dry Run)
-                </span>
-                <span className="text-[11px] text-stone-400">
-                  开启后仅模拟筛选与匹配流程，不会真正向 HR 发出招呼语，新手推荐先演练体验
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setLocalDryRun(!localDryRun)}
-                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                  localDryRun ? "bg-amber-500" : "bg-stone-700"
-                }`}
-              >
-                <span
-                  className={`pointer-events-none inline-block size-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                    localDryRun ? "translate-x-5" : "translate-x-0"
-                  }`}
-                />
-              </button>
-            </div>
-
-            <div className="pt-2 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 rounded-xl text-xs text-stone-400 hover:text-white transition-all cursor-pointer"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={handleSavePolicy}
-                className="px-5 py-2 rounded-xl bg-blue-500 hover:bg-blue-400 text-stone-950 font-bold text-xs shadow-md transition-all cursor-pointer"
-              >
-                保存安全设置
-              </button>
-            </div>
-          </div>
+          <PolicySettingsView
+            localDailyLimit={localDailyLimit}
+            setLocalDailyLimit={setLocalDailyLimit}
+            localDelayMin={localDelayMin}
+            setLocalDelayMin={setLocalDelayMin}
+            localDelayMax={localDelayMax}
+            setLocalDelayMax={setLocalDelayMax}
+            localDryRun={localDryRun}
+            setLocalDryRun={setLocalDryRun}
+            onSave={handleSavePolicy}
+            onClose={onClose}
+          />
         )}
 
-        {/* -------------------- 弹窗 3: 打招呼模板 (高情商开场白模板) -------------------- */}
+        {/* 弹窗 3: 打招呼模板 */}
         {type === "greeting" && (
-          <div className="py-4 space-y-4">
-            <div className="mist-setting-row">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-stone-200">
-                  招呼语内容 (支持动态变量插入)
-                </label>
-                <span className="text-[11px] text-stone-400 font-mono">
-                  可用变量: {"{name}"} 姓名 · {"{job}"} 岗位名
-                </span>
-              </div>
-              <textarea
-                rows={4}
-                value={localGreeting}
-                onChange={(e) => setLocalGreeting(e.target.value)}
-                placeholder="您好！看到贵司正在招聘{job}岗位，我的专业与技能非常契合，这是我的简历，期待能与您进一步沟通交流！"
-                className="mist-input text-xs leading-relaxed"
-              />
-            </div>
-
-            {/* 快速选用推荐高回复率模板 */}
-            <div className="space-y-1.5">
-              <span className="text-[11px] font-semibold text-stone-400">
-                精选高情商开箱模板 (点击快速填入)：
-              </span>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setLocalGreeting(
-                      "您好！看到贵司在招{job}岗位，我对贵司的发展非常向往。我的专业背景与核心技能高度契合，附上我的详细简历，期待与您深入沟通！"
-                    )
-                  }
-                  className="p-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-left text-[11px] text-stone-300 transition-all cursor-pointer"
-                >
-                  <span className="font-bold text-emerald-400 block mb-0.5">诚恳求职模板 (应届 / 实习)</span>
-                  <p className="line-clamp-2 text-stone-400">突出向往与背景契合度，措辞谦逊专业...</p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setLocalGreeting(
-                      "您好，关注到贵司的{job}职位。我有扎实的工程落地与项目经验，深耕核心技术栈，希望能协助贵团队达成业务目标，期待进一步交流！"
-                    )
-                  }
-                  className="p-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-left text-[11px] text-stone-300 transition-all cursor-pointer"
-                >
-                  <span className="font-bold text-amber-400 block mb-0.5">经验实战模板 (社招 / 跳槽)</span>
-                  <p className="line-clamp-2 text-stone-400">强调落地成果与技术积累，直奔主题...</p>
-                </button>
-              </div>
-            </div>
-
-            <div className="pt-2 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 rounded-xl text-xs text-stone-400 hover:text-white transition-all cursor-pointer"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveGreeting}
-                className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-bold text-xs shadow-md transition-all cursor-pointer"
-              >
-                保存招呼语
-              </button>
-            </div>
-          </div>
+          <GreetingSettingsView
+            localGreeting={localGreeting}
+            setLocalGreeting={setLocalGreeting}
+            onSave={handleSaveGreeting}
+            onClose={onClose}
+          />
         )}
 
-        {/* -------------------- 弹窗 4: AI 大模型配置 (删掉无用的预设配置) -------------------- */}
+        {/* 弹窗 4: AI 大模型配置 */}
         {type === "model" && (
-          <div className="py-4 space-y-4">
-            <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-purple-200/90 leading-relaxed flex items-start gap-2.5">
-              <HugeiconsIcon icon={SparklesIcon} size={16} className="text-purple-400 shrink-0 mt-0.5" />
-              <div>
-                <strong>推荐配置 (支持免费 OpenRouter 专属模型)</strong><br />
-                已为你预设免费高性价比模型 <code className="text-purple-300 font-mono">nvidia/nemotron-3.5-lightning:free</code>，支持 100万 超长上下文，每天可免费享受 50 次深度简历体检与改写！
-              </div>
-            </div>
-
-            <div className="mist-setting-row">
-              <label className="text-xs font-semibold text-stone-200">
-                API Base URL (接口端点地址)
-              </label>
-              <input
-                type="text"
-                value={baseUrl}
-                onChange={(e) => setBaseUrl(e.target.value)}
-                placeholder="https://openrouter.ai/api/v1"
-                className="mist-input text-xs font-mono"
-              />
-            </div>
-
-            <div className="mist-setting-row">
-              <label className="text-xs font-semibold text-stone-200">
-                API Key (密钥令牌)
-              </label>
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-or-v1-..."
-                className="mist-input text-xs font-mono"
-              />
-            </div>
-
-            <div className="mist-setting-row">
-              <label className="text-xs font-semibold text-stone-200">
-                模型名称 (Model Identifier)
-              </label>
-              <input
-                type="text"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder="nvidia/nemotron-3.5-lightning:free"
-                className="mist-input text-xs font-mono"
-              />
-            </div>
-
-            {testResult && (
-              <div
-                className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
-                  testResult.ok
-                    ? "bg-emerald-950/60 border-emerald-500/30 text-emerald-300"
-                    : "bg-rose-950/60 border-rose-500/30 text-rose-300"
-                }`}
-              >
-                {testResult.ok ? (
-                  <HugeiconsIcon icon={CheckmarkCircle01Icon} size={16} className="text-emerald-400 shrink-0" />
-                ) : (
-                  <HugeiconsIcon icon={AlertCircleIcon} size={16} className="text-rose-400 shrink-0" />
-                )}
-                <span>{testResult.msg}</span>
-              </div>
-            )}
-
-            <div className="pt-2 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={handleTestModel}
-                disabled={testingModel}
-                className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-stone-200 text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5"
-              >
-                <HugeiconsIcon icon={SparklesIcon} size={14} className="text-purple-400" />
-                <span>{testingModel ? "正在测试连接..." : "测试连接状态"}</span>
-              </button>
-
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-4 py-2 rounded-xl text-xs text-stone-400 hover:text-white transition-all cursor-pointer"
-                >
-                  取消
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveModel}
-                  className="px-5 py-2 rounded-xl bg-purple-500 hover:bg-purple-400 text-white font-bold text-xs shadow-md transition-all cursor-pointer"
-                >
-                  保存配置
-                </button>
-              </div>
-            </div>
-          </div>
+          <ModelSettingsView
+            baseUrl={baseUrl}
+            setBaseUrl={setBaseUrl}
+            apiKey={apiKey}
+            setApiKey={setApiKey}
+            model={model}
+            setModel={setModel}
+            testingModel={testingModel}
+            testResult={testResult}
+            onTestModel={handleTestModel}
+            onSave={handleSaveModel}
+            onClose={onClose}
+          />
         )}
       </div>
     </div>
