@@ -92,24 +92,27 @@ export const CardSwap = forwardRef<CardSwapHandle, CardSwapProps>(
     },
     ref
   ) => {
-    const config =
-      easing === "elastic"
-        ? {
-            ease: "elastic.out(0.65, 0.9)",
-            durDrop: 1.4,
-            durMove: 1.3,
-            durReturn: 1.4,
-            promoteOverlap: 0.85,
-            returnDelay: 0.08,
-          }
-        : {
-            ease: "power2.inOut",
-            durDrop: 0.7,
-            durMove: 0.7,
-            durReturn: 0.7,
-            promoteOverlap: 0.45,
-            returnDelay: 0.15,
-          };
+    const config = useMemo(
+      () =>
+        easing === "elastic"
+          ? {
+              ease: "power2.out",
+              durDrop: 0.45,
+              durMove: 0.42,
+              durReturn: 0.48,
+              promoteOverlap: 0.65,
+              returnDelay: 0.04,
+            }
+          : {
+              ease: "power2.inOut",
+              durDrop: 0.4,
+              durMove: 0.4,
+              durReturn: 0.42,
+              promoteOverlap: 0.5,
+              returnDelay: 0.05,
+            },
+      [easing]
+    );
 
     const childArr = useMemo(() => Children.toArray(children), [children]);
     const refs = useMemo(
@@ -128,21 +131,57 @@ export const CardSwap = forwardRef<CardSwapHandle, CardSwapProps>(
     const container = useRef<HTMLDivElement>(null);
 
     const isSwappingRef = useRef(false);
+    const unlockTimerRef = useRef<number | null>(null);
+
+    const releaseSwapLock = useCallback(() => {
+      isSwappingRef.current = false;
+      if (unlockTimerRef.current !== null) {
+        window.clearTimeout(unlockTimerRef.current);
+        unlockTimerRef.current = null;
+      }
+    }, []);
+
+    const acquireSwapLock = useCallback((timeoutMs = 600) => {
+      if (isSwappingRef.current) return false;
+      isSwappingRef.current = true;
+      if (unlockTimerRef.current !== null) {
+        window.clearTimeout(unlockTimerRef.current);
+      }
+      unlockTimerRef.current = window.setTimeout(() => {
+        isSwappingRef.current = false;
+        unlockTimerRef.current = null;
+      }, timeoutMs);
+      return true;
+    }, []);
+
+    useEffect(() => {
+      return () => {
+        releaseSwapLock();
+        if (tlRef.current) {
+          tlRef.current.kill();
+          tlRef.current = null;
+        }
+      };
+    }, [releaseSwapLock]);
 
     const swap = useCallback(() => {
-      if (order.current.length < 2 || isSwappingRef.current) return;
-      isSwappingRef.current = true;
+      if (order.current.length < 2 || !acquireSwapLock(650)) return;
 
       const [front, ...rest] = order.current;
       const elFront = refs[front]?.current;
       if (!elFront) {
-        isSwappingRef.current = false;
+        releaseSwapLock();
         return;
+      }
+
+      if (tlRef.current) {
+        tlRef.current.kill();
+        tlRef.current = null;
       }
 
       const tl = gsap.timeline({
         onComplete: () => {
-          isSwappingRef.current = false;
+          releaseSwapLock();
         },
       });
       tlRef.current = tl;
@@ -169,7 +208,7 @@ export const CardSwap = forwardRef<CardSwapHandle, CardSwapProps>(
             duration: config.durMove,
             ease: config.ease,
           },
-          `promote+=${i * 0.1}`
+          `promote+=${i * 0.05}`
         );
       });
 
@@ -203,23 +242,27 @@ export const CardSwap = forwardRef<CardSwapHandle, CardSwapProps>(
         order.current = [...rest, front];
         onFrontChange?.(rest[0]);
       });
-    }, [config, refs, cardDistance, verticalDistance, onFrontChange]);
+    }, [config, refs, cardDistance, verticalDistance, onFrontChange, acquireSwapLock, releaseSwapLock]);
 
     const swapPrev = useCallback(() => {
-      if (order.current.length < 2 || isSwappingRef.current) return;
-      isSwappingRef.current = true;
+      if (order.current.length < 2 || !acquireSwapLock(650)) return;
 
       const lastIdx = order.current[order.current.length - 1];
       const rest = order.current.slice(0, -1);
       const elBack = refs[lastIdx]?.current;
       if (!elBack) {
-        isSwappingRef.current = false;
+        releaseSwapLock();
         return;
+      }
+
+      if (tlRef.current) {
+        tlRef.current.kill();
+        tlRef.current = null;
       }
 
       const tl = gsap.timeline({
         onComplete: () => {
-          isSwappingRef.current = false;
+          releaseSwapLock();
         },
       });
       tlRef.current = tl;
@@ -230,13 +273,13 @@ export const CardSwap = forwardRef<CardSwapHandle, CardSwapProps>(
         x: frontSlot.x,
         y: frontSlot.y + 360,
         z: frontSlot.z + 60,
-        duration: config.durDrop * 0.5,
+        duration: config.durDrop * 0.6,
         ease: "power2.out",
       });
       tl.to(elBack, {
         y: frontSlot.y,
         z: frontSlot.z,
-        duration: config.durReturn * 0.6,
+        duration: config.durReturn * 0.7,
         ease: config.ease,
       });
 
@@ -262,16 +305,18 @@ export const CardSwap = forwardRef<CardSwapHandle, CardSwapProps>(
         order.current = [lastIdx, ...rest];
         onFrontChange?.(lastIdx);
       });
-    }, [config, refs, cardDistance, verticalDistance, onFrontChange]);
+    }, [config, refs, cardDistance, verticalDistance, onFrontChange, acquireSwapLock, releaseSwapLock]);
 
     const bringToFront = (targetIndex: number) => {
       if (order.current[0] === targetIndex) return;
       const idxInOrder = order.current.indexOf(targetIndex);
       if (idxInOrder === -1) return;
 
-      if (tlRef.current && tlRef.current.isActive()) {
+      if (tlRef.current) {
         tlRef.current.kill();
+        tlRef.current = null;
       }
+      releaseSwapLock();
 
       const without = order.current.filter((i) => i !== targetIndex);
       const newOrder = [targetIndex, ...without];
@@ -286,7 +331,7 @@ export const CardSwap = forwardRef<CardSwapHandle, CardSwapProps>(
           y: slot.y,
           z: slot.z,
           zIndex: slot.zIndex,
-          duration: 0.65,
+          duration: 0.45,
           ease: "power2.out",
         });
       });
@@ -300,7 +345,7 @@ export const CardSwap = forwardRef<CardSwapHandle, CardSwapProps>(
       bringToFront,
     }));
 
-    // 鼠标滚轮监听：滚轮上下滚动时连续切换卡片（带防惯性抖动与阅读模式隔离）
+    // 鼠标滚轮监听：滚轮上下滚动时切换卡片（阅读模式与轮换模式严格隔离）
     useEffect(() => {
       const node = container.current;
       if (!node) return;
@@ -308,29 +353,16 @@ export const CardSwap = forwardRef<CardSwapHandle, CardSwapProps>(
       let lastWheelTime = 0;
 
       const handleWheel = (e: WheelEvent) => {
-        const target = e.target as HTMLElement | null;
-        const scrollable = target?.closest(".allow-inner-scroll, .reading-content-zone") as HTMLElement | null;
-
-        // 如果用户在正文阅读模式下，滚轮 100% 留给正文阅读滑动，严禁触发切卡
-        if (isReadingMode && scrollable) {
+        // 1. 如果处于专注阅读模式：绝不拦截，滚轮 100% 留给正文阅读与长文档滑动
+        if (isReadingMode) {
           return;
         }
 
-        // 非阅读模式下，若指针正好处于内部可滚动元素上：
-        if (scrollable) {
-          const atTop = scrollable.scrollTop <= 4;
-          const atBottom = scrollable.scrollTop + scrollable.clientHeight >= scrollable.scrollHeight - 4;
-          // 若内部还能沿滚动方向继续滚动，则优先内部文档原生滚动
-          if ((e.deltaY > 0 && !atBottom) || (e.deltaY < 0 && !atTop)) {
-            return;
-          }
-        }
-
-        // 触控板微小动量与手势噪声过滤（小于 10 的微小触控偏移不切卡）
-        if (Math.abs(e.deltaY) < 10) return;
+        // 2. 如果非阅读模式：滚轮上下滚动立即用于抽换卡片，且绝不被内部文本拦截
+        if (Math.abs(e.deltaY) < 12) return;
 
         const now = performance.now();
-        if (now - lastWheelTime < 300) return;
+        if (now - lastWheelTime < 280) return;
         lastWheelTime = now;
 
         e.preventDefault();
@@ -413,6 +445,12 @@ export const CardSwap = forwardRef<CardSwapHandle, CardSwapProps>(
 
               // 如果用户点击的是正文阅读区、操作按钮、输入框或链接，严禁触发外层切卡
               if (target?.closest(".reading-content-zone, .allow-inner-scroll, button, a, input, textarea")) {
+                onCardClick?.(i);
+                return;
+              }
+
+              // 如果当前处于阅读模式，点击卡片其他位置旨在退出阅读模式，严禁误触切卡
+              if (isReadingMode) {
                 onCardClick?.(i);
                 return;
               }

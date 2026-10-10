@@ -586,10 +586,15 @@ export default function ResumePanel({
                   return (
                     <Card
                       key={item.name}
-                      className="w-full max-w-5xl xl:max-w-6xl h-[630px] rounded-3xl border border-amber-500/25 bg-[#171513] shadow-2xl flex flex-col overflow-hidden select-none"
+                      className="w-full h-[630px] rounded-3xl border border-stone-800/80 bg-[#171513] shadow-2xl flex flex-col overflow-hidden select-none"
                     >
                       {/* 卡片顶栏：文件核心元信息 + 原版直开 + 提炼画像 + 默认与删除 */}
-                      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-stone-800/80 bg-stone-900/60 shrink-0">
+                      <div
+                        className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-stone-800/80 bg-stone-900/60 shrink-0 cursor-default"
+                        onClick={() => {
+                          if (isReadingMode) setIsReadingMode(false);
+                        }}
+                      >
                         {/* 文件名与格式徽章 */}
                         <div className="min-w-0 flex items-center gap-2.5">
                           <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
@@ -690,11 +695,17 @@ export default function ResumePanel({
                         </div>
                       </div>
 
-                      {/* 卡片主体：真实高清内容视窗 (100% 留给文件本身) */}
-                      <div className="flex-1 w-full p-4 overflow-hidden flex flex-col justify-center items-center bg-[#110f0e] relative">
+                      {/* 卡片主体：真实高清内容视窗 (100% 留给文件本身，支持内层独立平滑滚动) */}
+                      <div className="flex-1 min-h-0 w-full p-4 overflow-hidden flex flex-col items-stretch justify-start bg-[#110f0e] relative">
                         {/* 1. 图片格式 (简历原图、学信网报告、技能证书) */}
                         {isImg && (
-                          <div className="w-full h-full flex flex-col items-center justify-center relative group">
+                          <div
+                            className="w-full h-full flex flex-col items-center justify-center relative group"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!isReadingMode) setIsReadingMode(true);
+                            }}
+                          >
                             {/* 悬浮缩放控制栏 */}
                             <div
                               className="absolute top-2 right-2 flex items-center gap-1 bg-stone-900/90 backdrop-blur border border-stone-700/60 rounded-xl p-1 z-20"
@@ -746,10 +757,10 @@ export default function ResumePanel({
 
                         {/* 2. Word 文档提取预览 (.docx / .doc) */}
                         {isWord && (
-                          <div className="w-full h-full flex flex-col text-left">
+                          <div className="w-full h-full min-h-0 flex flex-col text-left">
                             {/* Word 排版温馨引导横条 */}
                             <div
-                              className="flex items-center justify-between px-3.5 py-2 mb-3 rounded-xl border border-blue-500/20 bg-blue-950/20 text-xs text-blue-300 shrink-0"
+                              className="flex items-center justify-between px-3.5 py-2 mb-2.5 rounded-xl border border-blue-500/20 bg-blue-950/20 text-xs text-blue-300 shrink-0"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <span className="flex items-center gap-2">
@@ -768,16 +779,20 @@ export default function ResumePanel({
                             <div
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setIsReadingMode(true);
+                                if (!isReadingMode) setIsReadingMode(true);
                               }}
-                              className={`flex-1 overflow-y-auto rounded-xl border p-5 leading-relaxed text-stone-200 select-text allow-inner-scroll reading-content-zone transition-all ${
+                              className={`flex-1 min-h-0 overflow-y-auto rounded-xl border p-5 leading-relaxed text-stone-200 select-text allow-inner-scroll reading-content-zone transition-all ${
                                 isReadingMode
                                   ? isMonochrome
-                                    ? "border-white/50 ring-2 ring-white/15 bg-[#09090b] shadow-inner"
-                                    : "border-amber-500/60 ring-2 ring-amber-500/20 bg-[#161412] shadow-inner"
+                                    ? "border-white/60 ring-2 ring-white/15 bg-[#09090b] shadow-inner"
+                                    : "border-amber-500/70 ring-2 ring-amber-500/20 bg-[#161412] shadow-inner"
                                   : "border-stone-800 bg-[#161412]/80 hover:border-stone-700 cursor-text"
                               }`}
-                              title={isReadingMode ? "正在专注阅读中：滚轮上下浏览正文（点击外部恢复抽换卡片）" : "点击即可聚焦进入正文专注阅读模式"}
+                              title={
+                                isReadingMode
+                                  ? "正在专注阅读中：滚轮或触控板上下浏览正文（点击卡片外部恢复抽换）"
+                                  : "点击正文区域进入专注阅读模式（滚轮仅滚动文档内容）"
+                              }
                             >
                               {content?.text ? (
                                 <pre className="whitespace-pre-wrap font-sans text-xs leading-6 text-stone-300">
@@ -795,7 +810,13 @@ export default function ResumePanel({
 
                         {/* 3. PDF 预览 */}
                         {isPdf && (
-                          <div className="w-full h-full flex flex-col">
+                          <div
+                            className="w-full h-full flex flex-col"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!isReadingMode) setIsReadingMode(true);
+                            }}
+                          >
                             <iframe
                               src={blobUrl || content?.data_url}
                               className="w-full h-[510px] rounded-xl border border-stone-800 bg-[#2b2b2b] shadow-inner"
@@ -806,7 +827,12 @@ export default function ResumePanel({
                       </div>
 
                       {/* 卡片底栏交互提示 */}
-                      <div className="px-5 py-2.5 bg-stone-900/80 border-t border-stone-800 text-[11px] text-stone-400 flex items-center justify-between shrink-0">
+                      <div
+                        className="px-5 py-2.5 bg-stone-900/80 border-t border-stone-800 text-[11px] text-stone-400 flex items-center justify-between shrink-0 cursor-default"
+                        onClick={() => {
+                          if (isReadingMode) setIsReadingMode(false);
+                        }}
+                      >
                         <span className="flex items-center gap-1.5">
                           <Layers className="size-3 text-amber-400" />
                           <span>

@@ -56,6 +56,25 @@
 .reading-content-zone {
   overscroll-behavior: contain;
   scroll-behavior: smooth;
+  touch-action: pan-y;
+}
+
+.reading-content-zone::-webkit-scrollbar {
+  width: 6px;
+}
+
+.reading-content-zone::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 9999px;
+}
+
+.reading-content-zone::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
+}
+
+.reading-content-zone::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
 }
 
 .allow-inner-scroll {
