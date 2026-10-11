@@ -47,6 +47,14 @@ export function formatEventForDisplay(
       );
     case "login_ok":
       return view(time, "登录状态确认", "已确认 BOSS 登录状态", payload, "success");
+    case "login_required":
+      return view(
+        time,
+        "需要登录",
+        message || "BOSS 登录已失效，请在浏览器里扫码登录",
+        payload,
+        "warning",
+      );
     case "job_found":
       return view(
         time,

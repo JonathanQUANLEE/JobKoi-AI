@@ -63,7 +63,16 @@ async def send_job_descriptions_to_chat(
         actual_url=actual_url,
         redirected=bool(url and actual_url and url != actual_url),
     )
-    await finding_jobs.log_in()
+    # log_in 返回 False = 确认未登录（等待扫码超时）；返回 True/None 视为已登录继续。
+    # 显式判断 False 是为了让旧的 mock（返回 None）及"未登录"两种语义清晰区分。
+    if (await finding_jobs.log_in()) is False:
+        # 登录已失效：直达登录页等扫码，超时未登录则明确提示用户后中止本轮
+        write_response._emit_progress(
+            "login_required",
+            message="BOSS 登录已失效。请在浏览器里扫码登录后，再点一次「启动巡航」。",
+        )
+        log.warning("BOSS 未登录，中止本轮巡航")
+        return
     write_response._emit_progress("login_ok")
 
     if (
