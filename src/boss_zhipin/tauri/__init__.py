@@ -630,7 +630,14 @@ async def list_platforms() -> dict[str, Any]:
 
 @commands.command()
 async def open_platform_login(body: _PlatformLoginBody) -> dict[str, Any]:
-    """打开指定平台的扫码登录页面。"""
+    """打开指定平台的扫码登录页面。
+
+    前置拦截：巡航运行中禁止换号——换号会关掉正在投递的受控浏览器。
+    """
+    from boss_zhipin.gui import runner
+
+    if runner.is_running():
+        raise RuntimeError("巡航运行中，请先停止巡航再换号登录")
     from boss_zhipin.platforms import get_platform_manager
 
     return await get_platform_manager().open_login(body.platform_id)
