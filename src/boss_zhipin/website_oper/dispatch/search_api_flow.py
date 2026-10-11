@@ -10,6 +10,24 @@ from typing import Any
 from boss_zhipin.audit import validate_letter
 from boss_zhipin.config.filter_rules import match_posting
 from boss_zhipin.platforms.platform_limits import PlatformLimitReached
+from boss_zhipin.website_oper.dispatch.env_config import (
+    _auto_send_daily_limit,
+    _auto_send_delay_range,
+    _auto_send_max_sent,
+    _profile_filters,
+    _profile_name,
+    _stop_on_captcha_enabled,
+    _to_filter_posting,
+)
+from boss_zhipin.website_oper.dispatch.history_logger import (
+    _job_with_derived_fields,
+    _log_seen,
+    _log_sent,
+    _log_skipped,
+    _read_seen_job_keys,
+    _sent_today_count,
+    _state_path,
+)
 
 log = logging.getLogger(__name__)
 
@@ -127,6 +145,8 @@ async def _process_single_api_job(
     status 可取值: 'seen', 'captcha', 'filtered',
                    'already_contacted', 'dry_run', 'sent', 'failed'
     """
+    # write_response 仅为 _emit_progress 借道保留：测试把事件收集器 patch 在门面属性上，
+    # 直连 gui.events.emit 会绕过 patch 导致收不到事件；待 emit 专项批与测试 patch 点一起迁移。
     from boss_zhipin.website_oper import finding_jobs, job_api, write_response
 
     job = job_api.to_job_posting(api_job)
@@ -142,7 +162,7 @@ async def _process_single_api_job(
         return "seen", sent_count, daily_sent_count
 
     seen_job_keys.add(dedupe_key)
-    write_response._log_seen(seen_jobs_path, job=job, job_key=dedupe_key, send_mode="auto")
+    _log_seen(seen_jobs_path, job=job, job_key=dedupe_key, send_mode="auto")
 
     # 企业级去重已按用户规格移除（2026-10-11）：同一企业常有多个岗位，
     # 不能因为投过该企业就跳过它的其他岗位；去重只按岗位（dedupe_key）。
@@ -151,10 +171,10 @@ async def _process_single_api_job(
     # 规则全部只依赖卡片字段时，先用 API 卡片数据过滤一轮；不命中直接跳过，
     # 不再打开详情页（详情页只留给"卡片信息已命中、需进一步核对 JD"的岗位）。
     if _can_prescreen_by_title(filters):
-        probe_posting = write_response._to_filter_posting(job, "")
+        probe_posting = _to_filter_posting(job, "")
         probe_match = match_posting(probe_posting, filters)
         if not probe_match.matched:
-            write_response._log_skipped(
+            _log_skipped(
                 skipped_log_path,
                 job=job,
                 job_key=dedupe_key,
@@ -175,7 +195,7 @@ async def _process_single_api_job(
             return "filtered", sent_count, daily_sent_count
 
     if not await _open_job_detail_page(job.detail_url):
-        write_response._log_skipped(
+        _log_skipped(
             skipped_log_path,
             job=job,
             job_key=dedupe_key,
@@ -194,13 +214,13 @@ async def _process_single_api_job(
     if not jd_text:
         log.info("详情页 JD 未取到，按标题筛选：%s", job.title)
 
-    job = write_response._job_with_derived_fields(
+    job = _job_with_derived_fields(
         job_api.to_job_posting(api_job, description=jd_text), jd_text
     )
-    filter_posting = write_response._to_filter_posting(job, jd_text)
+    filter_posting = _to_filter_posting(job, jd_text)
     match = match_posting(filter_posting, filters)
     if not match.matched:
-        write_response._log_skipped(
+        _log_skipped(
             skipped_log_path,
             job=job,
             job_key=dedupe_key,
@@ -224,7 +244,7 @@ async def _process_single_api_job(
         await finding_jobs.get_text_by_css("a.btn-startchat", timeout=3) or ""
     ).strip()
     if "继续沟通" in button_text or "继续聊天" in button_text:
-        write_response._log_skipped(
+        _log_skipped(
             skipped_log_path,
             job=job,
             job_key=dedupe_key,
@@ -239,7 +259,7 @@ async def _process_single_api_job(
         return "already_contacted", sent_count, daily_sent_count
 
     if scan_only or dry_run:
-        write_response._log_sent(
+        _log_sent(
             sent_log_path,
             job=job,
             job_key=dedupe_key,
@@ -272,7 +292,7 @@ async def _process_single_api_job(
     if status == "sent":
         sent_count += 1
         daily_sent_count += 1
-        write_response._log_sent(
+        _log_sent(
             sent_log_path,
             job=job,
             job_key=dedupe_key,
@@ -296,7 +316,7 @@ async def _process_single_api_job(
         )
     else:
         reason = "already_contacted" if status == "already_contacted" else "send_failed"
-        write_response._log_skipped(
+        _log_skipped(
             skipped_log_path,
             job=job,
             job_key=dedupe_key,
@@ -324,6 +344,8 @@ async def _run_search_api_flow(
     greeting: str,
 ) -> None:
     """API 直读搜索结果：按页枚举 → 逐个开详情页 → 本地筛选 → 发送。"""
+    # write_response 仅为 _emit_progress 借道保留：测试把事件收集器 patch 在门面属性上，
+    # 直连 gui.events.emit 会绕过 patch 导致收不到事件；待 emit 专项批与测试 patch 点一起迁移。
     from boss_zhipin.website_oper import finding_jobs, job_api, write_response
 
     if not scan_only:
@@ -331,19 +353,19 @@ async def _run_search_api_flow(
         if not validation.ok:
             raise RuntimeError("固定招呼语未通过发送校验: " + ", ".join(validation.reasons))
 
-    seen_jobs_path = write_response._state_path("BOSS_SEEN_JOBS_FILE")
-    sent_log_path = write_response._state_path("BOSS_SENT_LOG_FILE")
-    skipped_log_path = write_response._state_path("BOSS_SKIPPED_LOG_FILE")
-    filters = write_response._profile_filters()
-    stop_on_captcha = write_response._stop_on_captcha_enabled()
-    delay_min, delay_max = write_response._auto_send_delay_range()
-    max_sent = write_response._auto_send_max_sent()
-    daily_limit = write_response._auto_send_daily_limit()
+    seen_jobs_path = _state_path("BOSS_SEEN_JOBS_FILE")
+    sent_log_path = _state_path("BOSS_SENT_LOG_FILE")
+    skipped_log_path = _state_path("BOSS_SKIPPED_LOG_FILE")
+    filters = _profile_filters()
+    stop_on_captcha = _stop_on_captcha_enabled()
+    delay_min, delay_max = _auto_send_delay_range()
+    max_sent = _auto_send_max_sent()
+    daily_limit = _auto_send_daily_limit()
     sent_count = 0
-    daily_sent_count = write_response._sent_today_count(
-        sent_log_path, profile=write_response._profile_name()
+    daily_sent_count = _sent_today_count(
+        sent_log_path, profile=_profile_name()
     )
-    seen_job_keys: set[str] = write_response._read_seen_job_keys(seen_jobs_path)
+    seen_job_keys: set[str] = _read_seen_job_keys(seen_jobs_path)
     query = job_api.search_query_from_url(url)
     tab = finding_jobs.get_tab()
     if tab is None:
