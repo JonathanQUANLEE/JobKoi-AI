@@ -125,12 +125,12 @@ def _state_record(
     dry_run: bool = False,
     sent: bool = False,
 ) -> dict:
-    from boss_zhipin.website_oper import write_response
+    from boss_zhipin.website_oper.dispatch.env_config import _profile_name
 
     return {
         "ts": datetime.now(timezone.utc).isoformat(),
         "ts_local": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "profile": write_response._profile_name(),
+        "profile": _profile_name(),
         "job_key": job_key,
         "job": _job_payload(job),
         "match": details or {},
@@ -195,8 +195,6 @@ def _log_sent(
     dry_run: bool = False,
     sent: bool = False,
 ) -> None:
-    from boss_zhipin.website_oper import write_response
-
     record = _state_record(
         job=job,
         job_key=job_key,
@@ -206,7 +204,7 @@ def _log_sent(
         dry_run=dry_run,
         sent=sent,
     )
-    record["match_explanation"] = write_response._match_explanation(details)
+    record["match_explanation"] = _match_explanation(details)
     _append_jsonl(path, record)
 
 
