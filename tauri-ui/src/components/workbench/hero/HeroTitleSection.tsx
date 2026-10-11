@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { TextEffect } from "../../core/text-effect";
-import type { Lang } from "../../../lib/i18n";
+import { translate, type Lang } from "../../../lib/i18n";
 
 interface HeroTitleSectionProps {
   isSunkMode: boolean;
@@ -8,6 +8,7 @@ interface HeroTitleSectionProps {
 }
 
 export default function HeroTitleSection({ isSunkMode, lang }: HeroTitleSectionProps) {
+  const t = (key: string, vars?: Record<string, string | number>) => translate(lang, key, vars);
   const [heroAnimCycle, setHeroAnimCycle] = useState(0);
   const [heroAnimFading, setHeroAnimFading] = useState(false);
 
@@ -56,9 +57,7 @@ export default function HeroTitleSection({ isSunkMode, lang }: HeroTitleSectionP
             as="span"
             className="inline-block"
           >
-            {lang === "en"
-              ? "Tell AI your situation, craft your custom profile"
-              : "向 AI 顾问说出你的情况，定制专属求职画像"}
+            {t("hero.titleLine1")}
           </TextEffect>
         </h1>
 
@@ -73,9 +72,7 @@ export default function HeroTitleSection({ isSunkMode, lang }: HeroTitleSectionP
             as="p"
             className="m-0"
           >
-            {lang === "en"
-              ? "Tell me your graduation year, skills, target cities or expected salary."
-              : "告诉我你的毕业年份、专业技能、意向城市或期望薪资。"}
+            {t("hero.titleLine2")}
           </TextEffect>
           <TextEffect
             key={`hero-l3-${heroAnimCycle}`}
@@ -86,9 +83,7 @@ export default function HeroTitleSection({ isSunkMode, lang }: HeroTitleSectionP
             as="p"
             className="m-0"
           >
-            {lang === "en"
-              ? "AI advisor will chat with you to tailor precision job preferences and settings."
-              : "AI 顾问将与你深度交流，自动生成量身定制的求职偏好与就绪策略。"}
+            {t("hero.titleLine3")}
           </TextEffect>
         </div>
       </div>

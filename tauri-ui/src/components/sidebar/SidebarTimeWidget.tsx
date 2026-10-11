@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Clock } from "lucide-react";
-import type { Lang } from "../../lib/i18n";
+import { translate, type Lang } from "../../lib/i18n";
 
 interface SidebarTimeWidgetProps {
   lang: Lang;
@@ -8,6 +8,7 @@ interface SidebarTimeWidgetProps {
 }
 
 export default function SidebarTimeWidget({ lang, isMonochrome }: SidebarTimeWidgetProps) {
+  const t = (key: string, vars?: Record<string, string | number>) => translate(lang, key, vars);
   const [beijingTime, setBeijingTime] = useState(() => {
     return new Date().toLocaleTimeString("zh-CN", {
       timeZone: "Asia/Shanghai",
@@ -38,7 +39,7 @@ export default function SidebarTimeWidget({ lang, isMonochrome }: SidebarTimeWid
       <div className="flex items-center gap-1.5">
         <Clock className={`size-3 shrink-0 ${isMonochrome ? "text-zinc-300" : "text-amber-400"}`} />
         <span className="text-[10px] text-[var(--muted-fg)] font-sans">
-          {lang === "en" ? "Beijing Time" : "北京时间"}
+          {t("sidebar.beijingTime")}
         </span>
       </div>
       <span className={`font-bold tracking-wider font-mono text-xs ${isMonochrome ? "text-zinc-100" : "text-amber-300"}`}>

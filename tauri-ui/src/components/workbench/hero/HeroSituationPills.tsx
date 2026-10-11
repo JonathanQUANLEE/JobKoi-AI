@@ -1,6 +1,6 @@
 import { ArrowUpRight, RotateCw } from "lucide-react";
 import { JOBSEEKER_SITUATION_BATCHES } from "../../../lib/dashboardHelpers";
-import type { Lang } from "../../../lib/i18n";
+import { translate, type Lang } from "../../../lib/i18n";
 
 interface HeroSituationPillsProps {
   isSunkMode: boolean;
@@ -19,6 +19,7 @@ export default function HeroSituationPills({
   onNextBatch,
   lang,
 }: HeroSituationPillsProps) {
+  const t = (key: string, vars?: Record<string, string | number>) => translate(lang, key, vars);
   return (
     <div
       className={`flex items-center justify-center gap-2.5 text-xs sm:text-[13px] flex-nowrap overflow-x-auto [scrollbar-width:none] w-full px-2 transition-all duration-500 ${
@@ -43,10 +44,10 @@ export default function HeroSituationPills({
         type="button"
         onClick={onNextBatch}
         className="group shrink-0 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-[#1c1917]/60 hover:bg-[#25201d] hover:border-white/20 px-3 py-1.5 text-stone-400 hover:text-white transition-all shadow-sm cursor-pointer whitespace-nowrap"
-        title={lang === "en" ? "Shuffle Cases" : "换一批求职者情况案例"}
+        title={t("hero.shuffleTitle")}
       >
         <RotateCw className={`size-3.5 transition-transform duration-300 ${isRotatingRec ? "rotate-180" : ""}`} />
-        <span className="text-xs sm:text-[13px]">{lang === "en" ? "Shuffle Cases" : "换一批情况"}</span>
+        <span className="text-xs sm:text-[13px]">{t("hero.shuffle")}</span>
       </button>
     </div>
   );

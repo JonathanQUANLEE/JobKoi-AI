@@ -9,7 +9,7 @@ import type { AgentChatMessage } from "../../lib/ipc";
 import { useResumeUpload } from "../../hooks/useResumeUpload";
 import LatticeLoader from "../core/LatticeLoader";
 import type { RuleForm } from "../../lib/profileForm";
-import type { Lang } from "../../lib/i18n";
+import { translate, type Lang } from "../../lib/i18n";
 import { summarizeAgentProfile } from "../../lib/agentPreview";
 import {
   PLACEHOLDERS,
@@ -59,6 +59,7 @@ export default function HeroStage({
   ringActiveIndex,
   scrollToRingStage,
 }: HeroStageProps) {
+  const t = (key: string, vars?: Record<string, string | number>) => translate(lang, key, vars);
   const [heroInputText, setHeroInputText] = useState("");
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [recBatchIndex, setRecBatchIndex] = useState(0);
@@ -297,19 +298,15 @@ export default function HeroStage({
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploadingResume || heroChatting}
                   className="flex shrink-0 items-center gap-1.5 rounded-full bg-white/[0.08] hover:bg-white/[0.15] border border-white/20 hover:border-amber-400/60 px-3 py-1 text-xs text-stone-200 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95 whitespace-nowrap"
-                  title={
-                    lang === "en"
-                      ? "Import Resume (PDF/Word/Images) - auto sync to Vault"
-                      : "导入简历/证明材料 (PDF/Word/图片) · 自动同步至简历库并提炼画像"
-                  }
+                  title={t("hero.importResumeTitle")}
                 >
                   <Paperclip className="size-3.5 text-amber-400" />
-                  <span>{lang === "en" ? "Import Resume" : "导入简历同步"}</span>
+                  <span>{t("hero.importResume")}</span>
                 </button>
 
                 <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-[#ff5722]/20 to-[#ff2a55]/20 border border-[#ff5722]/40 px-3 py-1 text-xs font-semibold text-[#ff5722] shadow-sm">
                   <Bot className="size-3.5" />
-                  {lang === "en" ? "Tell AI" : "告诉顾问"}
+                  {t("hero.tellAI")}
                 </span>
 
                 {BACKGROUND_TAGS.map((tag) => (
@@ -327,14 +324,14 @@ export default function HeroStage({
               </div>
 
               <span className="hidden shrink-0 items-center gap-1 text-xs text-stone-500 xl:inline-flex">
-                <kbd className="font-sans px-1.5 py-0.5 rounded-md bg-stone-900 border border-stone-800 text-stone-400">Enter</kbd> {lang === "en" ? "Send" : "发送"}
+                <kbd className="font-sans px-1.5 py-0.5 rounded-md bg-stone-900 border border-stone-800 text-stone-400">Enter</kbd> {t("hero.send")}
               </span>
 
               <button
                 type="submit"
                 disabled={heroChatting || !heroInputText.trim()}
-                title={lang === "en" ? "Send to AI Advisor" : "发送给 AI 顾问"}
-                aria-label={lang === "en" ? "Send to AI Advisor" : "发送给 AI 顾问"}
+                title={t("hero.sendTitle")}
+                aria-label={t("hero.sendTitle")}
                 className="grid size-9.5 shrink-0 place-items-center rounded-full bg-white text-stone-950 transition-all hover:scale-105 active:scale-95 shadow-md disabled:opacity-40 disabled:cursor-not-allowed font-bold cursor-pointer"
               >
                 {heroChatting ? (

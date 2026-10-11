@@ -10,7 +10,7 @@ import {
 import LatticeLoader from "../../core/LatticeLoader";
 import type { AgentChatMessage } from "../../../lib/ipc";
 import type { RuleForm } from "../../../lib/profileForm";
-import type { Lang } from "../../../lib/i18n";
+import { translate, type Lang } from "../../../lib/i18n";
 import type { AgentPreviewSummary } from "../../../lib/agentPreview";
 
 interface HeroDialogueFeedProps {
@@ -50,6 +50,7 @@ export default function HeroDialogueFeed({
   lang,
   scrollToRingStage,
 }: HeroDialogueFeedProps) {
+  const t = (key: string, vars?: Record<string, string | number>) => translate(lang, key, vars);
   return (
     <>
       {/* 顶部控制栏 */}
@@ -131,9 +132,9 @@ export default function HeroDialogueFeed({
               <div className="inline-flex items-center gap-3.5 px-4 py-2.5 rounded-2xl bg-white/[0.05] border border-white/10 shadow-lg backdrop-blur-md">
                 <LatticeLoader
                   status="working"
-                  label={lang === "en" ? "Thinking" : "工作中"}
-                  doneLabel={lang === "en" ? "Thought in" : "已完成"}
-                  errorLabel={lang === "en" ? "Failed after" : "失败于"}
+                  label={t("hero.thinking")}
+                  doneLabel={t("hero.doneIn")}
+                  errorLabel={t("hero.failedAfter")}
                   pattern="orbit"
                   grid={3}
                   shape="round"
@@ -151,7 +152,7 @@ export default function HeroDialogueFeed({
                   startTime={chatStartTime || undefined}
                 />
                 <span className="text-xs text-stone-400 font-medium">
-                  {chatPhaseText || (lang === "en" ? "Deep analyzing background & requirements..." : "正在深度思考并提炼专属求职画像...")}
+                  {chatPhaseText || t("hero.deepAnalyzing")}
                 </span>
               </div>
             </div>
@@ -164,8 +165,8 @@ export default function HeroDialogueFeed({
             <div className="flex items-center justify-between mb-3.5">
               <LatticeLoader
                 status="done"
-                label={lang === "en" ? "Thinking" : "工作中"}
-                doneLabel={lang === "en" ? "Job Profile Ready in" : "专属求职画像已就绪"}
+                label={t("hero.thinking")}
+                doneLabel={t("hero.profileReady")}
                 pattern="orbit"
                 grid={3}
                 shape="round"
@@ -179,14 +180,14 @@ export default function HeroDialogueFeed({
                 showTimer={false}
               />
               <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-950/70 border border-emerald-500/30 text-emerald-300 font-medium">
-                ● {lang === "en" ? "Ready" : "策略就绪"}
+                ● {t("hero.readyBadge")}
               </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs sm:text-[13px] mb-3.5">
               <div className="bg-stone-900/70 p-3 rounded-xl border border-stone-800/80">
                 <span className="text-stone-500 text-[11px] block font-medium">
-                  {lang === "en" ? "Target Role:" : "目标岗位:"}
+                  {t("hero.targetRole")}
                 </span>
                 <span className="font-semibold text-stone-100 text-sm mt-0.5 block truncate">
                   {heroProfilePreview?.query || currentLabel}
@@ -194,15 +195,15 @@ export default function HeroDialogueFeed({
               </div>
               <div className="bg-stone-900/70 p-3 rounded-xl border border-stone-800/80">
                 <span className="text-stone-500 text-[11px] block font-medium">
-                  {lang === "en" ? "Target Cities:" : "意向城市:"}
+                  {t("hero.targetCities")}
                 </span>
                 <span className="font-semibold text-stone-100 text-sm mt-0.5 block truncate">
-                  {heroProfilePreview?.cities || currentCityValues || (lang === "en" ? "Nationwide / Any" : "全国/不限")}
+                  {heroProfilePreview?.cities || currentCityValues || t("hero.anyCity")}
                 </span>
               </div>
               <div className="bg-stone-900/70 p-3 rounded-xl border border-stone-800/80">
                 <span className="text-stone-500 text-[11px] block font-medium">
-                  {lang === "en" ? "Preferred Skills:" : "希望包含技能:"}
+                  {t("hero.preferredSkills")}
                 </span>
                 <span className="text-emerald-400 font-medium truncate block text-sm mt-0.5">
                   {heroProfilePreview?.anyKeywords || currentRule.anyKeywords || "-"}
@@ -210,7 +211,7 @@ export default function HeroDialogueFeed({
               </div>
               <div className="bg-stone-900/70 p-3 rounded-xl border border-stone-800/80">
                 <span className="text-stone-500 text-[11px] block font-medium">
-                  {lang === "en" ? "Excluded Directions:" : "排除方向:"}
+                  {t("hero.excludedDirections")}
                 </span>
                 <span className="text-red-400 font-medium truncate block text-sm mt-0.5">
                   {heroProfilePreview?.excludeKeywords || currentRule.excludeKeywords || "-"}
@@ -222,7 +223,7 @@ export default function HeroDialogueFeed({
               <div className="flex items-center gap-1.5 text-xs text-stone-300">
                 <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
                 <span className="text-xs text-stone-400">
-                  {lang === "en" ? "Verify AI extraction and proceed" : "已自动提炼定制画像，可一键前往查看"}
+                  {t("hero.verifyHint")}
                 </span>
               </div>
               <button
@@ -234,7 +235,7 @@ export default function HeroDialogueFeed({
                 className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold text-xs shadow-md shadow-amber-500/20 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
               >
                 <UserCheck className="size-3.5" />
-                <span>{lang === "en" ? "Confirm & View Job Profile →" : "确认信息正确，前往求职画像 →"}</span>
+                <span>{t("hero.confirmProfile")}</span>
               </button>
             </div>
           </div>
