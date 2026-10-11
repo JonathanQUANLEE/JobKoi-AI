@@ -1,6 +1,15 @@
 import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ShieldCheckIcon } from "@hugeicons/core-free-icons";
+import { useT } from "../../../store";
+
+/** 拟人化节流三档预设（2026-10-12 用户拍板；区间 [15,45]s 依据风控调研，
+ *  与后端 platforms/limits.py 的 BOSS_DELAY_RANGE_SECONDS 单一来源一致）。 */
+const DELAY_PRESETS: { key: string; descKey: string; min: string; max: string }[] = [
+  { key: "policy.preset.fast", descKey: "policy.preset.fastDesc", min: "15", max: "30" },
+  { key: "policy.preset.standard", descKey: "policy.preset.standardDesc", min: "20", max: "40" },
+  { key: "policy.preset.safe", descKey: "policy.preset.safeDesc", min: "30", max: "45" },
+];
 
 interface PolicySettingsViewProps {
   localDailyLimit: string;
@@ -23,6 +32,7 @@ export default function PolicySettingsView({
   onSave,
   onClose,
 }: PolicySettingsViewProps) {
+  const t = useT();
   // 从本地读取或初始化 3 大平台各自的投递限额（默认拉满官方最大上限）
   const [bossLimit, setBossLimit] = useState<number>(() => {
     try {
@@ -184,39 +194,55 @@ export default function PolicySettingsView({
         </div>
       </div>
 
-      {/* 拟人化等待时间区间 - 锁死状态，由系统防封算法接管 */}
+      {/* 拟人化等待时间区间 - 三档可选（2026-10-12 用户拍板）。
+          替换旧版"🔒 系统算法托管 · 已锁定 3~6s"假 UI：那个区块显示的
+          3-6s 与真实生效值毫无关系（真实值来自画像 delay_min/max），
+          既误导用户又堵死了调节入口。 */}
       <div className="mist-setting-row bg-white/[0.02] border border-white/5 p-3.5 rounded-xl">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-semibold text-stone-200 flex items-center gap-2">
-            <span>拟人化等待时间区间 (秒)</span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30">
-              🔒 系统算法托管 · 已锁定
-            </span>
+          <label className="text-xs font-semibold text-stone-200">
+            拟人化等待时间区间 (秒)
           </label>
           <span className="text-[11px] text-stone-400 font-mono">
-            3 ~ 6 秒 (泊松随机分布)
+            {localDelayMin} ~ {localDelayMax} 秒
           </span>
         </div>
         <p className="text-[11px] text-stone-400 leading-relaxed mt-1">
-          为杜绝招聘平台反爬虫检测封号，当前阶段由系统核心算法锁死在仿生黄金安全区间 (3~6s)，暂不开放自定义调节以保障账号 100% 安全。
+          {t("policy.delayCurrent", { min: localDelayMin, max: localDelayMax })}
         </p>
-        <div className="flex items-center gap-2 mt-2 opacity-70">
-          <input
-            type="number"
-            disabled
-            readOnly
-            value="3"
-            className="mist-input text-xs font-mono text-center cursor-not-allowed bg-white/5 text-stone-400 w-24"
-          />
-          <span className="text-stone-500 text-xs">至</span>
-          <input
-            type="number"
-            disabled
-            readOnly
-            value="6"
-            className="mist-input text-xs font-mono text-center cursor-not-allowed bg-white/5 text-stone-400 w-24"
-          />
-          <span className="text-stone-400 text-xs">秒（黄金安全基线）</span>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2.5">
+          {DELAY_PRESETS.map((preset) => {
+            const active = localDelayMin === preset.min && localDelayMax === preset.max;
+            return (
+              <button
+                key={preset.key}
+                type="button"
+                onClick={() => {
+                  setLocalDelayMin(preset.min);
+                  setLocalDelayMax(preset.max);
+                }}
+                className={`p-3 rounded-xl text-left transition-all cursor-pointer border ${
+                  active
+                    ? "border-blue-500/60 bg-blue-500/10"
+                    : "bg-white/[0.03] border-white/10 hover:border-blue-500/40"
+                }`}
+              >
+                <div
+                  className={`flex items-baseline justify-between ${
+                    active ? "text-blue-300" : "text-stone-200"
+                  }`}
+                >
+                  <span className="text-xs font-bold">{t(preset.key)}</span>
+                  <span className="text-xs font-semibold font-mono tabular-nums">
+                    {preset.min}–{preset.max}s
+                  </span>
+                </div>
+                <p className="mt-1 text-[10px] leading-snug text-stone-400">
+                  {t(preset.descKey)}
+                </p>
+              </button>
+            );
+          })}
         </div>
       </div>
 
