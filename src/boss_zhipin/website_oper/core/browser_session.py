@@ -77,7 +77,9 @@ async def open_browser_with_options(url_target: str, browser: str) -> None:
     config.headless = False
     finding_jobs._browser = await _start_browser_with_retry(config)
 
-    finding_jobs._tab = await finding_jobs._browser.get(url_target, new_window=True)
+    # 直接在 Chrome 启动自带的初始窗口里导航（不开新窗口）——
+    # 旧写法 new_window=True 会留下 Chrome 原生空白窗口，用户看到两个窗口。
+    finding_jobs._tab = await finding_jobs._browser.get(url_target)
     try:
         await finding_jobs._tab.activate()
         await finding_jobs._tab.bring_to_front()

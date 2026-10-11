@@ -55,7 +55,8 @@ class LiepinPlatform(BasePlatform):
         cfg.user_data_dir = str(self._get_profile_dir())
         cfg.headless = False
         browser = await uc.start(config=cfg)
-        tab = await browser.get("https://www.liepin.com/login", new_window=True)
+        # 在初始窗口导航，避免留下 Chrome 原生空白窗口（单窗口体验）
+        tab = await browser.get("https://www.liepin.com/login")
         try:
             await tab.activate()
             await tab.bring_to_front()

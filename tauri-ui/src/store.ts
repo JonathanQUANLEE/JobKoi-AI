@@ -80,6 +80,17 @@ type RunState = {
   showCenterToast: (text: string, opts?: { tone?: "success" | "error"; duration?: number }) => void;
   clearCenterToast: () => void;
 
+  // FaceID 式登录引导浮层：点「换号」后全屏模糊 + 中央圆圈扫描动画，
+  // 扫码成功 → 圆圈变绿色对勾 + "叮"一声（苹果解锁质感）
+  loginOverlay: {
+    platform: string;
+    status: "waiting" | "success" | "error";
+    message?: string;
+  } | null;
+  showLoginOverlay: (platform: string) => void;
+  updateLoginOverlay: (patch: { status?: "waiting" | "success" | "error"; message?: string }) => void;
+  hideLoginOverlay: () => void;
+
   // 全局联动消息通知（统一定位在左侧边栏，支持 8s 自动消失、最多5条折叠堆叠与双击平铺）
   notifications: NotificationItem[];
   notification: NotificationItem | null;
@@ -170,6 +181,13 @@ export const useRunStore = create<RunState>((set) => ({
       },
     }),
   clearCenterToast: () => set({ centerToast: null }),
+  loginOverlay: null,
+  showLoginOverlay: (platform) => set({ loginOverlay: { platform, status: "waiting" } }),
+  updateLoginOverlay: (patch) =>
+    set((s) =>
+      s.loginOverlay ? { loginOverlay: { ...s.loginOverlay, ...patch } } : {},
+    ),
+  hideLoginOverlay: () => set({ loginOverlay: null }),
 
   lang: detectLang(),
 

@@ -4,6 +4,7 @@ import SettingsModal, { type SettingsTab } from "../SettingsModal";
 import MistSettingsModal, { type MistModalType } from "../settings/MistSettingsModal";
 import GlobalUsagiPet from "../pet/GlobalUsagiPet";
 import CenterToast from "../core/CenterToast";
+import LoginOverlay from "../core/LoginOverlay";
 import type { Lang } from "../../lib/i18n";
 import type { NavItem } from "../Sidebar";
 import type { useProfileFormState } from "../../hooks/useProfileFormState";
@@ -52,6 +53,9 @@ export default function DashboardModalLayer({
     <>
       {/* 软件中心浮现提示（登录成功等关键反馈） */}
       <CenterToast />
+
+      {/* FaceID 式登录引导浮层（换号扫码全流程） */}
+      <LoginOverlay />
 
       {/* 侧边滑出高级设置抽屉 */}
       <SettingsDrawer
