@@ -45,6 +45,7 @@ from boss_zhipin.website_oper.core.browser_session import (
     prepare_manual_boss_page,
     reload_current_page,
     shutdown,
+    sleep_with_browser_guard,
     url,
 )
 from boss_zhipin.website_oper.core.chat_action import (
@@ -195,6 +196,7 @@ __all__ = [
     "send_chat_message",
     "send_resume_after_greeting_enabled",
     "shutdown",
+    "sleep_with_browser_guard",
     "url",
     "wait_for_css",
 ]

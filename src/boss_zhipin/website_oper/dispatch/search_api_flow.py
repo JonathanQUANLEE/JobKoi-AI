@@ -330,7 +330,10 @@ async def _process_single_api_job(
         if status == "already_contacted":
             log.info("⏭️ [api-flow] 该岗位此前已沟通过，跳过：%s", job.title)
 
-    await asyncio.sleep(random.uniform(delay_min, delay_max))
+    # 带站岗的节流睡眠：用户中途手关浏览器时 ~2s 内中止，不傻等满 10-30s
+    from boss_zhipin.website_oper.core.browser_session import sleep_with_browser_guard
+
+    await sleep_with_browser_guard(random.uniform(delay_min, delay_max))
     return status, sent_count, daily_sent_count
 
 

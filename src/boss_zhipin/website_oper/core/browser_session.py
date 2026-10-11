@@ -109,6 +109,30 @@ def is_browser_alive() -> bool:
         return False
 
 
+async def sleep_with_browser_guard(seconds: float, chunk: float = 2.0) -> None:
+    """拟人化节流睡眠的"带站岗"版：浏览器中途死掉立即抛错，不傻等满时长。
+
+    背景（2026-10-12 用户实测）：巡航在 10-30s 节流睡眠中被用户手关浏览器，
+    主循环要等本轮睡眠睡满、下一轮开头才验活发现——用户盯着"运行中"干等
+    最长 30s 才复位。改为每 2s 验一次活，一死立刻抛 RuntimeError，由
+    runner._wrap 统一转 error 事件 + loop_ended，前端秒级复位。
+
+    站岗条件：入睡时持有受控 tab 才验活（tests 里 open_browser 被 mock、
+    不设 _tab → 退化为纯睡眠，与旧行为完全一致）。
+    """
+    from boss_zhipin.website_oper import finding_jobs
+
+    guard = finding_jobs.get_tab() is not None
+    remaining = max(0.0, seconds)
+    while remaining > 0:
+        await asyncio.sleep(min(chunk, remaining))
+        remaining -= chunk
+        if guard and remaining > 0 and not finding_jobs.is_browser_alive():
+            raise RuntimeError(
+                "浏览器已关闭，本轮巡航中止。可修改画像后重新点「开启巡航」。"
+            )
+
+
 async def open_browser_with_options(url_target: str, browser: str) -> None:
     """启动 Chrome 并打开 url。``browser`` 仅接受 ``"chrome"``。"""
     from boss_zhipin.website_oper import finding_jobs

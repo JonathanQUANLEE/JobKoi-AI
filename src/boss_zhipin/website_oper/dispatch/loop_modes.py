@@ -186,7 +186,10 @@ async def handle_auto_send_job(
 
     delay = random.uniform(delay_min, delay_max)
     log.info("自动发送节流等待 %.1f 秒后继续", delay)
-    await asyncio.sleep(delay)
+    # 带站岗的节流睡眠：用户中途手关浏览器时 ~2s 内中止，不傻等满 10-30s
+    from boss_zhipin.website_oper.core.browser_session import sleep_with_browser_guard
+
+    await sleep_with_browser_guard(delay)
     return False, sent_count, daily_sent_count
 
 
