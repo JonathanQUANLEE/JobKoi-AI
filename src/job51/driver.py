@@ -11,12 +11,13 @@ import json
 import logging
 import os
 import re
-import subprocess
 from pathlib import Path
 from urllib.parse import quote
 
 import nodriver as uc
 from nodriver import Config
+
+from boss_zhipin.platforms.session_cleanup import reap_profile_chrome
 
 log = logging.getLogger(__name__)
 
@@ -72,31 +73,8 @@ CLICK_BY_ID_JS = r"""
 """
 
 
-def _kill_profile_chrome(profile_dir: str) -> None:
-    subprocess.run(
-        [
-            "powershell", "-NoProfile", "-Command",
-            f"Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | "
-            f"Where-Object {{ $_.CommandLine -like '*{profile_dir}*' }} | "
-            f"ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }}",
-        ],
-        capture_output=True,
-    )
-
-
-def _clear_singleton_locks(profile_dir: str) -> None:
-    for name in ("SingletonLock", "SingletonCookie", "SingletonSocket"):
-        try:
-            os.remove(os.path.join(profile_dir, name))
-        except FileNotFoundError:
-            pass
-        except Exception:  # noqa: BLE001
-            pass
-
-
 def cleanup_profile() -> None:
-    _kill_profile_chrome(PROFILE_DIR)
-    _clear_singleton_locks(PROFILE_DIR)
+    reap_profile_chrome(PROFILE_DIR)
 
 
 async def open_browser(url: str) -> uc.Tab:
