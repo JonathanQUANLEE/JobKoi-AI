@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Globe, RefreshCw, X, FileText, CheckSquare, AlertTriangle } from "lucide-react";
 import { ipc, type PlatformItem } from "../lib/ipc";
 import { translate, type Lang } from "../lib/i18n";
 import { withTimeout } from "../lib/withTimeout";
+import { useLoginPolling } from "../hooks/useLoginPolling";
 import { useRunStore } from "../store";
 import { MagicCard } from "./core/MagicBento";
 import PlatformCard from "./platform/PlatformCard";
@@ -104,59 +105,9 @@ export default function PlatformHub({
     loadPlatforms();
   }, [loadPlatforms]);
 
-  // 登录确认轮询器：open_platform_login 现在秒回（不等扫码），
-  // 这里每 4s 轻量探测一次登录态；成功即自动关浏览器 + 中央大字 + 刷新卡片。
-  const loginPollRef = useRef<number | null>(null);
-  const stopLoginPoll = useCallback(() => {
-    if (loginPollRef.current != null) {
-      window.clearInterval(loginPollRef.current);
-      loginPollRef.current = null;
-    }
-  }, []);
-  useEffect(() => stopLoginPoll, [stopLoginPoll]);
-
-  const startLoginPoll = useCallback(
-    (platformId: string) => {
-      stopLoginPoll();
-      let attempts = 0;
-      loginPollRef.current = window.setInterval(async () => {
-        attempts += 1;
-        if (attempts > 120) {
-          stopLoginPoll(); // 4s × 120 = 8 分钟上限
-          return;
-        }
-        try {
-          const st = await withTimeout(
-            ipc.checkLoginStatus(platformId),
-            10_000,
-            "登录状态探测",
-          );
-          if (st && st.logged_in) {
-            stopLoginPoll();
-            // 登录成功：cookie 已写入持久化 profile，自动关掉登录浏览器
-            try {
-              await ipc.shutdownBrowser();
-            } catch {
-              /* 关闭失败不阻塞提示 */
-            }
-            // FaceID 式反馈：圆圈 → 绿色对勾 + 叮一声 → 1.5s 后自动淡出
-            useRunStore.getState().updateLoginOverlay({ status: "success" });
-            window.setTimeout(() => {
-              useRunStore.getState().hideLoginOverlay();
-              useRunStore.getState().showCenterToast("检测到您已登录 · 认证成功", {
-                tone: "success",
-                duration: 2200,
-              });
-            }, 1500);
-            await loadPlatforms();
-          }
-        } catch {
-          /* 单次探测失败/超时：继续下一轮，不打扰用户 */
-        }
-      }, 4000);
-    },
-    [stopLoginPoll, loadPlatforms],
-  );
+  // 登录确认轮询引擎（每 4s 探测登录态，成功自动关浏览器 + FaceID 反馈 + 刷新卡片）
+  // 已下沉到 hooks/useLoginPolling
+  const { startLoginPoll } = useLoginPolling(loadPlatforms);
 
   async function handleLogin(e: React.MouseEvent, platformId: string) {
     e.stopPropagation();
