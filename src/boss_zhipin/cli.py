@@ -53,7 +53,7 @@ def parse_args(argv: list[str] | None = None) -> Namespace:
     parser = ArgumentParser(prog="boss-zhipin")
     parser.add_argument(
         "--profile",
-        help="从 profiles 目录加载 YAML 配置，例如 backend-intern",
+        help="从 profiles 目录加载 YAML 配置，例如 gui-default",
     )
     return parser.parse_args(argv)
 
