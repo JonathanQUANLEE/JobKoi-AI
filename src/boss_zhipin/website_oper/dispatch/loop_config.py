@@ -6,6 +6,31 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from boss_zhipin.website_oper.dispatch.env_config import (
+    _auto_send_daily_limit,
+    _auto_send_delay_range,
+    _auto_send_fixed_greeting_enabled,
+    _auto_send_max_sent,
+    _boss_active_filter_enabled,
+    _fixed_greeting,
+    _gui_review_enabled,
+    _merge_boss_active_filter,
+    _page_filters,
+    _profile_filters,
+    _review_before_send_enabled,
+    _scan_max_jobs,
+    _scan_only_enabled,
+    _send_mode_name,
+    _stop_on_captcha_enabled,
+)
+from boss_zhipin.website_oper.dispatch.history_logger import _state_path
+from boss_zhipin.website_oper.dispatch.rule_matcher import (
+    _review_locations,
+    _review_required_terms,
+    _scan_groups,
+    _scan_required_terms,
+)
+
 log = logging.getLogger(__name__)
 
 
@@ -38,50 +63,46 @@ class LoopConfig:
 
     @classmethod
     def load(cls) -> LoopConfig:
-        """从 write_response 解析当前环境与 profile 下的运行时配置。"""
-        from boss_zhipin.website_oper import write_response
-
-        scan_only = write_response._scan_only_enabled()
-        page_filters = write_response._page_filters()
-        profile_filters = write_response._merge_boss_active_filter(
-            write_response._profile_filters(), page_filters
-        )
-        boss_active_filter_enabled = write_response._boss_active_filter_enabled(page_filters)
-        scan_groups = write_response._scan_groups() if scan_only else []
-        scan_max_jobs = write_response._scan_max_jobs() if scan_only else None
-        scan_required_terms = write_response._scan_required_terms() if scan_only else []
-        auto_send_fixed_greeting = write_response._auto_send_fixed_greeting_enabled()
+        """从环境变量与 profile 解析当前运行时配置。"""
+        scan_only = _scan_only_enabled()
+        page_filters = _page_filters()
+        profile_filters = _merge_boss_active_filter(_profile_filters(), page_filters)
+        boss_active_filter_enabled = _boss_active_filter_enabled(page_filters)
+        scan_groups = _scan_groups() if scan_only else []
+        scan_max_jobs = _scan_max_jobs() if scan_only else None
+        scan_required_terms = _scan_required_terms() if scan_only else []
+        auto_send_fixed_greeting = _auto_send_fixed_greeting_enabled()
         auto_send_max_sent = (
-            write_response._auto_send_max_sent() if auto_send_fixed_greeting else None
+            _auto_send_max_sent() if auto_send_fixed_greeting else None
         )
         auto_send_daily_limit = (
-            write_response._auto_send_daily_limit() if auto_send_fixed_greeting else None
+            _auto_send_daily_limit() if auto_send_fixed_greeting else None
         )
         auto_send_delay_min, auto_send_delay_max = (
-            write_response._auto_send_delay_range() if auto_send_fixed_greeting else (0.0, 0.0)
+            _auto_send_delay_range() if auto_send_fixed_greeting else (0.0, 0.0)
         )
-        review_before_send = write_response._review_before_send_enabled()
-        gui_review = write_response._gui_review_enabled()
-        send_mode = write_response._send_mode_name(
+        review_before_send = _review_before_send_enabled()
+        gui_review = _gui_review_enabled()
+        send_mode = _send_mode_name(
             scan_only=scan_only,
             review_before_send=review_before_send,
             auto_send_fixed_greeting=auto_send_fixed_greeting,
         )
         if send_mode == "unset":
             raise RuntimeError("必须选择运行模式：scan、review 或 auto")
-        seen_jobs_path = write_response._state_path("BOSS_SEEN_JOBS_FILE")
-        sent_log_path = write_response._state_path("BOSS_SENT_LOG_FILE")
-        skipped_log_path = write_response._state_path("BOSS_SKIPPED_LOG_FILE")
-        stop_on_captcha = write_response._stop_on_captcha_enabled()
+        seen_jobs_path = _state_path("BOSS_SEEN_JOBS_FILE")
+        sent_log_path = _state_path("BOSS_SENT_LOG_FILE")
+        skipped_log_path = _state_path("BOSS_SKIPPED_LOG_FILE")
+        stop_on_captcha = _stop_on_captcha_enabled()
         fixed_greeting = (
-            write_response._fixed_greeting()
+            _fixed_greeting()
             if (review_before_send or auto_send_fixed_greeting)
             else ""
         )
         review_required_terms = (
-            write_response._review_required_terms() if review_before_send else []
+            _review_required_terms() if review_before_send else []
         )
-        review_locations = write_response._review_locations() if review_before_send else []
+        review_locations = _review_locations() if review_before_send else []
         if (review_before_send or auto_send_fixed_greeting) and not fixed_greeting:
             raise RuntimeError("固定招呼语模式必须设置 BOSS_FIXED_GREETING")
 
@@ -120,6 +141,8 @@ def is_limit_reached(
     daily_sent_count: int,
 ) -> bool:
     """检查是否触发单次发送上限、今日发送上限或扫描最大数限制。"""
+    # _emit_progress 保留借道 write_response：测试把事件收集器 patch 在门面属性上，
+    # 直连 gui.events.emit 会绕过 patch 导致收不到事件；待 emit 专项批与测试 patch 点一起迁移。
     from boss_zhipin.website_oper import write_response
 
     if cfg.auto_send_max_sent is not None and sent_count >= cfg.auto_send_max_sent:
