@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import random
 import re
@@ -22,6 +21,13 @@ if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
 from job51 import driver  # noqa: E402
+from boss_zhipin.platforms.ledger import (  # noqa: E402
+    append_jsonl,
+    normalize_company,
+    sent_companies,
+    sent_job_ids,
+    today_sent,
+)
 
 LOGS = ROOT / "logs"
 SENT_LOG = LOGS / "job51_sent.jsonl"
@@ -76,47 +82,6 @@ def _is_computer_title(title: str) -> bool:
     return any(_kw_hit(low, p) for p in COMPUTER_TITLE_PATTERNS)
 
 
-def _normalize_company(name: str) -> str:
-    s = re.sub(r"[\s\u3000]+", "", str(name or "")).lower()
-    s = re.sub(r"[\(（\[][^)）\]]*[\)）\]]", "", s)
-    for suffix in ("股份有限公司", "有限责任公司", "有限公司", "集团公司", "公司", "集团"):
-        if s.endswith(suffix) and len(s) > len(suffix):
-            s = s[: -len(suffix)]
-            break
-    return s
-
-
-def _load_jsonl(path: Path) -> list[dict]:
-    if not path.exists():
-        return []
-    out = []
-    with path.open(encoding="utf-8", errors="replace") as f:
-        for line in f:
-            try:
-                out.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-    return out
-
-
-def _append_jsonl(path: Path, rec: dict) -> None:
-    with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-
-
-def _sent_job_ids() -> set[str]:
-    return {r.get("job_id") for r in _load_jsonl(SENT_LOG) if r.get("job_id")}
-
-
-def _sent_companies() -> set[str]:
-    return {_normalize_company(r.get("company")) for r in _load_jsonl(SENT_LOG) if r.get("company")}
-
-
-def _today_sent() -> int:
-    today = datetime.now().strftime("%Y-%m-%d")
-    return sum(1 for r in _load_jsonl(SENT_LOG) if str(r.get("ts") or "").startswith(today))
-
-
 def _log(msg: str) -> None:
     print(msg, flush=True)
 
@@ -136,8 +101,8 @@ async def _dismiss_confirm_dialog(tab) -> bool:
 
 
 async def run(keywords: list[str], daily_limit: int, tab=None) -> int:
-    sent_ids = _sent_job_ids()
-    sent_companies = _sent_companies()
+    sent_ids = sent_job_ids(SENT_LOG)
+    sent_companies = sent_companies(SENT_LOG)
     _log(f"[job51] 已投 {len(sent_ids)} 个岗位 / {len(sent_companies)} 家公司（将跳过）")
 
     if tab is None:
@@ -146,7 +111,7 @@ async def run(keywords: list[str], daily_limit: int, tab=None) -> int:
             _log("[job51] 未登录，请先跑 scripts/job51_login.py 扫码")
             return -1
 
-    sent_today = _today_sent()
+    sent_today = today_sent(SENT_LOG)
     sent_this_run = 0
 
     for kw in keywords:
@@ -175,14 +140,14 @@ async def run(keywords: list[str], daily_limit: int, tab=None) -> int:
                     continue
                 # 校招岗（jobLabel="校招"）会跳转应届生求职网，跳过
                 if job_label == "校招":
-                    _append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "campus_skip"})
+                    append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "campus_skip"})
                     continue
                 # 放宽：不再限定"实习"，只要计算机相关岗位即投
                 if not _is_computer_title(title):
-                    _append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "not_computer"})
+                    append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "not_computer"})
                     continue
-                if company and _normalize_company(company) in sent_companies:
-                    _append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "company_dedup"})
+                if company and normalize_company(company) in sent_companies:
+                    append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "company_dedup"})
                     continue
 
                 result = await driver.apply_by_jobid(tab, job_id)
@@ -202,10 +167,10 @@ async def run(keywords: list[str], daily_limit: int, tab=None) -> int:
 
                 sent_ids.add(job_id)
                 if company:
-                    sent_companies.add(_normalize_company(company))
+                    sent_companies.add(normalize_company(company))
                 sent_today += 1
                 sent_this_run += 1
-                _append_jsonl(SENT_LOG, {
+                append_jsonl(SENT_LOG, {
                     "ts": datetime.now().isoformat(),
                     "job_id": job_id, "title": title, "company": company,
                     "sent": True, "keyword": kw,
