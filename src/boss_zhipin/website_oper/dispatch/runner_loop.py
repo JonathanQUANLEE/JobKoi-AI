@@ -9,6 +9,7 @@ Facade 与调度中枢：
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from boss_zhipin.platforms.platform_limits import PlatformLimitReached
@@ -224,7 +225,7 @@ async def send_job_descriptions_to_chat(
                             log.info("当前页全是已投过的岗位，已翻到下一页继续")
                             window_index = 1
                             consecutive_duplicates = 0
-                            await write_response.asyncio.sleep(2)
+                            await asyncio.sleep(2)
                             continue
                         if barren_reloads < MAX_FEED_RELOADS:
                             log.info(
@@ -252,7 +253,7 @@ async def send_job_descriptions_to_chat(
                         write_response._emit_progress("feed_exhausted", total=job_index - 1)
                         break
 
-                    await write_response.asyncio.sleep(3)
+                    await asyncio.sleep(3)
                     continue
 
                 if dedupe_key:
@@ -304,7 +305,7 @@ async def send_job_descriptions_to_chat(
                         title=job_title,
                     )
                     advance_position()
-                    await write_response.asyncio.sleep(3)
+                    await asyncio.sleep(3)
                     continue
 
                 if element == "立即沟通":
@@ -347,7 +348,7 @@ async def send_job_descriptions_to_chat(
                             title=job_title,
                         )
                         advance_position()
-                        await write_response.asyncio.sleep(3)
+                        await asyncio.sleep(3)
                         continue
 
                     if cfg.scan_only:
@@ -361,7 +362,7 @@ async def send_job_descriptions_to_chat(
                             details=details,
                         )
                         advance_position()
-                        await write_response.asyncio.sleep(3)
+                        await asyncio.sleep(3)
                         continue
 
                     if cfg.auto_send_fixed_greeting:
@@ -385,7 +386,7 @@ async def send_job_descriptions_to_chat(
                         if should_stop:
                             break
                         advance_position()
-                        await write_response.asyncio.sleep(3)
+                        await asyncio.sleep(3)
                         continue
 
                     if cfg.review_before_send:
@@ -404,7 +405,7 @@ async def send_job_descriptions_to_chat(
                         )
                         if status == "quit":
                             break
-                        await write_response.asyncio.sleep(3)
+                        await asyncio.sleep(3)
                         advance_position()
                         continue
             else:
@@ -424,7 +425,7 @@ async def send_job_descriptions_to_chat(
                 if action == "exhausted":
                     break
 
-            await write_response.asyncio.sleep(3)
+            await asyncio.sleep(3)
             advance_position()
 
         except PlatformLimitReached as e:
