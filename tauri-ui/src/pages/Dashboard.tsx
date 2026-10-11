@@ -68,7 +68,6 @@ export default function Dashboard() {
     setMessage,
     usrName: profileForm.usrName,
     label: profileForm.label,
-    dryRun: profileForm.dryRun,
     profileName: profileForm.profileName,
     greeting: profileForm.greeting,
     greetingPath: profileForm.greetingPath,
@@ -173,7 +172,6 @@ export default function Dashboard() {
           expandRipple={expandRipple}
           onExpandSidebar={handleExpandSidebar}
           activeNav={activeNav}
-          dryRun={profileForm.dryRun}
           running={botRuntime.running}
           statusText={botRuntime.statusText}
           lang={lang}
@@ -270,7 +268,6 @@ export default function Dashboard() {
               rule={profileForm.rule}
               defaultResumeName={defaultResumeName}
               mode={profileForm.mode}
-              dryRun={profileForm.dryRun}
               delayMin={profileForm.delayMin}
               delayMax={profileForm.delayMax}
               dailyLimit={profileForm.dailyLimit}
@@ -300,8 +297,6 @@ export default function Dashboard() {
               setRule={profileForm.setRule}
               dailyLimit={profileForm.dailyLimit}
               setDailyLimit={profileForm.setDailyLimit}
-              dryRun={profileForm.dryRun}
-              setDryRun={profileForm.setDryRun}
               defaultResumeName={defaultResumeName}
               onGoToResumes={() => setActiveNav("resumes")}
               onBackToWorkbench={() => {

@@ -61,8 +61,6 @@ export interface UseProfileFormStateReturn {
   setMaxSent: Dispatch<SetStateAction<string>>;
   dailyLimit: string;
   setDailyLimit: Dispatch<SetStateAction<string>>;
-  dryRun: boolean;
-  setDryRun: Dispatch<SetStateAction<boolean>>;
   stopOnCaptcha: boolean;
   setStopOnCaptcha: Dispatch<SetStateAction<boolean>>;
   sendResumeAfterGreeting: boolean;
@@ -102,7 +100,6 @@ export function useProfileFormState({
   const [delayMax, setDelayMax] = useState("60");
   const [maxSent, setMaxSent] = useState("50");
   const [dailyLimit, setDailyLimit] = useState("80");
-  const [dryRun, setDryRun] = useState(true);
   const [stopOnCaptcha, setStopOnCaptcha] = useState(true);
   const [sendResumeAfterGreeting, setSendResumeAfterGreeting] = useState(false);
   const [autoResumeOnReply, setAutoResumeOnReply] = useState(false);
@@ -306,8 +303,6 @@ export function useProfileFormState({
     setMaxSent,
     dailyLimit,
     setDailyLimit,
-    dryRun,
-    setDryRun,
     stopOnCaptcha,
     setStopOnCaptcha,
     sendResumeAfterGreeting,

@@ -38,7 +38,6 @@ interface WorkbenchViewProps {
   rule: RuleForm;
   defaultResumeName: string;
   mode: Mode;
-  dryRun: boolean;
   delayMin: string;
   delayMax: string;
   dailyLimit: string;
@@ -87,7 +86,6 @@ export default function WorkbenchView({
   rule,
   defaultResumeName,
   mode,
-  dryRun,
   delayMin,
   delayMax,
   dailyLimit,
@@ -171,7 +169,6 @@ export default function WorkbenchView({
           educationValues={educationValues}
           defaultResumeName={defaultResumeName}
           mode={mode}
-          dryRun={dryRun}
           delayMin={delayMin}
           delayMax={delayMax}
           dailyLimit={dailyLimit}

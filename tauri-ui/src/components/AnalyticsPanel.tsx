@@ -21,7 +21,6 @@ interface AnalyticsPanelProps {
   setMode: (mode: Mode) => void;
   running: boolean;
   currentIndex: number | null;
-  dryRun: boolean;
   delayMin: string;
   delayMax: string;
   stats: { scanned: number; sent: number; skipped: number };
@@ -41,7 +40,6 @@ export default function AnalyticsPanel({
   setMode,
   running,
   currentIndex,
-  dryRun,
   delayMin,
   delayMax,
   stats,
@@ -72,7 +70,6 @@ export default function AnalyticsPanel({
         running={running}
         currentIndex={currentIndex}
         mode={mode}
-        dryRun={dryRun}
         delayMin={delayMin}
         delayMax={delayMax}
         stats={stats}
