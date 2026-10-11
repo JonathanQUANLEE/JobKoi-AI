@@ -9,6 +9,8 @@ import os
 from pathlib import Path
 from typing import Literal
 
+from boss_zhipin.website_oper.dispatch.env_config import _csv_env
+
 log = logging.getLogger(__name__)
 
 SCAN_MATCH_LOG_PATH = Path(
@@ -31,10 +33,8 @@ class KeywordPolicy:
     any_label: str = "方向关键词"
 
     def match(self, *, title: str, description: str) -> tuple[bool, str]:
-        from boss_zhipin.website_oper import write_response
-
         text = self._text_for_scope(title=title, description=description)
-        required_ok, required_reason = write_response._matches_required_terms(
+        required_ok, required_reason = _matches_required_terms(
             text, self.required_terms
         )
         if not required_ok:
@@ -84,48 +84,36 @@ def _matches_required_terms(text: str, required_terms: list[str]) -> tuple[bool,
 
 
 def _scan_required_terms() -> list[str]:
-    from boss_zhipin.website_oper import write_response
-
-    return write_response._csv_env("BOSS_SCAN_REQUIRED_TERMS")
+    return _csv_env("BOSS_SCAN_REQUIRED_TERMS")
 
 
 def _review_required_terms() -> list[str]:
-    from boss_zhipin.website_oper import write_response
-
-    return write_response._csv_env("BOSS_REVIEW_REQUIRED_TERMS")
+    return _csv_env("BOSS_REVIEW_REQUIRED_TERMS")
 
 
 def _review_locations() -> list[str]:
-    from boss_zhipin.website_oper import write_response
-
-    return write_response._csv_env("BOSS_REVIEW_LOCATIONS")
+    return _csv_env("BOSS_REVIEW_LOCATIONS")
 
 
 def _auto_required_terms() -> list[str]:
-    from boss_zhipin.website_oper import write_response
-
     return (
-        write_response._csv_env("BOSS_AUTO_TITLE_REQUIRED_TERMS")
-        or write_response._csv_env("BOSS_AUTO_REQUIRED_TERMS")
+        _csv_env("BOSS_AUTO_TITLE_REQUIRED_TERMS")
+        or _csv_env("BOSS_AUTO_REQUIRED_TERMS")
     )
 
 
 def _auto_title_keywords() -> list[str]:
-    from boss_zhipin.website_oper import write_response
-
     return (
-        write_response._csv_env("BOSS_AUTO_TITLE_KEYWORDS")
-        or write_response._csv_env("BOSS_AUTO_DIRECTION_TERMS")
+        _csv_env("BOSS_AUTO_TITLE_KEYWORDS")
+        or _csv_env("BOSS_AUTO_DIRECTION_TERMS")
         or ["后端开发", "ai"]
     )
 
 
 def _auto_send_policy() -> KeywordPolicy:
-    from boss_zhipin.website_oper import write_response
-
     return KeywordPolicy(
-        required_terms=write_response._auto_required_terms(),
-        any_groups=[write_response._auto_title_keywords()],
+        required_terms=_auto_required_terms(),
+        any_groups=[_auto_title_keywords()],
         scope="title",
         scope_label="岗位名称",
         any_label="方向关键词",
@@ -138,18 +126,14 @@ def _matches_auto_send_job(
     title: str | None = None,
     description: str | None = None,
 ) -> tuple[bool, str]:
-    from boss_zhipin.website_oper import write_response
-
     if title is None:
         title = text or ""
-    return write_response._auto_send_policy().match(title=title, description=description or "")
+    return _auto_send_policy().match(title=title, description=description or "")
 
 
 def _scan_groups() -> list[list[str]]:
-    from boss_zhipin.website_oper import write_response
-
-    keyword_groups = [[item] for item in write_response._csv_env("BOSS_SCAN_KEYWORDS")]
-    locations = write_response._csv_env("BOSS_SCAN_LOCATIONS")
+    keyword_groups = [[item] for item in _csv_env("BOSS_SCAN_KEYWORDS")]
+    locations = _csv_env("BOSS_SCAN_LOCATIONS")
     if locations:
         keyword_groups.append(locations)
     return keyword_groups

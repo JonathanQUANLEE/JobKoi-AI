@@ -4,6 +4,17 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from boss_zhipin.config.filter_rules import explain_posting_match, match_posting
+from boss_zhipin.website_oper.dispatch.env_config import (
+    _filter_rules_without_boss_active,
+    _to_filter_posting,
+)
+from boss_zhipin.website_oper.dispatch.rule_matcher import (
+    _matches_all_groups,
+    _matches_auto_send_job,
+    _matches_required_terms,
+)
+
 log = logging.getLogger(__name__)
 
 
@@ -26,21 +37,19 @@ def evaluate_job_match(
 
     返回 (matched, reason, stage_name, details)
     """
-    from boss_zhipin.website_oper import write_response
-
     if profile_filters:
-        filter_posting = write_response._to_filter_posting(job, job_description)
+        filter_posting = _to_filter_posting(job, job_description)
         effective_profile_filters = profile_filters
         boss_active_missing = boss_active_filter_enabled and not filter_posting.boss_active_status
         if boss_active_missing:
-            effective_profile_filters = write_response._filter_rules_without_boss_active(
+            effective_profile_filters = _filter_rules_without_boss_active(
                 profile_filters
             )
-        profile_match = write_response.match_posting(
+        profile_match = match_posting(
             filter_posting,
             effective_profile_filters,
         )
-        match_explanation = write_response.explain_posting_match(
+        match_explanation = explain_posting_match(
             filter_posting,
             effective_profile_filters,
         )
@@ -60,19 +69,19 @@ def evaluate_job_match(
         return profile_match.matched, profile_match.reason, "profile_filter", details
 
     if scan_only:
-        term_ok, term_reason = write_response._matches_required_terms(
+        term_ok, term_reason = _matches_required_terms(
             job_description, scan_required_terms
         )
         if not term_ok:
             apply = False
             reason = term_reason
         else:
-            apply, reason = write_response._matches_all_groups(job_description, scan_groups)
+            apply, reason = _matches_all_groups(job_description, scan_groups)
         details = {"stage": "scan_only", "reason": reason}
         return apply, reason, "scan_only", details
 
     if auto_send_fixed_greeting:
-        apply, reason = write_response._matches_auto_send_job(
+        apply, reason = _matches_auto_send_job(
             title=job_title,
             description=job_description,
         )
@@ -85,7 +94,7 @@ def evaluate_job_match(
         return apply, reason, "auto_send_filter", details
 
     if review_before_send:
-        term_ok, term_reason = write_response._matches_required_terms(
+        term_ok, term_reason = _matches_required_terms(
             job_description, review_required_terms
         )
         if not term_ok:
@@ -96,7 +105,7 @@ def evaluate_job_match(
                 {"stage": "required_terms", "reason": term_reason},
             )
 
-        location_ok, location_reason = write_response._matches_all_groups(
+        location_ok, location_reason = _matches_all_groups(
             job_description, [review_locations]
         )
         if not location_ok:
