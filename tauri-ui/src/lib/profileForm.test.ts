@@ -69,7 +69,8 @@ describe("buildProfileData", () => {
       send: {
         mode: "auto",
         greeting_file: "./greetings/custom.txt",
-        delay_min: 12,
+        // 12s 低于拟人化安全下限 15s（防风控），落盘前钳到 15
+        delay_min: 15,
         delay_max: 45,
         max_sent: 50,
         daily_sent_limit: 80,
@@ -126,11 +127,52 @@ describe("buildProfileData", () => {
     expect(data.filters.title.exclude.enabled).toBe(false);
     expect(data.send).toMatchObject({
       greeting_file: "./greetings/default.txt",
-      delay_min: 10,
-      delay_max: 60,
+      // 坏值回退默认（标准档 20-40）；60s 超上限 45 钳到 45
+      delay_min: 20,
+      delay_max: 45,
       max_sent: 50,
       daily_sent_limit: 80,
     });
+  });
+
+  it("clamps humanized delay into the safe range [15, 45] seconds", () => {
+    const mk = (delayMin: string, delayMax: string) =>
+      buildProfileData({
+        label: "AI",
+        startUrl: "",
+        rule: {
+          requiredKeywords: "",
+          anyKeywords: "AI",
+          excludeKeywords: "",
+          scope: "title",
+          match: "contains",
+          caseSensitive: false,
+        },
+        cityValues: "",
+        educationValues: "",
+        bossActiveValues: "",
+        filterPolicy: "warning",
+        mode: "auto",
+        greetingPath: "",
+        delayMin,
+        delayMax,
+        maxSent: "50",
+        dailyLimit: "80",
+        stopOnCaptcha: true,
+        sendResumeAfterGreeting: false,
+        autoResumeOnReply: false,
+        aiGreeting: false,
+      });
+
+    // 危险低值（雾化弹窗旧默认 3-6）→ 钳到安全下限
+    expect(mk("3", "6").send).toMatchObject({ delay_min: 15, delay_max: 15 });
+    // 空值 → 标准档默认 20-40
+    expect(mk("", "").send).toMatchObject({ delay_min: 20, delay_max: 40 });
+    // 超上限 → 钳到 45
+    expect(mk("50", "80").send).toMatchObject({ delay_min: 45, delay_max: 45 });
+    // 区间内的值原样保留
+    expect(mk("15", "45").send).toMatchObject({ delay_min: 15, delay_max: 45 });
+    expect(mk("30", "45").send).toMatchObject({ delay_min: 30, delay_max: 45 });
   });
 
   it("stores title plus description as a reusable matching scope", () => {

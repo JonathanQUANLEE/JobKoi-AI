@@ -96,8 +96,8 @@ export function useProfileFormState({
   const [educationValues, setEducationValues] = useState("");
   const [bossActiveValues, setBossActiveValues] = useState("");
   const [filterPolicy, setFilterPolicy] = useState<FilterPolicy>("warning");
-  const [delayMin, setDelayMin] = useState("10");
-  const [delayMax, setDelayMax] = useState("60");
+  const [delayMin, setDelayMin] = useState("20");
+  const [delayMax, setDelayMax] = useState("40");
   const [maxSent, setMaxSent] = useState("50");
   const [dailyLimit, setDailyLimit] = useState("80");
   const [stopOnCaptcha, setStopOnCaptcha] = useState(true);

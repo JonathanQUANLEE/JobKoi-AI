@@ -115,8 +115,8 @@ export function buildProfileData(values: ProfileFormValues): BuiltProfileData {
     send: {
       mode: values.mode,
       greeting_file: values.greetingPath.trim() || "./greetings/default.txt",
-      delay_min: numberOrDefault(values.delayMin, 10),
-      delay_max: numberOrDefault(values.delayMax, 60),
+      delay_min: clampDelayOrDefault(values.delayMin, 20),
+      delay_max: clampDelayOrDefault(values.delayMax, 40),
       max_sent: numberOrDefault(values.maxSent, 50),
       daily_sent_limit: numberOrDefault(values.dailyLimit, 80),
       stop_on_captcha: values.stopOnCaptcha,
@@ -160,4 +160,18 @@ function splitKeywords(value: string) {
 function numberOrDefault(value: string, fallback: number) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && value.trim() !== "" ? parsed : fallback;
+}
+
+/**
+ * 拟人化节流安全区间（与后端 platforms/limits.py 的 BOSS_DELAY_RANGE_SECONDS 一致）：
+ * 下限 15s = 同类工具公开文档最保守建议（影刀 RPA「打招呼至少 15s 一次」防封号）。
+ * GUI 三档预设：效率 15-30 / 标准 20-40 / 稳健 30-45；任何设置界面存的值
+ * 越界都在落盘前钳进区间——后端运行时还有一道同值钳制兜底。
+ */
+export const DELAY_RANGE_SECONDS: [number, number] = [15, 45];
+
+function clampDelayOrDefault(value: string, fallback: number) {
+  const parsed = numberOrDefault(value, fallback);
+  const [low, high] = DELAY_RANGE_SECONDS;
+  return Math.min(high, Math.max(low, parsed));
 }
