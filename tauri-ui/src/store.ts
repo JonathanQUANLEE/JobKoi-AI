@@ -285,9 +285,13 @@ export const useRunStore = create<RunState>((set) => ({
       if (ev.kind === "loop_ended") {
         running = false;
       }
-      // 限额停机（本地安全限额 / 平台限额提示）→ 常驻横幅，不再自动消失
+      // 常驻停机横幅：本地安全限额 / 平台限额提示 / 登录失效命中后持续显示，直到下一轮运行
       let limitNotice = s.limitNotice;
-      if (ev.kind === "limit_reached" || ev.kind === "platform_limit_reached") {
+      if (
+        ev.kind === "limit_reached" ||
+        ev.kind === "platform_limit_reached" ||
+        ev.kind === "login_required"
+      ) {
         const msg =
           typeof ev.payload.message === "string" && ev.payload.message.trim()
             ? ev.payload.message

@@ -137,8 +137,12 @@ export default function PlatformHub({
       const res = await ipc.openPlatformLogin(platformId);
       if (res.status === "error") {
         setMessage(`提示: ${res.message || "拉起失败"}`);
+      } else if (res.logged_in) {
+        // 扫码已成功（后端等到了登录态）→ 立即刷新平台卡状态
+        setMessage(`「${platformId}」已登录成功，状态已刷新！`);
+        await loadPlatforms();
       } else {
-        setMessage(`已成功打开「${platformId}」浏览器窗口，请在弹窗扫码登录！`);
+        setMessage(`已打开「${platformId}」登录页，请在浏览器扫码；完成后点「刷新状态」。`);
       }
       setTimeout(loadPlatforms, 5000);
     } catch (err) {

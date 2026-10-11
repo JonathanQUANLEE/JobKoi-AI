@@ -6,6 +6,9 @@ import logging
 
 log = logging.getLogger(__name__)
 
+# BOSS 登录页直达 URL（平台中心「换号/登录」与主循环未登录兜底共用）
+BOSS_LOGIN_URL = "https://www.zhipin.com/web/user/?ka=header-login"
+
 
 def _on_login_page(url: str) -> bool:
     return any(s in url for s in ("/web/user/", "passport-zp", "/login"))
@@ -90,29 +93,24 @@ async def _wait_url_stable(stable_for: float = 2.0, timeout: float = 30) -> str:
     return last_url
 
 
-async def log_in() -> None:
-    """识别登录状态；未登录则点开微信扫码，等用户扫码登录。"""
+async def log_in() -> bool:
+    """识别登录状态；未登录则**直达登录页**弹出扫码，等用户登录。
+
+    Returns:
+        True=已登录（可直接开始跑）；False=等待超时仍未登录（调用方应提示用户）。
+    """
     from boss_zhipin.website_oper import finding_jobs
 
     if await finding_jobs._is_logged_in():
         log.info("检测到已登录（profile: %s），跳过扫码", finding_jobs.CHROME_PROFILE_DIR)
-        return
+        return True
 
     tab = finding_jobs._tab
     if tab is None:
-        return
-    cur_url = tab.url
-    log.info("log_in 入口 URL: %s", cur_url)
-
-    if not _on_login_page(cur_url):
-        try:
-            login_btn = await tab.find("登录", best_match=True, timeout=15)
-            if login_btn:
-                await login_btn.click()
-                log.info("已点击 header 登录入口")
-                await finding_jobs._wait_url_stable(stable_for=2.0, timeout=15)
-        except Exception as e:
-            log.warning("找不到 header 登录入口（%s），尝试直接在当前页找微信入口", e)
+        return False
+    log.info("未登录（cookie 失效或首次使用）— 导航到登录页: %s", BOSS_LOGIN_URL)
+    await tab.get(BOSS_LOGIN_URL)
+    await finding_jobs._wait_url_stable(stable_for=2.0, timeout=15)
 
     try:
         wechat_btn = await tab.find("微信", best_match=True, timeout=10)
@@ -120,7 +118,7 @@ async def log_in() -> None:
             await wechat_btn.click()
             log.info("已点击微信登录入口，请扫码...")
         else:
-            log.warning("未自动点上微信入口，请在浏览器里手动选择登录方式")
+            log.warning("未自动点上微信入口，请在登录页手动选择登录方式")
     except Exception as e:
         log.warning("查找微信入口出错（%s），请手动选择登录方式", e)
 
@@ -129,9 +127,10 @@ async def log_in() -> None:
     while asyncio.get_event_loop().time() < deadline:
         if await finding_jobs._is_logged_in():
             log.info("登录成功！cookie 已写入 profile，下次跑应该不用再扫")
-            return
+            return True
         await asyncio.sleep(2)
     log.warning("登录超时，请确认是否已扫码登录")
+    return False
 
 
 async def captcha_visible() -> bool:

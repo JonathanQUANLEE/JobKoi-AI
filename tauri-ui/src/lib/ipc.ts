@@ -9,6 +9,7 @@ export type EventKind =
   | "page_opened"
   | "page_filter"
   | "login_ok"
+  | "login_required"
   | "job_found"
   | "job_matched"
   | "job_skipped"
@@ -243,10 +244,13 @@ export interface DeliveryHistoryResult {
 export const ipc = {
   listPlatforms: () => pyInvoke<PlatformListResult>("list_platforms", {}),
   openPlatformLogin: (platformId: string) =>
-    pyInvoke<{ status: string; platform?: string; url?: string; message?: string }>(
-      "open_platform_login",
-      { platformId },
-    ),
+    pyInvoke<{
+      status: string;
+      platform?: string;
+      url?: string;
+      message?: string;
+      logged_in?: boolean;
+    }>("open_platform_login", { platformId }),
   getDeliveryHistory: (platform: string = "", limit: number = 100) =>
     pyInvoke<DeliveryHistoryResult>("get_delivery_history", { platform, limit }),
   resetTodayDelivery: (platform: string = "boss") =>

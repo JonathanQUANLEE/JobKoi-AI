@@ -615,10 +615,35 @@ class _PlatformLoginBody(_CamelModel):
 
 @commands.command()
 async def list_platforms() -> dict[str, Any]:
-    """返回所有平台元数据及其登录态（BOSS、猎聘、51job、智联）。"""
+    """返回所有平台元数据及其登录态（BOSS、猎聘、51job、智联）。
+
+    BOSS 的登录态用真实探测覆盖（浏览器已开时 DOM+URL 双重检测），
+    避免「cookie 文件还在但登录已失效」的假就绪。
+    """
     from boss_zhipin.platforms import get_platform_manager
 
-    return {"platforms": get_platform_manager().list_platforms()}
+    manager = get_platform_manager()
+    platforms = manager.list_platforms()
+    boss = manager.get_platform("boss")
+    if boss is not None:
+        try:
+            detection = await boss.detect_login_state()
+        except Exception as e:  # noqa: BLE001
+            log.warning("BOSS 登录态探测失败: %s", e)
+            detection = {"verified": False, "logged_in": boss.check_login()}
+        verified = bool(detection.get("verified"))
+        logged_in = bool(detection.get("logged_in"))
+        for item in platforms:
+            if item["id"] == "boss":
+                item["is_logged_in"] = logged_in
+                if logged_in:
+                    item["status_text"] = "已就绪 (免密免登)"
+                elif verified:
+                    item["status_text"] = "未登录 (需扫码)"
+                else:
+                    item["status_text"] = "待验证 (点「换号」确认登录)"
+                break
+    return {"platforms": platforms}
 
 
 @commands.command()

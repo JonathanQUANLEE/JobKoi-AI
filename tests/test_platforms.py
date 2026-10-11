@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from pathlib import Path
 
 from boss_zhipin.platforms.base import BasePlatform
@@ -42,12 +43,58 @@ def test_boss_platform_login_detection_with_temp_dir(tmp_path: Path):
     boss = BossPlatform(root_dir=tmp_path)
     assert boss.check_login() is False
 
-    # 模拟创建 Cookie 文件
+    # 只放一个非 SQLite 的假 cookie 文件（旧行为会误报已登录）→ 读不出且无有效 cookie -> False
     cookie_file = tmp_path / "chrome_profile" / "Default" / "Network" / "Cookies"
     cookie_file.parent.mkdir(parents=True, exist_ok=True)
     cookie_file.write_bytes(b"dummy_cookie_data")
 
+    assert boss.check_login() is False
+
+
+def test_boss_platform_login_detection_with_real_cookie_db(tmp_path: Path):
+    """真实 Chrome Cookies SQLite：zhipin 域有未过期持久 cookie → 已就绪。
+
+    这是 2026-10-11 修复「cookie 文件存在≠登录有效」的回归测试：
+    登录态必须解析 SQLite 里的 expires_utc，而不是看文件在不在。
+    """
+    import sqlite3
+    import struct
+
+    boss = BossPlatform(root_dir=tmp_path)
+    db_file = tmp_path / "chrome_profile" / "Default" / "Network" / "Cookies"
+    db_file.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(
+        "CREATE TABLE cookies (host_key TEXT, expires_utc INTEGER, is_persistent INTEGER)"
+    )
+    # Chrome 时间基准 1601-01-01；给一个远未来的过期时间（即未过期）
+    future_micros = (int(time.time()) + 86400 * 30) * 1_000_000 + 11644473600000000
+    conn.execute(
+        "INSERT INTO cookies VALUES ('.zhipin.com', ?, 1)", (future_micros,)
+    )
+    conn.commit()
+    conn.close()
+
     assert boss.check_login() is True
+
+
+def test_boss_platform_login_detection_with_expired_cookie_db(tmp_path: Path):
+    """zhipin 域 cookie 全部已过期 → 未登录。"""
+    import sqlite3
+
+    boss = BossPlatform(root_dir=tmp_path)
+    db_file = tmp_path / "chrome_profile" / "Default" / "Network" / "Cookies"
+    db_file.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(
+        "CREATE TABLE cookies (host_key TEXT, expires_utc INTEGER, is_persistent INTEGER)"
+    )
+    # 过期时间在过去（1970 附近即已过期）
+    conn.execute("INSERT INTO cookies VALUES ('.zhipin.com', ? , 1)", (1,))
+    conn.commit()
+    conn.close()
+
+    assert boss.check_login() is False
 
 
 def test_zhaopin_platform_open_login_unsupported():
