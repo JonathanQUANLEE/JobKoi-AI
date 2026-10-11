@@ -9,8 +9,6 @@ interface PolicySettingsViewProps {
   setLocalDelayMin: (val: string) => void;
   localDelayMax: string;
   setLocalDelayMax: (val: string) => void;
-  localDryRun: boolean;
-  setLocalDryRun: (val: boolean) => void;
   onSave: () => void;
   onClose: () => void;
 }
@@ -22,8 +20,6 @@ export default function PolicySettingsView({
   setLocalDelayMin,
   localDelayMax,
   setLocalDelayMax,
-  localDryRun,
-  setLocalDryRun,
   onSave,
   onClose,
 }: PolicySettingsViewProps) {
@@ -222,30 +218,6 @@ export default function PolicySettingsView({
           />
           <span className="text-stone-400 text-xs">秒（黄金安全基线）</span>
         </div>
-      </div>
-
-      <div className="mist-setting-row flex-row items-center justify-between border-t border-white/10 pt-3">
-        <div>
-          <span className="text-xs font-semibold text-stone-200 block">
-            演练试跑模式 (Dry Run)
-          </span>
-          <span className="text-[11px] text-stone-400">
-            开启后仅模拟筛选与匹配流程，不会真正向 HR 发出招呼语，新手推荐先演练体验
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={() => setLocalDryRun(!localDryRun)}
-          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-            localDryRun ? "bg-amber-500" : "bg-stone-700"
-          }`}
-        >
-          <span
-            className={`pointer-events-none inline-block size-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-              localDryRun ? "translate-x-5" : "translate-x-0"
-            }`}
-          />
-        </button>
       </div>
 
       <div className="pt-2 flex justify-end gap-3">

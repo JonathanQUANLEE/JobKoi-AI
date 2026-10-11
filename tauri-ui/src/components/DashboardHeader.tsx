@@ -1,4 +1,4 @@
-import { FlaskConical, PanelLeftOpen, SlidersHorizontal, Minus, Square, X } from "lucide-react";
+import { PanelLeftOpen, SlidersHorizontal, Minus, Square, X } from "lucide-react";
 import type { Lang } from "../lib/i18n";
 import { useRunStore } from "../store";
 import type { NavItem } from "./Sidebar";
@@ -9,7 +9,6 @@ interface DashboardHeaderProps {
   expandRipple: boolean;
   onExpandSidebar: () => void;
   activeNav: NavItem;
-  dryRun: boolean;
   running: boolean;
   statusText: string;
   lang: Lang;
@@ -40,7 +39,6 @@ export default function DashboardHeader({
   expandRipple,
   onExpandSidebar,
   activeNav,
-  dryRun,
   running,
   statusText,
   lang,
@@ -137,12 +135,6 @@ export default function DashboardHeader({
 
       {/* 右侧操作栏与窗口原生控制按钮 */}
       <div className="flex items-center gap-3 shrink-0 relative z-30">
-        {dryRun && (
-          <span className="flex items-center gap-1 rounded-full bg-cyan-950/60 border border-cyan-500/30 px-2 py-0.5 text-[10px] font-semibold text-cyan-300">
-            <FlaskConical className="h-3 w-3" />
-            <span>{lang === "en" ? "Dry Run" : "演练模式"}</span>
-          </span>
-        )}
         <button
           type="button"
           onClick={() => onOpenSettingsModal?.("general")}

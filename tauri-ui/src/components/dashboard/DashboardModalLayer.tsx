@@ -97,8 +97,6 @@ export default function DashboardModalLayer({
         setMaxSent={profileForm.setMaxSent}
         dailyLimit={profileForm.dailyLimit}
         setDailyLimit={profileForm.setDailyLimit}
-        dryRun={profileForm.dryRun}
-        setDryRun={profileForm.setDryRun}
         stopOnCaptcha={profileForm.stopOnCaptcha}
         setStopOnCaptcha={profileForm.setStopOnCaptcha}
         sendResumeAfterGreeting={profileForm.sendResumeAfterGreeting}
@@ -148,8 +146,6 @@ export default function DashboardModalLayer({
         setDelayMin={profileForm.setDelayMin}
         delayMax={profileForm.delayMax}
         setDelayMax={profileForm.setDelayMax}
-        dryRun={profileForm.dryRun}
-        setDryRun={profileForm.setDryRun}
         greeting={profileForm.greeting}
         setGreeting={profileForm.setGreeting}
         onSaveConfig={profileForm.saveConfig}

@@ -63,15 +63,15 @@ class _CamelModel(BaseModel):
 
 
 class RunConfig(_CamelModel):
-    """``start_run`` 的参数。
+    """``start_run`` 的参数（2026-10-11 用户拍板：产品删除 Dry-run 演练概念）。
 
-    字段对齐 ``boss_zhipin.cli`` 走 CLI 时收集的东西。空字符串 / None 走跟
-    CLI 一样的默认（比如 label 空时用 BOSS 默认推荐 feed）。
+    GUI 永远真实投递（点击立即沟通；不发消息、不发简历——那两个由
+    BOSS_CLICK_ONLY / BOSS_SEND_RESUME_AFTER_GREETING 开关管，默认关）。
+    DRY_RUN 仅保留给开发者 CLI 调试，GUI 启动前强制清掉。
     """
 
     usr_name: str
     label: str = ""
-    dry_run: bool = False
     profile: str = ""
     use_current_page: bool = False
     # 本轮要跑的招聘平台 id 列表（默认只跑 BOSS；勾选多个则并发巡航）
@@ -96,15 +96,10 @@ def _build_main_loop_factory(config: RunConfig):
         from boss_zhipin.cli import apply_profile_to_env, run_automation
         from boss_zhipin.config.profiles import load_profile
 
-        # 同步到 env，业务代码深处读 env 的地方也能感知。
-        # DRY_RUN 必须**显式清掉**：os.environ 是进程级、跨 run 复用的。只设不清
-        # 的话，用户先勾 Dry-run 测一次留下 DRY_RUN=1，之后取消勾选真跑时，任何
-        # call-time 读 os.getenv("DRY_RUN") 的地方仍判为 dry-run → 招呼语只生成不
-        # 发送，且要重启 App 才好（非技术用户极难自查）。每次按当前勾选状态归位。
-        if config.dry_run:
-            environ["DRY_RUN"] = "1"
-        else:
-            environ.pop("DRY_RUN", None)
+        # GUI 永远真实投递（产品已删除 Dry-run 演练概念）。DRY_RUN 仅限开发者
+        # CLI 调试用——启动前强制清掉，防止开发者手动设的 DRY_RUN=1 把用户
+        # 巡航悄悄变成"不真实点击"的演练。
+        environ.pop("DRY_RUN", None)
         environ["BOSS_GUI_REVIEW"] = "1"
         environ["BOSS_USR_NAME"] = config.usr_name
         if config.label:
@@ -129,7 +124,7 @@ def _build_main_loop_factory(config: RunConfig):
             await run_automation(
                 usr_name=config.usr_name,
                 label=config.label or environ.get("BOSS_LABEL", ""),
-                dry_run=config.dry_run,
+                dry_run=False,
                 use_current_page=config.use_current_page,
             )
             return
@@ -142,7 +137,7 @@ def _build_main_loop_factory(config: RunConfig):
         boss_coro = run_automation(
             usr_name=config.usr_name,
             label=config.label or environ.get("BOSS_LABEL", ""),
-            dry_run=config.dry_run,
+            dry_run=False,
             use_current_page=config.use_current_page,
         )
 

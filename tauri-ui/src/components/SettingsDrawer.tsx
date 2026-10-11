@@ -66,8 +66,6 @@ interface SettingsDrawerProps {
   setMaxSent: (v: string) => void;
   dailyLimit: string;
   setDailyLimit: (v: string) => void;
-  dryRun: boolean;
-  setDryRun: (v: boolean) => void;
   stopOnCaptcha: boolean;
   setStopOnCaptcha: (v: boolean) => void;
   sendResumeAfterGreeting: boolean;
@@ -178,8 +176,6 @@ export default function SettingsDrawer(props: SettingsDrawerProps) {
               setMaxSent={props.setMaxSent}
               dailyLimit={props.dailyLimit}
               setDailyLimit={props.setDailyLimit}
-              dryRun={props.dryRun}
-              setDryRun={props.setDryRun}
               stopOnCaptcha={props.stopOnCaptcha}
               setStopOnCaptcha={props.setStopOnCaptcha}
               sendResumeAfterGreeting={props.sendResumeAfterGreeting}

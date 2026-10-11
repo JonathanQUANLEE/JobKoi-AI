@@ -32,7 +32,6 @@ interface UseJobBotRuntimeOptions {
   setMessage: Dispatch<SetStateAction<string | null>>;
   usrName: string;
   label: string;
-  dryRun: boolean;
   profileName: string;
   greeting: string;
   greetingPath: string;
@@ -78,7 +77,6 @@ export function useJobBotRuntime({
   setMessage,
   usrName,
   label,
-  dryRun,
   profileName,
   greeting,
   greetingPath,
@@ -242,7 +240,6 @@ export function useJobBotRuntime({
       const config: RunConfig = {
         usrName: usrName.trim() || "求职者",
         label: label.trim(),
-        dryRun,
         profile: profileName.trim(),
         useCurrentPage: false,
         platforms: loadEnabledPlatforms(),
@@ -272,7 +269,6 @@ export function useJobBotRuntime({
     pushLog,
     usrName,
     label,
-    dryRun,
     t,
     setBusy,
     setMessage,

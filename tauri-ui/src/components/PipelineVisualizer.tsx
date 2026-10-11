@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   MapPin,
   Building2,
-  FlaskConical,
   ShieldCheck,
 } from "lucide-react";
 import { type Mode } from "../lib/profileForm";
@@ -17,7 +16,6 @@ interface PipelineVisualizerProps {
   running: boolean;
   currentIndex: number | null;
   mode: Mode;
-  dryRun: boolean;
   delayMin: string;
   delayMax: string;
   stats: { scanned: number; sent: number; skipped: number };
@@ -51,7 +49,6 @@ export default function PipelineVisualizer({
   running,
   currentIndex,
   mode,
-  dryRun,
   delayMin,
   delayMax,
   stats,
@@ -93,12 +90,6 @@ export default function PipelineVisualizer({
             </h3>
           </div>
           <div className="flex items-center gap-2">
-            {dryRun && (
-              <span className="flex items-center gap-1 rounded-full bg-cyan-950/60 border border-cyan-500/30 px-2 py-0.5 text-[10px] font-semibold text-cyan-300">
-                <FlaskConical className="h-3 w-3" />
-                <span>演练模式</span>
-              </span>
-            )}
             <span className="rounded-full bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 text-[10px] font-semibold text-amber-400">
               {mode === "auto" ? "全自动投递" : mode === "review" ? "人工审核模式" : "仅扫描匹配"}
             </span>

@@ -19,8 +19,6 @@ interface ProfilePanelProps {
   setRule: Dispatch<SetStateAction<RuleForm>>;
   dailyLimit: string;
   setDailyLimit: (val: string) => void;
-  dryRun: boolean;
-  setDryRun: (val: boolean) => void;
   defaultResumeName: string;
   onGoToResumes: () => void;
   onBackToWorkbench: () => void;
@@ -65,8 +63,6 @@ export default function ProfilePanel({
   setRule,
   dailyLimit,
   setDailyLimit,
-  dryRun,
-  setDryRun,
   defaultResumeName,
   onGoToResumes,
   onBackToWorkbench,
@@ -201,8 +197,6 @@ export default function ProfilePanel({
         <DeliverySafetyCard
           dailyLimit={dailyLimit}
           setDailyLimit={setDailyLimit}
-          dryRun={dryRun}
-          setDryRun={setDryRun}
           isEn={isEn}
         />
 

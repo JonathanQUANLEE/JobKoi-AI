@@ -9,8 +9,6 @@ interface DrawerPolicyTabProps {
   setMaxSent: (v: string) => void;
   dailyLimit: string;
   setDailyLimit: (v: string) => void;
-  dryRun: boolean;
-  setDryRun: (v: boolean) => void;
   stopOnCaptcha: boolean;
   setStopOnCaptcha: (v: boolean) => void;
   sendResumeAfterGreeting: boolean;
@@ -28,8 +26,6 @@ export default function DrawerPolicyTab({
   setMaxSent,
   dailyLimit,
   setDailyLimit,
-  dryRun,
-  setDryRun,
   stopOnCaptcha,
   setStopOnCaptcha,
   sendResumeAfterGreeting,
@@ -92,14 +88,6 @@ export default function DrawerPolicyTab({
 
       <div className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-4 space-y-3">
         <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400">投递动作安全开关</h3>
-        <label className="checkbox-line">
-          <input
-            type="checkbox"
-            checked={dryRun}
-            onChange={(e) => setDryRun(e.target.checked)}
-          />
-          <span>{t("toggle.dryRun")}（演练不真实点击投递）</span>
-        </label>
         <label className="checkbox-line">
           <input
             type="checkbox"

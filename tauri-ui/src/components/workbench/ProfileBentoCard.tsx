@@ -17,7 +17,6 @@ interface ProfileBentoCardProps {
   educationValues: string;
   defaultResumeName: string;
   mode: Mode;
-  dryRun: boolean;
   delayMin: string;
   delayMax: string;
   dailyLimit: string;
@@ -37,7 +36,6 @@ export default function ProfileBentoCard({
   educationValues,
   defaultResumeName,
   mode,
-  dryRun,
   delayMin,
   delayMax,
   dailyLimit,
@@ -185,11 +183,6 @@ export default function ProfileBentoCard({
                 <span className="rounded-lg bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 text-xs sm:text-[13px] font-bold text-amber-300">
                   {mode === "auto" ? (lang === "en" ? "Auto Apply" : "全自动投递") : mode === "review" ? (lang === "en" ? "Manual Review" : "逐条人工确认") : (lang === "en" ? "Scan Only" : "仅扫描测试")}
                 </span>
-                {dryRun && (
-                  <span className="rounded-lg bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 text-[11px] font-semibold text-cyan-300">
-                    {lang === "en" ? "Dry Run" : "演练模式"}
-                  </span>
-                )}
               </div>
             </div>
             <div className="mt-3 text-xs sm:text-[13px] text-stone-300 flex items-center gap-1.5">

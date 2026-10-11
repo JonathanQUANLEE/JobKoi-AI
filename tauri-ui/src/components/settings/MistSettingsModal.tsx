@@ -31,8 +31,6 @@ interface MistSettingsModalProps {
   setDelayMin?: (val: string) => void;
   delayMax?: string | number;
   setDelayMax?: (val: string) => void;
-  dryRun?: boolean;
-  setDryRun?: (val: boolean) => void;
   greeting?: string;
   setGreeting?: (val: string) => void;
   onSaveConfig?: () => Promise<void>;
@@ -51,8 +49,6 @@ export default function MistSettingsModal({
   setDelayMin,
   delayMax = "6",
   setDelayMax,
-  dryRun = false,
-  setDryRun,
   greeting = "",
   setGreeting,
   onSaveConfig,
@@ -72,7 +68,6 @@ export default function MistSettingsModal({
   const [localDailyLimit, setLocalDailyLimit] = useState(String(dailyLimit));
   const [localDelayMin, setLocalDelayMin] = useState(String(delayMin));
   const [localDelayMax, setLocalDelayMax] = useState(String(delayMax));
-  const [localDryRun, setLocalDryRun] = useState(dryRun);
   const [localGreeting, setLocalGreeting] = useState(greeting);
 
   // 大模型设置状态
@@ -97,14 +92,13 @@ export default function MistSettingsModal({
     setLocalDailyLimit(String(dailyLimit));
     setLocalDelayMin(String(delayMin));
     setLocalDelayMax(String(delayMax));
-    setLocalDryRun(dryRun);
     setLocalGreeting(greeting);
     if (llmConfig) {
       setBaseUrl(llmConfig.base_url || "https://openrouter.ai/api/v1");
       setApiKey(llmConfig.api_key || "");
       setModel(llmConfig.model || "nvidia/nemotron-3.5-lightning:free");
     }
-  }, [rule, dailyLimit, delayMin, delayMax, dryRun, greeting, llmConfig]);
+  }, [rule, dailyLimit, delayMin, delayMax, greeting, llmConfig]);
 
   if (!type) return null;
 
@@ -130,7 +124,6 @@ export default function MistSettingsModal({
     setDailyLimit?.(localDailyLimit);
     setDelayMin?.(localDelayMin);
     setDelayMax?.(localDelayMax);
-    setDryRun?.(localDryRun);
     const resolvedProfile = typeof currentProfileData === "function" ? currentProfileData() : currentProfileData;
     if (resolvedProfile && onSaveProfileData) {
       const updated = {
@@ -138,7 +131,6 @@ export default function MistSettingsModal({
         daily_limit: localDailyLimit,
         delay_min: localDelayMin,
         delay_max: localDelayMax,
-        dry_run: localDryRun,
       };
       onSaveProfileData(updated);
     }
@@ -267,8 +259,6 @@ export default function MistSettingsModal({
             setLocalDelayMin={setLocalDelayMin}
             localDelayMax={localDelayMax}
             setLocalDelayMax={setLocalDelayMax}
-            localDryRun={localDryRun}
-            setLocalDryRun={setLocalDryRun}
             onSave={handleSavePolicy}
             onClose={onClose}
           />

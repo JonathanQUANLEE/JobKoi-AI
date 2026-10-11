@@ -31,7 +31,6 @@ export type ProgressEvent = {
 export type RunConfig = {
   usrName: string;
   label: string;
-  dryRun: boolean;
   profile: string;
   useCurrentPage: boolean;
   /** 本轮要跑的招聘平台 id（默认 ["boss"]；勾选多个则并发巡航） */
