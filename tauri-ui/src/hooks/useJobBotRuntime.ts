@@ -179,6 +179,37 @@ export function useJobBotRuntime({
       });
       return;
     }
+
+    // 前置反馈 1：BOSS 登录态——未登录直接拦下并引导去平台中心扫码
+    try {
+      const plats = await ipc.listPlatforms();
+      const boss = plats.platforms.find((p) => p.id === "boss");
+      if (boss && (boss.status_text || "").includes("未登录")) {
+        setMessage("BOSS 直聘尚未登录：请先在「招聘平台中心」点登录扫码，再回来启动巡航。");
+        useRunStore.getState().notify({
+          type: "warning",
+          text: "BOSS 直聘尚未登录，请先在招聘平台中心扫码登录！",
+          source: "巡航启动",
+        });
+        return;
+      }
+    } catch {
+      /* 平台状态查询失败时交给后端 log_in 兜底，不重复拦截 */
+    }
+
+    // 前置反馈 2：未绑定默认简历 → 软提醒（不阻塞）
+    try {
+      const resumeRes = await ipc.listResumes();
+      if (!resumeRes.resumes.some((item) => item.is_default)) {
+        useRunStore.getState().notify({
+          type: "info",
+          text: "尚未绑定默认简历：建议到「简历资料库」设置默认简历，联系 HR 时沟通率更高。",
+          source: "发车提醒",
+        });
+      }
+    } catch {
+      /* 简历列表读取失败不阻塞巡航 */
+    }
     setBusy(true);
     setMessage(null);
     try {

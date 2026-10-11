@@ -3,6 +3,7 @@ import SettingsDrawer, { type DrawerTab } from "../SettingsDrawer";
 import SettingsModal, { type SettingsTab } from "../SettingsModal";
 import MistSettingsModal, { type MistModalType } from "../settings/MistSettingsModal";
 import GlobalUsagiPet from "../pet/GlobalUsagiPet";
+import CenterToast from "../core/CenterToast";
 import type { Lang } from "../../lib/i18n";
 import type { NavItem } from "../Sidebar";
 import type { useProfileFormState } from "../../hooks/useProfileFormState";
@@ -49,6 +50,9 @@ export default function DashboardModalLayer({
 }: DashboardModalLayerProps) {
   return (
     <>
+      {/* 软件中心浮现提示（登录成功等关键反馈） */}
+      <CenterToast />
+
       {/* 侧边滑出高级设置抽屉 */}
       <SettingsDrawer
         isOpen={drawerOpen}

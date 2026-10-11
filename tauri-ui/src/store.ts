@@ -71,9 +71,14 @@ type RunState = {
   restoredPage: Record<string, unknown> | null;
   restoredPageFilters: Record<string, unknown>[];
 
-  // 常驻限额停机横幅：本地安全限额 / 平台限额提示命中后持续显示，直到下一轮运行
+  // 常驻限额停机横幅：本地安全限额 / 平台限额提示 / 登录失效命中后持续显示，直到下一轮运行
   limitNotice: { message: string } | null;
   setLimitNotice: (notice: { message: string } | null) => void;
+
+  // 软件中心浮现提示（登录成功等关键反馈：背景虚化 + 大字 + 自动渐隐）
+  centerToast: { id: string; text: string; tone?: "success" | "error"; duration?: number } | null;
+  showCenterToast: (text: string, opts?: { tone?: "success" | "error"; duration?: number }) => void;
+  clearCenterToast: () => void;
 
   // 全局联动消息通知（统一定位在左侧边栏，支持 8s 自动消失、最多5条折叠堆叠与双击平铺）
   notifications: NotificationItem[];
@@ -154,6 +159,17 @@ export const useRunStore = create<RunState>((set) => ({
   restoredPageFilters: [],
   limitNotice: null,
   setLimitNotice: (limitNotice) => set({ limitNotice }),
+  centerToast: null,
+  showCenterToast: (text, opts) =>
+    set({
+      centerToast: {
+        id: `toast_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        text,
+        tone: opts?.tone ?? "success",
+        duration: opts?.duration ?? 2000,
+      },
+    }),
+  clearCenterToast: () => set({ centerToast: null }),
 
   lang: detectLang(),
 
