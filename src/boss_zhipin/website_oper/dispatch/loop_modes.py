@@ -6,13 +6,14 @@ import logging
 import random
 from typing import Any
 
-from boss_zhipin.audit import validate_letter
+from boss_zhipin import audit
+from boss_zhipin.gui import events
+from boss_zhipin.website_oper.dispatch import loop_actions, rule_matcher
 from boss_zhipin.website_oper.dispatch.history_logger import (
     _log_sent,
     _log_skipped,
     _match_explanation,
 )
-from boss_zhipin.website_oper.dispatch.loop_actions import compose_greeting
 from boss_zhipin.website_oper.dispatch.review_flow import (
     _ask_gui_review_decision,
     _ask_review_decision,
@@ -31,12 +32,8 @@ async def handle_scan_only_match(
     details: dict[str, Any],
 ) -> None:
     """处理 scan_only 命中：只记录与上报，不发消息。"""
-    # write_response 仅为 _emit_progress/_log_scan_match 借道保留：测试把事件收集器与
-    # 扫描匹配记录器 patch 在门面属性上，直连会绕过 patch；待 emit 专项批一起迁移。
-    from boss_zhipin.website_oper import write_response
-
     log.info("✅ [扫描命中 #%d] %s", job_index, details.get("reason", ""))
-    write_response._log_scan_match(
+    rule_matcher._log_scan_match(
         index=job_index,
         job_description=job_description,
         details=details,
@@ -51,7 +48,7 @@ async def handle_scan_only_match(
         dry_run=True,
         sent=False,
     )
-    write_response._emit_progress(
+    events.emit(
         "job_matched",
         index=job_index,
         status="scan_only",
@@ -78,19 +75,15 @@ async def handle_auto_send_job(
     daily_sent_count: int,
 ) -> tuple[bool, int, int]:
     """处理 auto 模式发送。返回 (should_stop, new_sent_count, new_daily_sent_count)。"""
-    # write_response 仅为 _emit_progress/log_attempt/click_contact_and_send_response 借道保留：
-    # 测试把这三者 patch 在门面属性上，直连会绕过 patch；待 emit 专项批一起迁移。
-    from boss_zhipin.website_oper import write_response
-
     response = fixed_greeting
-    validation = validate_letter(response)
+    validation = audit.validate_letter(response)
     if not validation.ok:
         log.warning(
             "[BLOCKED] 固定招呼语未通过校验: %s — preview: %r",
             validation.reasons,
             response[:80],
         )
-        write_response.log_attempt(
+        audit.log_attempt(
             source="fixed-greeting",
             channel="local",
             job_description=job_description,
@@ -99,7 +92,7 @@ async def handle_auto_send_job(
             dry_run=dry_run,
             sent=False,
         )
-        write_response._emit_progress(
+        events.emit(
             "letter_sent",
             index=job_index,
             status="blocked",
@@ -124,7 +117,7 @@ async def handle_auto_send_job(
             len(response),
             response,
         )
-        write_response.log_attempt(
+        audit.log_attempt(
             source="fixed-greeting",
             channel="local",
             job_description=job_description,
@@ -133,7 +126,7 @@ async def handle_auto_send_job(
             dry_run=True,
             sent=False,
         )
-        write_response._emit_progress(
+        events.emit(
             "letter_sent",
             index=job_index,
             status="dry_run",
@@ -155,10 +148,10 @@ async def handle_auto_send_job(
         return False, sent_count, daily_sent_count
 
     log.info("自动发送固定招呼语：%s", response)
-    await write_response.click_contact_and_send_response(response)
+    await loop_actions.click_contact_and_send_response(response)
     sent_count += 1
     daily_sent_count += 1
-    write_response.log_attempt(
+    audit.log_attempt(
         source="fixed-greeting",
         channel="local",
         job_description=job_description,
@@ -167,7 +160,7 @@ async def handle_auto_send_job(
         dry_run=False,
         sent=True,
     )
-    write_response._emit_progress(
+    events.emit(
         "letter_sent",
         index=job_index,
         status="sent",
@@ -188,7 +181,7 @@ async def handle_auto_send_job(
     )
     if auto_send_max_sent is not None and sent_count >= auto_send_max_sent:
         log.info("已发送 %d 条，达到 BOSS_AUTO_SEND_MAX_SENT 上限，结束", sent_count)
-        write_response._emit_progress("feed_exhausted", total=job_index)
+        events.emit("feed_exhausted", total=job_index)
         return True, sent_count, daily_sent_count
 
     delay = random.uniform(delay_min, delay_max)
@@ -211,21 +204,17 @@ async def handle_review_send_job(
     details: dict[str, Any],
 ) -> str:
     """处理 review 模式人工审核与发送。返回 'sent' | 'skip' | 'quit' | 'blocked'。"""
-    # write_response 仅为 _emit_progress/log_attempt/click_contact_and_send_response 借道保留：
-    # 测试把这三者 patch 在门面属性上，直连会绕过 patch；待 emit 专项批一起迁移。
-    from boss_zhipin.website_oper import write_response
-
-    response, _greeting_source = await compose_greeting(
+    response, _greeting_source = await loop_actions.compose_greeting(
         job_description, fixed_greeting
     )
-    validation = validate_letter(response)
+    validation = audit.validate_letter(response)
     if not validation.ok:
         log.warning(
             "[BLOCKED] 固定招呼语未通过校验: %s — preview: %r",
             validation.reasons,
             response[:80],
         )
-        write_response.log_attempt(
+        audit.log_attempt(
             source="fixed-greeting",
             channel="local",
             job_description=job_description,
@@ -234,7 +223,7 @@ async def handle_review_send_job(
             dry_run=dry_run,
             sent=False,
         )
-        write_response._emit_progress(
+        events.emit(
             "letter_sent",
             index=job_index,
             status="blocked",
@@ -271,7 +260,7 @@ async def handle_review_send_job(
 
     if decision == "quit":
         log.info("用户在审核模式选择退出")
-        write_response._emit_progress("feed_exhausted", total=job_index - 1)
+        events.emit("feed_exhausted", total=job_index - 1)
         return "quit"
 
     if decision == "skip":
@@ -284,7 +273,7 @@ async def handle_review_send_job(
             reason="review_skip",
             details=details,
         )
-        write_response._emit_progress(
+        events.emit(
             "job_skipped",
             index=job_index,
             reason="review_skip",
@@ -299,7 +288,7 @@ async def handle_review_send_job(
             len(response),
             response,
         )
-        write_response.log_attempt(
+        audit.log_attempt(
             source="fixed-greeting",
             channel="local",
             job_description=job_description,
@@ -308,7 +297,7 @@ async def handle_review_send_job(
             dry_run=True,
             sent=False,
         )
-        write_response._emit_progress(
+        events.emit(
             "letter_sent",
             index=job_index,
             status="dry_run",
@@ -329,8 +318,8 @@ async def handle_review_send_job(
         )
     else:
         log.info("审核通过，发送固定招呼语：%s", response)
-        await write_response.click_contact_and_send_response(response)
-        write_response.log_attempt(
+        await loop_actions.click_contact_and_send_response(response)
+        audit.log_attempt(
             source="fixed-greeting",
             channel="local",
             job_description=job_description,
@@ -339,7 +328,7 @@ async def handle_review_send_job(
             dry_run=False,
             sent=True,
         )
-        write_response._emit_progress(
+        events.emit(
             "letter_sent",
             index=job_index,
             status="sent",

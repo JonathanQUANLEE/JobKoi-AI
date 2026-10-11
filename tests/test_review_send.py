@@ -11,7 +11,10 @@ from inspect import signature
 
 import pytest
 
+from boss_zhipin import audit
+from boss_zhipin.gui import events as gui_events
 from boss_zhipin.website_oper import write_response
+from boss_zhipin.website_oper.dispatch import loop_actions
 
 FIXED_GREETING = "您好，我是一名计科专业的大三学生，熟悉Go后端和RAG应用开发。"
 
@@ -90,12 +93,12 @@ def test_auto_send_event_includes_match_explanation(monkeypatch):
         monkeypatch.setattr(write_response.finding_jobs, "get_text_by_css", get_text)
         monkeypatch.setattr(write_response.finding_jobs, "scroll_to_load_more_jobs", no_scroll)
         monkeypatch.setattr(write_response.finding_jobs, "click_next_page_if_present", no_next_page)
-        monkeypatch.setattr(write_response, "click_contact_and_send_response", noop)
+        monkeypatch.setattr(loop_actions, "click_contact_and_send_response", noop)
         monkeypatch.setattr(write_response.asyncio, "sleep", fast_sleep)
-        monkeypatch.setattr(write_response, "log_attempt", lambda **kwargs: None)
+        monkeypatch.setattr(audit, "log_attempt", lambda **kwargs: None)
         monkeypatch.setattr(
-            write_response,
-            "_emit_progress",
+            gui_events,
+            "emit",
             lambda kind, **payload: events.append((kind, payload)),
         )
 
@@ -250,7 +253,7 @@ def test_review_mode_sends_fixed_greeting_after_approval(monkeypatch):
         monkeypatch.setenv("BOSS_REVIEW_BEFORE_SEND", "1")
         monkeypatch.setenv("BOSS_FIXED_GREETING", FIXED_GREETING)
         _patch_browser(monkeypatch, get_jd=get_jd, sent=sent, sleeps=sleeps)
-        monkeypatch.setattr(write_response, "log_attempt", lambda **kwargs: audit_records.append(kwargs))
+        monkeypatch.setattr(audit, "log_attempt", lambda **kwargs: audit_records.append(kwargs))
         monkeypatch.setattr("builtins.input", lambda prompt="": prompts.append(prompt) or "y")
 
         await write_response.send_job_descriptions_to_chat(
@@ -282,7 +285,7 @@ def test_review_mode_skip_does_not_send(monkeypatch):
         monkeypatch.setenv("BOSS_REVIEW_BEFORE_SEND", "1")
         monkeypatch.setenv("BOSS_FIXED_GREETING", FIXED_GREETING)
         _patch_browser(monkeypatch, get_jd=get_jd, sent=sent, sleeps=sleeps)
-        monkeypatch.setattr(write_response, "log_attempt", lambda **kwargs: audit_records.append(kwargs))
+        monkeypatch.setattr(audit, "log_attempt", lambda **kwargs: audit_records.append(kwargs))
         monkeypatch.setattr("builtins.input", lambda prompt="": "n")
 
         await write_response.send_job_descriptions_to_chat(
@@ -314,7 +317,7 @@ def test_review_mode_required_terms_skip_before_prompt(monkeypatch):
         monkeypatch.setenv("BOSS_FIXED_GREETING", FIXED_GREETING)
         _patch_browser(monkeypatch, get_jd=get_jd, sent=sent, sleeps=sleeps)
         monkeypatch.setattr("builtins.input", lambda prompt="": pytest.fail("must skip before prompting"))
-        monkeypatch.setattr(write_response, "_emit_progress", lambda kind, **payload: events.append((kind, payload)))
+        monkeypatch.setattr(gui_events, "emit", lambda kind, **payload: events.append((kind, payload)))
 
         await write_response.send_job_descriptions_to_chat(
             usr_name="测试",
@@ -385,8 +388,8 @@ def test_auto_send_sends_without_prompt_and_waits_random_delay(monkeypatch):
         _patch_job_postings(monkeypatch, postings)
         monkeypatch.setattr("builtins.input", lambda prompt="": pytest.fail("auto-send must not prompt"))
         monkeypatch.setattr(write_response.random, "uniform", lambda low, high: 23.5)
-        monkeypatch.setattr(write_response, "log_attempt", lambda **kwargs: audit_records.append(kwargs))
-        monkeypatch.setattr(write_response, "_emit_progress", lambda kind, **payload: events.append((kind, payload)))
+        monkeypatch.setattr(audit, "log_attempt", lambda **kwargs: audit_records.append(kwargs))
+        monkeypatch.setattr(gui_events, "emit", lambda kind, **payload: events.append((kind, payload)))
 
         await write_response.send_job_descriptions_to_chat(
             usr_name="测试",
@@ -532,7 +535,7 @@ def test_auto_send_clicks_stay_on_page_before_chat_input(monkeypatch):
         monkeypatch.setattr(write_response.finding_jobs, "wait_for_css", wait_for_chat)
         monkeypatch.setattr(write_response.finding_jobs, "return_to_job_list", return_to_list)
         monkeypatch.setattr(write_response.asyncio, "sleep", fast_sleep)
-        monkeypatch.setattr(write_response, "log_attempt", lambda **kwargs: audit_records.append(kwargs))
+        monkeypatch.setattr(audit, "log_attempt", lambda **kwargs: audit_records.append(kwargs))
 
         await write_response.send_job_descriptions_to_chat(
             usr_name="测试",
@@ -623,7 +626,7 @@ def test_click_contact_uses_chat_input_when_no_confirmation(monkeypatch):
         monkeypatch.setattr(write_response.finding_jobs, "click_by_xpath", click_contact)
         monkeypatch.setattr(write_response.finding_jobs, "click_stay_on_page_if_present", stay_on_page)
         monkeypatch.setattr(write_response.finding_jobs, "wait_for_css", wait_for_chat)
-        monkeypatch.setattr(write_response, "send_response_and_go_back", send_response)
+        monkeypatch.setattr(loop_actions, "send_response_and_go_back", send_response)
 
         await write_response.click_contact_and_send_response("hello")
 
@@ -674,8 +677,8 @@ def test_auto_send_skips_wrong_direction_without_required_terms(monkeypatch):
         _patch_browser(monkeypatch, get_jd=get_jd, sent=sent, sleeps=sleeps)
         _patch_job_postings(monkeypatch, postings)
         monkeypatch.setattr(write_response.random, "uniform", lambda low, high: 10)
-        monkeypatch.setattr(write_response, "log_attempt", lambda **kwargs: None)
-        monkeypatch.setattr(write_response, "_emit_progress", lambda kind, **payload: events.append((kind, payload)))
+        monkeypatch.setattr(audit, "log_attempt", lambda **kwargs: None)
+        monkeypatch.setattr(gui_events, "emit", lambda kind, **payload: events.append((kind, payload)))
 
         await write_response.send_job_descriptions_to_chat(
             usr_name="测试",
@@ -722,8 +725,8 @@ def test_auto_send_uses_profile_filters_when_configured(monkeypatch):
         _patch_browser(monkeypatch, get_jd=get_jd, sent=sent, sleeps=sleeps)
         _patch_job_postings(monkeypatch, postings)
         monkeypatch.setattr(write_response.random, "uniform", lambda low, high: 10)
-        monkeypatch.setattr(write_response, "log_attempt", lambda **kwargs: None)
-        monkeypatch.setattr(write_response, "_emit_progress", lambda kind, **payload: events.append((kind, payload)))
+        monkeypatch.setattr(audit, "log_attempt", lambda **kwargs: None)
+        monkeypatch.setattr(gui_events, "emit", lambda kind, **payload: events.append((kind, payload)))
 
         await write_response.send_job_descriptions_to_chat(
             usr_name="测试",
@@ -780,8 +783,8 @@ def test_profile_filters_can_match_location_field(monkeypatch):
         _patch_browser(monkeypatch, get_jd=get_jd, sent=sent, sleeps=sleeps)
         monkeypatch.setattr(write_response.finding_jobs, "get_job_by_index", get_job)
         monkeypatch.setattr(write_response.random, "uniform", lambda low, high: 10)
-        monkeypatch.setattr(write_response, "log_attempt", lambda **kwargs: None)
-        monkeypatch.setattr(write_response, "_emit_progress", lambda kind, **payload: events.append((kind, payload)))
+        monkeypatch.setattr(audit, "log_attempt", lambda **kwargs: None)
+        monkeypatch.setattr(gui_events, "emit", lambda kind, **payload: events.append((kind, payload)))
 
         await write_response.send_job_descriptions_to_chat(
             usr_name="测试",
@@ -848,8 +851,8 @@ def test_page_boss_active_values_are_used_as_local_or_filter(monkeypatch):
         monkeypatch.setattr(write_response.finding_jobs, "apply_page_filters", apply_page_filters)
         monkeypatch.setattr(write_response.finding_jobs, "get_job_by_index", get_job)
         monkeypatch.setattr(write_response.random, "uniform", lambda low, high: 10)
-        monkeypatch.setattr(write_response, "log_attempt", lambda **kwargs: None)
-        monkeypatch.setattr(write_response, "_emit_progress", lambda kind, **payload: events.append((kind, payload)))
+        monkeypatch.setattr(audit, "log_attempt", lambda **kwargs: None)
+        monkeypatch.setattr(gui_events, "emit", lambda kind, **payload: events.append((kind, payload)))
 
         await write_response.send_job_descriptions_to_chat(
             usr_name="测试",
@@ -907,8 +910,8 @@ def test_missing_boss_active_status_does_not_block_title_match(monkeypatch):
         _patch_browser(monkeypatch, get_jd=get_jd, sent=sent, sleeps=sleeps)
         monkeypatch.setattr(write_response.finding_jobs, "get_job_by_index", get_job)
         monkeypatch.setattr(write_response.random, "uniform", lambda low, high: 10)
-        monkeypatch.setattr(write_response, "log_attempt", lambda **kwargs: None)
-        monkeypatch.setattr(write_response, "_emit_progress", lambda kind, **payload: events.append((kind, payload)))
+        monkeypatch.setattr(audit, "log_attempt", lambda **kwargs: None)
+        monkeypatch.setattr(gui_events, "emit", lambda kind, **payload: events.append((kind, payload)))
 
         await write_response.send_job_descriptions_to_chat(
             usr_name="测试",

@@ -5,6 +5,8 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
+from boss_zhipin.gui import events
+
 if TYPE_CHECKING:
     from boss_zhipin.website_oper.core.models import JobPosting
 
@@ -57,7 +59,6 @@ async def _ask_gui_review_decision(
     greeting: str,
 ) -> str:
     from boss_zhipin.gui import review_control
-    from boss_zhipin.website_oper import write_response
     from boss_zhipin.website_oper.dispatch import history_logger
 
     payload = {
@@ -67,10 +68,7 @@ async def _ask_gui_review_decision(
         "details": details,
         "greeting": greeting,
     }
-    # 注意：_emit_progress 保持借道 write_response——14 处测试把事件收集器
-    # patch 在门面属性上，直连 gui.events.emit 会绕过它们（等 P3-5 emit
-    # 专项批把调用方+测试 patch 点按顺序一起迁）。
-    write_response._emit_progress("review_requested", **payload)
+    events.emit("review_requested", **payload)
     decision = await review_control.request_review(payload)
-    write_response._emit_progress("review_cleared", index=index, decision=decision)
+    events.emit("review_cleared", index=index, decision=decision)
     return decision

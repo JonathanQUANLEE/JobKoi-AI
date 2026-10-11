@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from boss_zhipin.gui import events
 from boss_zhipin.website_oper.dispatch.env_config import (
     _auto_send_daily_limit,
     _auto_send_delay_range,
@@ -141,27 +142,23 @@ def is_limit_reached(
     daily_sent_count: int,
 ) -> bool:
     """检查是否触发单次发送上限、今日发送上限或扫描最大数限制。"""
-    # _emit_progress 保留借道 write_response：测试把事件收集器 patch 在门面属性上，
-    # 直连 gui.events.emit 会绕过 patch 导致收不到事件；待 emit 专项批与测试 patch 点一起迁移。
-    from boss_zhipin.website_oper import write_response
-
     if cfg.auto_send_max_sent is not None and sent_count >= cfg.auto_send_max_sent:
         log.info("已发送 %d 条，达到 BOSS_AUTO_SEND_MAX_SENT 上限，结束", sent_count)
-        write_response._emit_progress("feed_exhausted", total=job_index - 1)
+        events.emit("feed_exhausted", total=job_index - 1)
         return True
     if cfg.auto_send_daily_limit is not None and daily_sent_count >= cfg.auto_send_daily_limit:
         log.warning("今日已发送 %d 条，达到 BOSS_AUTO_SEND_DAILY_LIMIT=%d 上限，触发安全停机保护", daily_sent_count, cfg.auto_send_daily_limit)
-        write_response._emit_progress(
+        events.emit(
             "limit_reached",
             reason="daily_limit",
             limit=cfg.auto_send_daily_limit,
             current=daily_sent_count,
             message=f"今日投递已达安全上限（{daily_sent_count}/{cfg.auto_send_daily_limit} 份），为防止账号风控已触发安全停机。如需继续测试，请在设置中调大上限或重置今日计数。",
         )
-        write_response._emit_progress("feed_exhausted", total=job_index - 1)
+        events.emit("feed_exhausted", total=job_index - 1)
         return True
     if cfg.scan_max_jobs is not None and job_index - start_job_index >= cfg.scan_max_jobs:
         log.info("扫描达到 BOSS_SCAN_MAX_JOBS=%d，结束", cfg.scan_max_jobs)
-        write_response._emit_progress("feed_exhausted", total=job_index - 1)
+        events.emit("feed_exhausted", total=job_index - 1)
         return True
     return False

@@ -4,6 +4,8 @@ import asyncio
 
 import pytest
 
+from boss_zhipin import audit
+from boss_zhipin.gui import events as gui_events
 from boss_zhipin.gui import review_control
 from boss_zhipin.website_oper import write_response
 
@@ -119,8 +121,8 @@ def test_review_mode_uses_gui_decision_without_terminal_input(monkeypatch):
             write_response.finding_jobs, "click_next_page_if_present", lambda: noop()
         )
         monkeypatch.setattr(write_response.asyncio, "sleep", fast_sleep)
-        monkeypatch.setattr(write_response, "log_attempt", lambda **kwargs: None)
-        monkeypatch.setattr(write_response, "_emit_progress", emit)
+        monkeypatch.setattr(audit, "log_attempt", lambda **kwargs: None)
+        monkeypatch.setattr(gui_events, "emit", emit)
         monkeypatch.setattr(
             "builtins.input",
             lambda prompt="": pytest.fail("GUI review must not read terminal input"),

@@ -5,18 +5,19 @@ import asyncio
 import logging
 from typing import Any
 
+from boss_zhipin.gui import events
+
 log = logging.getLogger(__name__)
 
 
 async def reload_feed_and_restart(page_filters: dict[str, Any]) -> bool:
     """列表到底后整页刷新推荐流或轮换下一批意向城市。"""
-    from boss_zhipin.website_oper import finding_jobs, write_response
+    from boss_zhipin.website_oper import finding_jobs
     from boss_zhipin.website_oper.dispatch.env_config import _page_filters_for_click
 
     rotated = await finding_jobs.rotate_next_city_batch(
         _page_filters_for_click(page_filters),
-        # _emit_progress 借道门面：14 处测试 patch 点在此，直连会绕过（P3-5 emit 专项批统一迁）
-        emit_event=lambda payload: write_response._emit_progress("page_filter", **payload),
+        emit_event=lambda payload: events.emit("page_filter", **payload),
     )
     if not rotated:
         reloaded = await finding_jobs.reload_current_page()
@@ -40,7 +41,7 @@ async def handle_missing_jd_recovery(
     返回 (action, new_window_index, new_consecutive_misses, new_barren_reloads)
     其中 action 可以是: 'continue' | 'exhausted' | 'advance'
     """
-    from boss_zhipin.website_oper import finding_jobs, write_response
+    from boss_zhipin.website_oper import finding_jobs
 
     consecutive_misses += 1
     log.info("job_index=%d 拿不到 JD（连续第 %d 次）", job_index, consecutive_misses)
@@ -83,7 +84,7 @@ async def handle_missing_jd_recovery(
                 barren_reloads + 1,
                 max_feed_reloads,
             )
-            write_response._emit_progress(
+            events.emit(
                 "feed_reload",
                 attempt=barren_reloads + 1,
                 limit=max_feed_reloads,
@@ -96,7 +97,7 @@ async def handle_missing_jd_recovery(
             max_consecutive_misses,
             barren_reloads,
         )
-        write_response._emit_progress("feed_exhausted", total=job_index - 1)
+        events.emit("feed_exhausted", total=job_index - 1)
         return "exhausted", window_index, consecutive_misses, barren_reloads
 
     return "advance", window_index, consecutive_misses, barren_reloads

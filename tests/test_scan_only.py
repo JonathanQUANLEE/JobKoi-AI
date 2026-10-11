@@ -11,7 +11,9 @@ import json
 
 import pytest
 
+from boss_zhipin.gui import events as gui_events
 from boss_zhipin.website_oper import write_response
+from boss_zhipin.website_oper.dispatch import rule_matcher
 
 
 def _patch_job_description(monkeypatch, get_jd) -> None:
@@ -81,7 +83,7 @@ def test_scan_only_does_not_generate_or_send(monkeypatch):
         )
 
         events = []
-        monkeypatch.setattr(write_response, "_emit_progress", lambda kind, **payload: events.append((kind, payload)))
+        monkeypatch.setattr(gui_events, "emit", lambda kind, **payload: events.append((kind, payload)))
         monkeypatch.setattr(write_response.asyncio, "sleep", fast_sleep)
 
         await write_response.send_job_descriptions_to_chat(
@@ -130,7 +132,7 @@ def test_scan_only_stops_at_max_jobs(monkeypatch):
         _patch_job_description(monkeypatch, get_jd)
         monkeypatch.setattr(write_response.finding_jobs, "get_text_by_css", get_text)
         monkeypatch.setattr(write_response.asyncio, "sleep", fast_sleep)
-        monkeypatch.setattr(write_response, "_log_scan_match", lambda **kwargs: None)
+        monkeypatch.setattr(rule_matcher, "_log_scan_match", lambda **kwargs: None)
 
         await write_response.send_job_descriptions_to_chat(
             usr_name="测试",
@@ -180,7 +182,7 @@ def test_scan_only_scrolls_when_current_loaded_jobs_end(monkeypatch):
         monkeypatch.setattr(write_response.finding_jobs, "get_text_by_css", get_text)
         monkeypatch.setattr(write_response.finding_jobs, "scroll_to_load_more_jobs", scroll_more)
         monkeypatch.setattr(write_response.asyncio, "sleep", fast_sleep)
-        monkeypatch.setattr(write_response, "_log_scan_match", lambda **kwargs: None)
+        monkeypatch.setattr(rule_matcher, "_log_scan_match", lambda **kwargs: None)
 
         await write_response.send_job_descriptions_to_chat(
             usr_name="测试",
@@ -243,7 +245,7 @@ def test_scan_only_retries_sixteenth_card_after_scroll_loads_more(monkeypatch):
         monkeypatch.setattr(write_response.finding_jobs, "get_text_by_css", get_text)
         monkeypatch.setattr(write_response.finding_jobs, "scroll_to_load_more_jobs", scroll_more)
         monkeypatch.setattr(write_response.asyncio, "sleep", fast_sleep)
-        monkeypatch.setattr(write_response, "_log_scan_match", lambda **kwargs: matched.append(kwargs))
+        monkeypatch.setattr(rule_matcher, "_log_scan_match", lambda **kwargs: matched.append(kwargs))
 
         await write_response.send_job_descriptions_to_chat(
             usr_name="测试",
@@ -320,7 +322,7 @@ def test_scan_only_waits_at_loaded_boundary_instead_of_skipping_to_next_index(mo
         monkeypatch.setattr(write_response.finding_jobs, "scroll_to_load_more_jobs", no_scroll)
         monkeypatch.setattr(write_response.finding_jobs, "click_next_page_if_present", no_next_page)
         monkeypatch.setattr(write_response.asyncio, "sleep", fast_sleep)
-        monkeypatch.setattr(write_response, "_log_scan_match", lambda **kwargs: matched.append(kwargs))
+        monkeypatch.setattr(rule_matcher, "_log_scan_match", lambda **kwargs: matched.append(kwargs))
 
         await write_response.send_job_descriptions_to_chat(
             usr_name="测试",
@@ -489,8 +491,8 @@ def test_already_contacted_job_is_logged_with_button_state(monkeypatch, tmp_path
         monkeypatch.setattr(write_response.finding_jobs, "get_text_by_css", get_text)
         monkeypatch.setattr(write_response.asyncio, "sleep", fast_sleep)
         monkeypatch.setattr(
-            write_response,
-            "_emit_progress",
+            gui_events,
+            "emit",
             lambda kind, **payload: events.append((kind, payload)),
         )
 
@@ -556,8 +558,8 @@ def test_scan_only_skips_duplicate_job_keys(monkeypatch):
         monkeypatch.setattr(write_response.finding_jobs, "get_text_by_css", get_text)
         monkeypatch.setattr(write_response.finding_jobs, "scroll_to_load_more_jobs", no_scroll)
         monkeypatch.setattr(write_response.asyncio, "sleep", fast_sleep)
-        monkeypatch.setattr(write_response, "_log_scan_match", lambda **kwargs: matched.append(kwargs))
-        monkeypatch.setattr(write_response, "_emit_progress", lambda kind, **payload: events.append((kind, payload)))
+        monkeypatch.setattr(rule_matcher, "_log_scan_match", lambda **kwargs: matched.append(kwargs))
+        monkeypatch.setattr(gui_events, "emit", lambda kind, **payload: events.append((kind, payload)))
 
         await write_response.send_job_descriptions_to_chat(
             usr_name="测试",
@@ -637,9 +639,9 @@ def test_scan_only_skips_when_conditions_do_not_match(monkeypatch):
         _patch_job_description(monkeypatch, get_jd)
         monkeypatch.setattr(write_response.finding_jobs, "get_text_by_css", get_text)
         monkeypatch.setattr(write_response.asyncio, "sleep", fast_sleep)
-        monkeypatch.setattr(write_response, "_log_scan_match", lambda **kwargs: logged_matches.append(kwargs))
+        monkeypatch.setattr(rule_matcher, "_log_scan_match", lambda **kwargs: logged_matches.append(kwargs))
         events = []
-        monkeypatch.setattr(write_response, "_emit_progress", lambda kind, **payload: events.append((kind, payload)))
+        monkeypatch.setattr(gui_events, "emit", lambda kind, **payload: events.append((kind, payload)))
 
         await write_response.send_job_descriptions_to_chat(
             usr_name="测试",
@@ -698,7 +700,7 @@ def test_profile_state_skips_seen_job_and_logs_skip(monkeypatch, tmp_path):
         monkeypatch.setattr(write_response.finding_jobs, "get_job_by_index", get_job)
         monkeypatch.setattr(write_response.finding_jobs, "scroll_to_load_more_jobs", no_scroll)
         monkeypatch.setattr(write_response.asyncio, "sleep", fast_sleep)
-        monkeypatch.setattr(write_response, "_emit_progress", lambda kind, **payload: events.append((kind, payload)))
+        monkeypatch.setattr(gui_events, "emit", lambda kind, **payload: events.append((kind, payload)))
 
         await write_response.send_job_descriptions_to_chat(
             usr_name="测试",

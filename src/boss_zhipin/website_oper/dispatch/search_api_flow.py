@@ -9,6 +9,7 @@ from typing import Any
 
 from boss_zhipin.audit import validate_letter
 from boss_zhipin.config.filter_rules import match_posting
+from boss_zhipin.gui import events
 from boss_zhipin.platforms.platform_limits import PlatformLimitReached
 from boss_zhipin.website_oper.dispatch.env_config import (
     _auto_send_daily_limit,
@@ -145,15 +146,13 @@ async def _process_single_api_job(
     status 可取值: 'seen', 'captcha', 'filtered',
                    'already_contacted', 'dry_run', 'sent', 'failed'
     """
-    # write_response 仅为 _emit_progress 借道保留：测试把事件收集器 patch 在门面属性上，
-    # 直连 gui.events.emit 会绕过 patch 导致收不到事件；待 emit 专项批与测试 patch 点一起迁移。
-    from boss_zhipin.website_oper import finding_jobs, job_api, write_response
+    from boss_zhipin.website_oper import finding_jobs, job_api
 
     job = job_api.to_job_posting(api_job)
     dedupe_key = finding_jobs.job_key(job)
     if dedupe_key in seen_job_keys:
         # 已投过/扫过的岗位：跳过也要让用户看见（否则浏览器静止像卡死）
-        write_response._emit_progress(
+        events.emit(
             "job_skipped",
             title=job.title,
             reason="duplicate",
@@ -186,7 +185,7 @@ async def _process_single_api_job(
                     "job_title": job.title,
                 },
             )
-            write_response._emit_progress(
+            events.emit(
                 "job_skipped",
                 title=job.title,
                 reason="filtered_out",
@@ -207,7 +206,7 @@ async def _process_single_api_job(
 
     if stop_on_captcha and await finding_jobs.captcha_visible():
         log.warning("详情页检测到验证码/安全验证，按 BOSS_STOP_ON_CAPTCHA 停止")
-        write_response._emit_progress("captcha_stopped", title=job.title)
+        events.emit("captcha_stopped", title=job.title)
         return "captcha", sent_count, daily_sent_count
 
     jd_text = await asyncio.wait_for(_extract_detail_jd(), timeout=20)
@@ -232,7 +231,7 @@ async def _process_single_api_job(
                 "job_title": job.title,
             },
         )
-        write_response._emit_progress(
+        events.emit(
             "job_skipped",
             title=job.title,
             reason="filtered_out",
@@ -302,7 +301,7 @@ async def _process_single_api_job(
             dry_run=False,
             sent=True,
         )
-        write_response._emit_progress(
+        events.emit(
             "job_sent",
             title=job.title,
             company=job.company,
@@ -344,9 +343,7 @@ async def _run_search_api_flow(
     greeting: str,
 ) -> None:
     """API 直读搜索结果：按页枚举 → 逐个开详情页 → 本地筛选 → 发送。"""
-    # write_response 仅为 _emit_progress 借道保留：测试把事件收集器 patch 在门面属性上，
-    # 直连 gui.events.emit 会绕过 patch 导致收不到事件；待 emit 专项批与测试 patch 点一起迁移。
-    from boss_zhipin.website_oper import finding_jobs, job_api, write_response
+    from boss_zhipin.website_oper import finding_jobs, job_api
 
     if not scan_only:
         validation = validate_letter(greeting)
@@ -371,7 +368,7 @@ async def _run_search_api_flow(
     if tab is None:
         raise RuntimeError("受控 tab 不存在，无法执行 API 直读流程")
 
-    write_response._emit_progress(
+    events.emit(
         "api_flow_started",
         usr_name=usr_name,
         daily_sent=daily_sent_count,
@@ -397,7 +394,7 @@ async def _run_search_api_flow(
             api_jobs = await job_api.fetch_search_page(tab, query, page)
         except RuntimeError as e:
             log.warning("第 %d 页搜索接口失败，结束：%s", page, e)
-            write_response._emit_progress("api_flow_error", page=page, message=str(e))
+            events.emit("api_flow_error", page=page, message=str(e))
             break
         if not api_jobs:
             log.info("第 %d 页没有岗位，搜索结果已全部取完，结束", page)
@@ -428,7 +425,7 @@ async def _run_search_api_flow(
             if status == "captcha":
                 return
             if status == "platform_limit":
-                write_response._emit_progress(
+                events.emit(
                     "platform_limit_reached",
                     platform="boss",
                     matched_text="(详情页动作后检出)",
@@ -448,5 +445,5 @@ async def _run_search_api_flow(
         # 拟人化页间停顿再翻下一页。
         await asyncio.sleep(2.5)
 
-    write_response._emit_progress("api_flow_finished", total=sent_count, page=page)
+    events.emit("api_flow_finished", total=sent_count, page=page)
     log.info("[api-flow] 结束：本轮发送 %d 条，翻到第 %d 页", sent_count, page)
