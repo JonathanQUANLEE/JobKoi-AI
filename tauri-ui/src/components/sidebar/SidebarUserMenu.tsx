@@ -1,7 +1,7 @@
 import { Settings, ExternalLink, RefreshCw, Languages } from "lucide-react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { FilterIcon, ShieldCheckIcon, Comment01Icon, CpuIcon } from "@hugeicons/core-free-icons";
-import { LANGS, type Lang } from "../../lib/i18n";
+import { LANGS, translate, type Lang } from "../../lib/i18n";
 import PillNavButton from "../core/PillNavButton";
 
 interface SidebarUserMenuProps {
@@ -25,6 +25,7 @@ export default function SidebarUserMenu({
   onSetLang,
   isMonochrome,
 }: SidebarUserMenuProps) {
+  const t = (key: string, vars?: Record<string, string | number>) => translate(lang, key, vars);
   return (
     <div className="absolute bottom-16 left-2 right-2 rounded-2xl border border-[var(--grid)] bg-[var(--panel-2)] p-3 shadow-2xl backdrop-blur-md z-50 text-xs space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-150">
       {/* 用户状态徽章 */}
@@ -37,7 +38,7 @@ export default function SidebarUserMenu({
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between">
             <span className="font-bold text-[var(--ink)]">
-              {lang === "en" ? "Job Hunter" : "求职锦鲤"}
+              {t("sidebar.userName")}
             </span>
             <span
               className={`text-[10px] font-semibold px-1.5 py-0.2 rounded ${
@@ -46,11 +47,11 @@ export default function SidebarUserMenu({
                   : "text-amber-400 bg-amber-500/15"
               }`}
             >
-              {lang === "en" ? "PRO" : "尊享版"}
+              {t("sidebar.proBadge")}
             </span>
           </div>
           <div className="text-[10px] text-[var(--muted-fg)] mt-0.5">
-            {lang === "en" ? "Local Direct Connect · Active" : "本地安全直连 · 已就绪"}
+            {t("sidebar.connStatus")}
           </div>
         </div>
       </div>
@@ -70,7 +71,7 @@ export default function SidebarUserMenu({
               }`}
             />
           }
-          label={lang === "en" ? "System Settings" : "系统设置"}
+          label={t("sidebar.menuSettings")}
           shortcut="Ctrl+,"
         />
 
@@ -81,7 +82,7 @@ export default function SidebarUserMenu({
             onOpenSettings("rules");
           }}
           icon={<HugeiconsIcon icon={FilterIcon} size={15} className="text-stone-400 shrink-0" />}
-          label={lang === "en" ? "Job Filter Rules" : "过滤规则设置"}
+          label={t("sidebar.menuRules")}
         />
 
         <PillNavButton
@@ -91,7 +92,7 @@ export default function SidebarUserMenu({
             onOpenSettings("policy");
           }}
           icon={<HugeiconsIcon icon={ShieldCheckIcon} size={15} className="text-stone-400 shrink-0" />}
-          label={lang === "en" ? "Delivery Settings" : "投递设置与安全"}
+          label={t("sidebar.menuDelivery")}
         />
 
         <PillNavButton
@@ -101,7 +102,7 @@ export default function SidebarUserMenu({
             onOpenSettings("greeting");
           }}
           icon={<HugeiconsIcon icon={Comment01Icon} size={15} className="text-stone-400 shrink-0" />}
-          label={lang === "en" ? "Greeting Templates" : "打招呼模板"}
+          label={t("sidebar.menuGreeting")}
         />
 
         <PillNavButton
@@ -111,7 +112,7 @@ export default function SidebarUserMenu({
             onOpenSettings("model");
           }}
           icon={<HugeiconsIcon icon={CpuIcon} size={15} className="text-stone-400 shrink-0" />}
-          label={lang === "en" ? "AI Model Config" : "AI 模型配置"}
+          label={t("sidebar.menuModel")}
         />
 
         <PillNavButton
@@ -121,7 +122,7 @@ export default function SidebarUserMenu({
             onOpenBrowser();
           }}
           icon={<ExternalLink className="h-3.5 w-3.5 text-stone-400 shrink-0" />}
-          label={lang === "en" ? "Debug Browser" : "手动打开调试浏览器"}
+          label={t("sidebar.menuBrowser")}
         />
 
         <PillNavButton
@@ -131,7 +132,7 @@ export default function SidebarUserMenu({
             onResetBrowser();
           }}
           icon={<RefreshCw className="h-3.5 w-3.5 text-red-400 shrink-0" />}
-          label={lang === "en" ? "Reset Browser Data" : "重置浏览器数据"}
+          label={t("sidebar.menuResetBrowser")}
         />
       </div>
 
@@ -139,7 +140,7 @@ export default function SidebarUserMenu({
       <div className="pt-2 border-t border-[var(--grid)] flex items-center justify-between text-[11px] text-[var(--muted-fg)]">
         <span className="flex items-center gap-1.5">
           <Languages className="h-3.5 w-3.5 text-stone-400" />
-          <span>{lang === "en" ? "Language" : "界面语言"}</span>
+          <span>{t("sidebar.langLabel")}</span>
         </span>
         <div className="flex gap-1">
           {LANGS.map((item) => (
