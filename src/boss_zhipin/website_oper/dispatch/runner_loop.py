@@ -32,6 +32,23 @@ from boss_zhipin.website_oper.dispatch.loop_navigator import (
     handle_missing_jd_recovery,
     reload_feed_and_restart,
 )
+from boss_zhipin.website_oper.dispatch.env_config import (
+    _page_filters_for_click,
+    _profile_name,
+    _should_select_label,
+)
+from boss_zhipin.website_oper.dispatch.history_logger import (
+    _has_stable_job_identity,
+    _job_with_derived_fields,
+    _log_seen,
+    _log_skipped,
+    _read_seen_job_keys,
+    _sent_today_count,
+)
+from boss_zhipin.website_oper.dispatch.search_api_flow import (
+    _run_search_api_flow,
+    _use_search_api_flow,
+)
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +65,8 @@ async def send_job_descriptions_to_chat(
     use_current_page: bool = False,
 ) -> None:
     """主循环（async）。"""
+    # write_response 仅为 _emit_progress 借道保留：测试把事件收集器 patch 在门面属性上，
+    # 直连 gui.events.emit 会绕过 patch 导致收不到事件；待 emit 专项批与测试 patch 点一起迁移。
     from boss_zhipin.website_oper import finding_jobs, write_response
 
     cfg = LoopConfig.load()
@@ -92,18 +111,18 @@ async def send_job_descriptions_to_chat(
         log.info("使用当前 BOSS 页面运行，跳过自动页面筛选点击")
     else:
         await finding_jobs.apply_page_filters(
-            write_response._page_filters_for_click(cfg.page_filters),
+            _page_filters_for_click(cfg.page_filters),
             emit_event=lambda payload: write_response._emit_progress("page_filter", **payload),
         )
         # 筛选点击会更新 URL——用最新的 URL 判定走哪条流
         actual_url = finding_jobs.get_current_url()
 
     if (
-        write_response._use_search_api_flow(actual_url)
+        _use_search_api_flow(actual_url)
         and not cfg.review_before_send
         and finding_jobs.get_tab() is not None
     ):
-        await write_response._run_search_api_flow(
+        await _run_search_api_flow(
             usr_name=usr_name,
             url=actual_url,
             dry_run=dry_run,
@@ -138,12 +157,12 @@ async def send_job_descriptions_to_chat(
     MAX_FEED_RELOADS = 3
     barren_reloads = 0
     sent_count = 0
-    daily_sent_count = write_response._sent_today_count(
-        cfg.sent_log_path, profile=write_response._profile_name()
+    daily_sent_count = _sent_today_count(
+        cfg.sent_log_path, profile=_profile_name()
     )
-    seen_job_keys: set[str] = write_response._read_seen_job_keys(cfg.seen_jobs_path)
+    seen_job_keys: set[str] = _read_seen_job_keys(cfg.seen_jobs_path)
 
-    if write_response._should_select_label(label, url, use_current_page):
+    if _should_select_label(label, url, use_current_page):
         await finding_jobs.select_dropdown_option(label)
     elif label:
         log.info(
@@ -183,7 +202,7 @@ async def send_job_descriptions_to_chat(
             job_description = job.description if job else None
 
             if job_description:
-                job = write_response._job_with_derived_fields(job, job_description)
+                job = _job_with_derived_fields(job, job_description)
                 job_title = job.title
                 consecutive_misses = 0
                 dedupe_key = finding_jobs.job_key(job)
@@ -197,7 +216,7 @@ async def send_job_descriptions_to_chat(
                         duplicate_detail,
                         dedupe_key,
                     )
-                    write_response._log_skipped(
+                    _log_skipped(
                         cfg.skipped_log_path,
                         job=job,
                         job_key=dedupe_key,
@@ -215,7 +234,7 @@ async def send_job_descriptions_to_chat(
                         detail=duplicate_detail,
                         title=job_title,
                     )
-                    if write_response._has_stable_job_identity(job):
+                    if _has_stable_job_identity(job):
                         advance_window()
                     else:
                         advance_position()
@@ -258,7 +277,7 @@ async def send_job_descriptions_to_chat(
 
                 if dedupe_key:
                     seen_job_keys.add(dedupe_key)
-                    write_response._log_seen(
+                    _log_seen(
                         cfg.seen_jobs_path, job=job, job_key=dedupe_key, send_mode=cfg.send_mode
                     )
                     barren_reloads = 0
@@ -285,7 +304,7 @@ async def send_job_descriptions_to_chat(
                         else f"未找到可用的“立即沟通”按钮（当前状态：{button_text or '未知'}）"
                     )
                     log.info("⏭️ [联系状态跳过 #%d] %s", job_index, detail)
-                    write_response._log_skipped(
+                    _log_skipped(
                         cfg.skipped_log_path,
                         job=job,
                         job_key=dedupe_key,
@@ -332,7 +351,7 @@ async def send_job_descriptions_to_chat(
                             reason,
                             job_title,
                         )
-                        write_response._log_skipped(
+                        _log_skipped(
                             cfg.skipped_log_path,
                             job=job,
                             job_key=dedupe_key,
