@@ -1,17 +1,19 @@
 import { ShieldCheck } from "lucide-react";
+import { translate, type Lang } from "../../lib/i18n";
 import { MagicCard } from "../core/MagicBento";
 
 interface DeliverySafetyCardProps {
   dailyLimit: string;
   setDailyLimit: (val: string) => void;
-  isEn: boolean;
+  lang: Lang;
 }
 
 export default function DeliverySafetyCard({
   dailyLimit,
   setDailyLimit,
-  isEn,
+  lang,
 }: DeliverySafetyCardProps) {
+  const t = (key: string, vars?: Record<string, string | number>) => translate(lang, key, vars);
   return (
     <MagicCard
       className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm space-y-4"
@@ -24,7 +26,7 @@ export default function DeliverySafetyCard({
       <div className="flex items-center gap-2 pb-2.5 border-b border-[var(--grid)]">
         <ShieldCheck className="size-4 text-cyan-400" />
         <h2 className="text-xs font-bold uppercase tracking-wider text-stone-200">
-          {isEn ? "Delivery Settings & Safety" : "投递设置与安全保护"}
+          {t("dsafe.title")}
         </h2>
       </div>
 
@@ -32,10 +34,10 @@ export default function DeliverySafetyCard({
         <div className="flex items-center justify-between p-3.5 rounded-xl border border-[var(--grid)] bg-[var(--panel-2)]">
           <div>
             <div className="text-xs font-medium text-stone-200">
-              {isEn ? "Daily Application Limit" : "每日投递上限"}
+              {t("dsafe.dailyLimit")}
             </div>
             <div className="text-[10px] text-stone-500 mt-0.5">
-              {isEn ? "Automatically pauses after reaching limit" : "达到上限后自动停止，防止账号被平台限制"}
+              {t("dsafe.dailyLimitHint")}
             </div>
           </div>
           <div className="flex items-center gap-1.5">
@@ -47,7 +49,7 @@ export default function DeliverySafetyCard({
               onChange={(e) => setDailyLimit(e.target.value)}
               className="w-20 rounded-xl border border-[var(--grid)] bg-[#1c1917] px-2.5 py-1.5 text-xs text-stone-100 font-mono text-center focus:border-cyan-500/60 focus:outline-none"
             />
-            <span className="text-stone-500">{isEn ? "/day" : "次/日"}</span>
+            <span className="text-stone-500">{t("dsafe.perDay")}</span>
           </div>
         </div>
 
@@ -56,17 +58,15 @@ export default function DeliverySafetyCard({
             <ShieldCheck className="size-5 text-emerald-400 shrink-0" />
             <div>
               <div className="text-xs font-semibold text-emerald-300">
-                {isEn ? "Smart Anti-Ban Protection" : "智能防封保护"}
+                {t("dsafe.antiBan")}
               </div>
               <div className="text-[10px] text-stone-400 mt-0.5">
-                {isEn
-                  ? "Human-like natural delays applied automatically"
-                  : "系统已默认配置最佳拟人随机浏览间隔，保障账号稳定安全"}
+                {t("dsafe.antiBanDesc")}
               </div>
             </div>
           </div>
           <span className="text-[10px] text-emerald-400 font-bold px-2 py-0.5 rounded-md bg-emerald-900/60 border border-emerald-500/30">
-            {isEn ? "Active" : "已保护"}
+            {t("dsafe.protected")}
           </span>
         </div>
       </div>

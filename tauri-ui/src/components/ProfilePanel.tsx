@@ -1,7 +1,7 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
 import { UserCheck, ArrowLeft, Save, Check, Sparkles, ShieldCheck } from "lucide-react";
 import type { RuleForm } from "../lib/profileForm";
-import { isEnglish, type Lang } from "../lib/i18n";
+import { translate, type Lang } from "../lib/i18n";
 import { useRunStore } from "../store";
 import TargetRolesCard from "./profile/TargetRolesCard";
 import SkillsExclusionCard from "./profile/SkillsExclusionCard";
@@ -71,7 +71,7 @@ export default function ProfilePanel({
   busy = false,
 }: ProfilePanelProps) {
   const [savedSuccess, setSavedSuccess] = useState(false);
-  const isEn = isEnglish(lang);
+  const t = (key: string, vars?: Record<string, string | number>) => translate(lang, key, vars);
   const notify = useRunStore((s) => s.notify);
 
   const handleSave = async () => {
@@ -79,8 +79,8 @@ export default function ProfilePanel({
     setSavedSuccess(true);
     notify({
       type: "success",
-      text: isEn ? "Job profile successfully saved!" : "求职画像与配置已成功保存！",
-      source: isEn ? "Profile" : "求职画像",
+      text: t("ppanel.notifySaved"),
+      source: t("ppanel.notifySource"),
     });
     setTimeout(() => setSavedSuccess(false), 2500);
   };
@@ -119,15 +119,13 @@ export default function ProfilePanel({
           </div>
           <div>
             <h1 className="text-base font-bold text-stone-100 flex items-center gap-2">
-              <span>{isEn ? "Job Profile" : "求职画像"}</span>
+              <span>{t("bento.title")}</span>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 font-medium">
-                {isEn ? "Synced with AI" : "已自动同步 AI 对话"}
+                {t("ppanel.syncedBadge")}
               </span>
             </h1>
             <p className="text-xs text-stone-400 mt-0.5">
-              {isEn
-                ? "Your target role, cities, and preferences summarized by the AI advisor. You can freely edit them below."
-                : "目标岗位、城市与投递偏好已由 AI 顾问整理就绪，支持直接修改"}
+              {t("ppanel.subtitle")}
             </p>
           </div>
         </div>
@@ -139,7 +137,7 @@ export default function ProfilePanel({
             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-[var(--grid)] hover:border-stone-700 bg-[#1c1917] hover:bg-[#25201d] text-xs font-medium text-stone-300 hover:text-white transition-all cursor-pointer"
           >
             <ArrowLeft className="size-3.5 text-stone-400" />
-            <span>{isEn ? "Back to Job Profile" : "返回求职画像"}</span>
+            <span>{t("ppanel.back")}</span>
           </button>
           <button
             type="button"
@@ -149,13 +147,7 @@ export default function ProfilePanel({
           >
             {savedSuccess ? <Check className="size-3.5" /> : <Save className="size-3.5" />}
             <span>
-              {savedSuccess
-                ? isEn
-                  ? "Saved!"
-                  : "已保存画像"
-                : isEn
-                ? "Save Profile"
-                : "保存画像"}
+              {savedSuccess ? t("ppanel.saved") : t("ppanel.save")}
             </span>
           </button>
         </div>
@@ -165,9 +157,7 @@ export default function ProfilePanel({
       <div className="flex items-center gap-2.5 rounded-2xl border border-amber-500/25 bg-amber-500/5 p-3.5 text-xs text-amber-200/95">
         <Sparkles className="size-4 text-amber-400 shrink-0" />
         <span>
-          {isEn
-            ? "Values below are auto-extracted from your conversation with the AI advisor. You can freely fine-tune them here."
-            : "以下画像信息已根据与 AI 顾问的对话自动提炼生成，您可在此随时手动修改与微调。"}
+          {t("ppanel.hint")}
         </span>
       </div>
 
@@ -180,7 +170,7 @@ export default function ProfilePanel({
           setCityValues={setCityValues}
           educationValues={educationValues}
           setEducationValues={setEducationValues}
-          isEn={isEn}
+          lang={lang}
           commonRoles={COMMON_ROLES}
           commonCities={COMMON_CITIES}
           toggleCity={toggleCity}
@@ -189,7 +179,7 @@ export default function ProfilePanel({
         <SkillsExclusionCard
           rule={rule}
           setRule={setRule}
-          isEn={isEn}
+          lang={lang}
           commonExcludes={COMMON_EXCLUDES}
           toggleExclude={toggleExclude}
         />
@@ -197,13 +187,13 @@ export default function ProfilePanel({
         <DeliverySafetyCard
           dailyLimit={dailyLimit}
           setDailyLimit={setDailyLimit}
-          isEn={isEn}
+          lang={lang}
         />
 
         <ResumeBindingCard
           defaultResumeName={defaultResumeName}
           onGoToResumes={onGoToResumes}
-          isEn={isEn}
+          lang={lang}
         />
       </div>
 
@@ -212,9 +202,7 @@ export default function ProfilePanel({
         <div className="flex items-center gap-2 text-xs text-stone-400">
           <ShieldCheck className="size-4 text-emerald-400" />
           <span>
-            {isEn
-              ? "All preferences are saved securely on your device for job matching"
-              : "所有微调设置将实时加密存储在本地，作为自动巡航与打招呼依据"}
+            {t("ppanel.secureNote")}
           </span>
         </div>
 
@@ -225,7 +213,7 @@ export default function ProfilePanel({
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-[var(--grid)] hover:border-stone-700 bg-[#1c1917] hover:bg-[#25201d] text-xs font-medium text-stone-300 hover:text-white transition-all cursor-pointer"
           >
             <ArrowLeft className="size-3.5 text-stone-400" />
-            <span>{isEn ? "Back to Job Profile" : "返回求职画像"}</span>
+            <span>{t("ppanel.back")}</span>
           </button>
           <button
             type="button"
@@ -235,13 +223,7 @@ export default function ProfilePanel({
           >
             {savedSuccess ? <Check className="size-4" /> : <Save className="size-4" />}
             <span>
-              {savedSuccess
-                ? isEn
-                  ? "Saved!"
-                  : "已保存全部设置！"
-                : isEn
-                ? "Save Profile"
-                : "保存画像配置"}
+              {savedSuccess ? t("ppanel.savedFull") : t("ppanel.saveFull")}
             </span>
           </button>
         </div>
