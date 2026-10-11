@@ -1,8 +1,7 @@
 import { Sparkles, Contrast, Laptop, Languages, Check } from "lucide-react";
-import { LANGS, type Lang } from "../../../lib/i18n";
+import { LANGS, translate, type Lang } from "../../../lib/i18n";
 
 interface AppearanceTabProps {
-  isEn: boolean;
   appTheme: string;
   setAppTheme: (t: "classic" | "monochrome" | "system") => void;
   lang: Lang;
@@ -11,22 +10,22 @@ interface AppearanceTabProps {
 }
 
 export default function AppearanceTab({
-  isEn,
   appTheme,
   setAppTheme,
   lang,
   onSetLang,
   isMonochrome,
 }: AppearanceTabProps) {
+  const t = (key: string, vars?: Record<string, string | number>) => translate(lang, key, vars);
   return (
     <div className="space-y-6">
       <div>
         <div className="flex items-center justify-between mb-2.5">
           <label className="block text-[var(--muted-fg)] text-[11px] font-semibold tracking-wide uppercase">
-            {isEn ? "Interface Theme" : "界面显示主题"}
+            {t("appear.themeLabel")}
           </label>
           <span className="text-[10px] text-stone-500">
-            {isEn ? "Instant preview & auto-saved" : "即时切换 · 自动保存"}
+            {t("appear.themeHint")}
           </span>
         </div>
 
@@ -48,7 +47,7 @@ export default function AppearanceTab({
               {appTheme === "classic" ? (
                 <span className="text-[10px] font-semibold text-amber-400 bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded-full flex items-center gap-1">
                   <Check className="size-3" />
-                  <span>{isEn ? "Active" : "当前使用"}</span>
+                  <span>{t("appear.active")}</span>
                 </span>
               ) : (
                 <span className="text-[10px] text-amber-400/60 font-mono">Default</span>
@@ -57,15 +56,13 @@ export default function AppearanceTab({
 
             <div>
               <div className="text-xs font-bold text-stone-100 flex items-center gap-1.5">
-                <span>{isEn ? "Classic Warm Amber" : "经典黑金"}</span>
+                <span>{t("appear.classicName")}</span>
                 <span className="text-[10px] font-normal text-amber-400/80">
-                  {isEn ? "(Default)" : "(默认)"}
+                  {t("appear.classicTag")}
                 </span>
               </div>
               <div className="text-[10px] text-stone-400 mt-1 leading-relaxed">
-                {isEn
-                  ? "Warm dark tone, amber cyber glow, geek cockpit aesthetic"
-                  : "沉浸暖黑底色 · 金琥珀微光 · 经典极客质感"}
+                {t("appear.classicDesc")}
               </div>
             </div>
 
@@ -94,7 +91,7 @@ export default function AppearanceTab({
               {appTheme === "monochrome" ? (
                 <span className="text-[10px] font-semibold text-black bg-white px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
                   <Check className="size-3" />
-                  <span>{isEn ? "Active" : "当前使用"}</span>
+                  <span>{t("appear.active")}</span>
                 </span>
               ) : (
                 <span className="text-[9px] font-semibold bg-white/10 text-zinc-300 px-1.5 py-0.2 rounded border border-white/20">
@@ -105,15 +102,13 @@ export default function AppearanceTab({
 
             <div>
               <div className="text-xs font-bold text-stone-100 flex items-center gap-1.5">
-                <span>{isEn ? "Monochrome Luxe" : "黑白高级感"}</span>
+                <span>{t("appear.monoName")}</span>
                 <span className="text-[9px] font-semibold bg-white text-black px-1.5 py-0.2 rounded">
                   高奢
                 </span>
               </div>
               <div className="text-[10px] text-zinc-400 mt-1 leading-relaxed">
-                {isEn
-                  ? "Deep obsidian black, zinc silver tiers, high-contrast PillNav invert"
-                  : "纯粹极夜曜黑 · 钛银灰阶 · 高反差 PillNav 翻转"}
+                {t("appear.monoDesc")}
               </div>
             </div>
 
@@ -142,7 +137,7 @@ export default function AppearanceTab({
               {appTheme === "system" ? (
                 <span className="text-[10px] font-semibold text-cyan-400 bg-cyan-500/20 border border-cyan-500/40 px-2 py-0.5 rounded-full flex items-center gap-1">
                   <Check className="size-3" />
-                  <span>{isEn ? "Active" : "当前使用"}</span>
+                  <span>{t("appear.active")}</span>
                 </span>
               ) : (
                 <span className="text-[10px] text-cyan-400/60 font-mono">Auto</span>
@@ -151,12 +146,10 @@ export default function AppearanceTab({
 
             <div>
               <div className="text-xs font-bold text-stone-100 flex items-center gap-1.5">
-                <span>{isEn ? "System Adaptive" : "跟随系统"}</span>
+                <span>{t("appear.systemName")}</span>
               </div>
               <div className="text-[10px] text-stone-400 mt-1 leading-relaxed">
-                {isEn
-                  ? "Adapt automatically according to OS dark/contrast appearance"
-                  : "自适应检测系统深色与高对比外观模式"}
+                {t("appear.systemDesc")}
               </div>
             </div>
 
@@ -173,7 +166,7 @@ export default function AppearanceTab({
       <div className="pt-3 border-t border-[var(--grid)]">
         <label className="block text-[var(--muted-fg)] text-[11px] mb-2 font-semibold tracking-wide uppercase flex items-center gap-1.5">
           <Languages className="size-3.5 text-[var(--muted-fg)]" />
-          <span>{isEn ? "System Language" : "系统显示语言 (Language)"}</span>
+          <span>{t("appear.langLabel")}</span>
         </label>
         <div className="grid grid-cols-2 gap-3">
           {LANGS.map((item) => (

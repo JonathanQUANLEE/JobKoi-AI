@@ -1,11 +1,5 @@
 export type Lang = "zh" | "en";
 
-/** 组件内偶尔需要一个布尔（传给子组件的 isEn prop / 条件渲染），
- * 统一从这取，避免各处再写 lang 比较。 */
-export function isEnglish(lang: Lang): boolean {
-  return lang === "en";
-}
-
 export const LANGS: { value: Lang; label: string }[] = [
   { value: "zh", label: "中文" },
   { value: "en", label: "English" },
@@ -244,6 +238,84 @@ const zh: Record<string, string> = {
   // ---- PlatformCard ----
   "pcard.todayDelivered": "今日已投递:",
   "pcard.safeDirect": "免密安全直连",
+  // ---- SettingsModal ----
+  "smodal.tab.general": "通用设置",
+  "smodal.tab.schedule": "定时巡航系统",
+  "smodal.tab.profile": "个人主页",
+  "smodal.tab.appearance": "外观主题",
+  "smodal.tab.shortcuts": "快捷键一览",
+  "smodal.tab.model": "AI 大模型",
+  "smodal.badge.configured": "已配置",
+  "smodal.badge.unset": "未配置",
+  "smodal.tab.notifications": "操作记录与通知",
+  "smodal.tab.about": "关于与帮助",
+  "smodal.title.general": "通用设置",
+  "smodal.title.schedule": "定时自动巡航系统",
+  "smodal.title.profile": "个人主页与求职者信息",
+  "smodal.title.appearance": "外观与显示主题",
+  "smodal.title.shortcuts": "常用快捷键",
+  "smodal.title.model": "AI 大模型服务配置",
+  "smodal.title.notifications": "操作记录与通知日志",
+  "smodal.title.about": "关于与帮助支持",
+  // ---- AppearanceTab ----
+  "appear.themeLabel": "界面显示主题",
+  "appear.themeHint": "即时切换 · 自动保存",
+  "appear.active": "当前使用",
+  "appear.classicName": "经典黑金",
+  "appear.classicTag": "(默认)",
+  "appear.classicDesc": "沉浸暖黑底色 · 金琥珀微光 · 经典极客质感",
+  "appear.monoName": "黑白高级感",
+  "appear.monoDesc": "纯粹极夜曜黑 · 钛银灰阶 · 高反差 PillNav 翻转",
+  "appear.systemName": "跟随系统",
+  "appear.systemDesc": "自适应检测系统深色与高对比外观模式",
+  "appear.langLabel": "系统显示语言 (Language)",
+  // ---- ShortcutsTab ----
+  "shortcut.toggleSidebar": "展开 / 收起侧边栏",
+  "shortcut.openSettings": "打开系统设置弹窗",
+  "shortcut.sendMessage": "顾问对话框中直接发送",
+  "shortcut.newLine": "对话框中换行",
+  "shortcut.closeDialog": "关闭当前弹窗或菜单",
+  // ---- ProfilePanel ----
+  "ppanel.notifySaved": "求职画像与配置已成功保存！",
+  "ppanel.notifySource": "求职画像",
+  "ppanel.syncedBadge": "已自动同步 AI 对话",
+  "ppanel.subtitle": "目标岗位、城市与投递偏好已由 AI 顾问整理就绪，支持直接修改",
+  "ppanel.back": "返回求职画像",
+  "ppanel.save": "保存画像",
+  "ppanel.saved": "已保存画像",
+  "ppanel.hint": "以下画像信息已根据与 AI 顾问的对话自动提炼生成，您可在此随时手动修改与微调。",
+  "ppanel.secureNote": "所有微调设置将实时加密存储在本地，作为自动巡航与打招呼依据",
+  "ppanel.saveFull": "保存画像配置",
+  "ppanel.savedFull": "已保存全部设置！",
+  // ---- TargetRolesCard ----
+  "trole.title": "目标岗位与城市",
+  "trole.jobTitle": "目标职位名称",
+  "trole.jobTitlePlaceholder": "例如：后端开发工程师 / 硬件研发",
+  "trole.cities": "意向城市",
+  "trole.citiesHint": "留空代表全国/不限",
+  "trole.citiesPlaceholder": "例如：深圳,广州,东莞",
+  "trole.citiesRotation": "已选 {count} 个城市：BOSS 直聘等平台单次最多勾选 4 个，系统已自动启用智能切批轮询（每轮 4 个轮流替换投递）。",
+  "trole.education": "期望学历",
+  // ---- DeliverySafetyCard ----
+  "dsafe.title": "投递设置与安全保护",
+  "dsafe.dailyLimit": "每日投递上限",
+  "dsafe.dailyLimitHint": "达到上限后自动停止，防止账号被平台限制",
+  "dsafe.perDay": "次/日",
+  "dsafe.antiBan": "智能防封保护",
+  "dsafe.antiBanDesc": "系统已默认配置最佳拟人随机浏览间隔，保障账号稳定安全",
+  "dsafe.protected": "已保护",
+  // ---- SkillsExclusionCard ----
+  "skillex.title": "技能偏好与排除方向",
+  "skillex.skills": "想找的专业技能词 (包含任意即可)",
+  "skillex.skillsPlaceholder": "例如：Python, FastAPI, 模电数电, 算法",
+  "skillex.exclusions": "不想考虑的方向 (系统自动避开)",
+  "skillex.exclusionsPlaceholder": "例如：销售, 客服, 劳务外包, 培训机构",
+  "skillex.hint": "系统将优先匹配包含您技能词的职位，并自动滤除包含不想考虑词汇的岗位。",
+  // ---- ResumeBindingCard ----
+  "rbind.title": "当前使用简历",
+  "rbind.manage": "管理简历库",
+  "rbind.attachmentHint": "默认简历附件 · 沟通后自动发送",
+  "rbind.change": "更换",
 };
 
 const en: Record<string, string> = {
@@ -479,6 +551,84 @@ const en: Record<string, string> = {
   // ---- PlatformCard ----
   "pcard.todayDelivered": "Today Delivered:",
   "pcard.safeDirect": "Safe & Direct",
+  // ---- SettingsModal ----
+  "smodal.tab.general": "General",
+  "smodal.tab.schedule": "Scheduled Cruise",
+  "smodal.tab.profile": "Profile",
+  "smodal.tab.appearance": "Appearance",
+  "smodal.tab.shortcuts": "Shortcuts",
+  "smodal.tab.model": "AI Model",
+  "smodal.badge.configured": "Configured",
+  "smodal.badge.unset": "Unset",
+  "smodal.tab.notifications": "Audit Logs",
+  "smodal.tab.about": "About & Help",
+  "smodal.title.general": "General Settings",
+  "smodal.title.schedule": "Scheduled Cruise System",
+  "smodal.title.profile": "User Profile",
+  "smodal.title.appearance": "Appearance & Theme",
+  "smodal.title.shortcuts": "Keyboard Shortcuts",
+  "smodal.title.model": "AI Model Configuration",
+  "smodal.title.notifications": "Audit & Notification Logs",
+  "smodal.title.about": "About JobHunter",
+  // ---- AppearanceTab ----
+  "appear.themeLabel": "Interface Theme",
+  "appear.themeHint": "Instant preview & auto-saved",
+  "appear.active": "Active",
+  "appear.classicName": "Classic Warm Amber",
+  "appear.classicTag": "(Default)",
+  "appear.classicDesc": "Warm dark tone, amber cyber glow, geek cockpit aesthetic",
+  "appear.monoName": "Monochrome Luxe",
+  "appear.monoDesc": "Deep obsidian black, zinc silver tiers, high-contrast PillNav invert",
+  "appear.systemName": "System Adaptive",
+  "appear.systemDesc": "Adapt automatically according to OS dark/contrast appearance",
+  "appear.langLabel": "System Language",
+  // ---- ShortcutsTab ----
+  "shortcut.toggleSidebar": "Toggle Sidebar",
+  "shortcut.openSettings": "Open Settings",
+  "shortcut.sendMessage": "Send message in AI chat",
+  "shortcut.newLine": "New line in chat",
+  "shortcut.closeDialog": "Close dialog or modal",
+  // ---- ProfilePanel ----
+  "ppanel.notifySaved": "Job profile successfully saved!",
+  "ppanel.notifySource": "Profile",
+  "ppanel.syncedBadge": "Synced with AI",
+  "ppanel.subtitle": "Your target role, cities, and preferences summarized by the AI advisor. You can freely edit them below.",
+  "ppanel.back": "Back to Job Profile",
+  "ppanel.save": "Save Profile",
+  "ppanel.saved": "Saved!",
+  "ppanel.hint": "Values below are auto-extracted from your conversation with the AI advisor. You can freely fine-tune them here.",
+  "ppanel.secureNote": "All preferences are saved securely on your device for job matching",
+  "ppanel.saveFull": "Save Profile",
+  "ppanel.savedFull": "Saved!",
+  // ---- TargetRolesCard ----
+  "trole.title": "Target Roles & Cities",
+  "trole.jobTitle": "Target Job Title",
+  "trole.jobTitlePlaceholder": "e.g. Backend Developer",
+  "trole.cities": "Preferred Cities",
+  "trole.citiesHint": "Empty = Any city",
+  "trole.citiesPlaceholder": "e.g. Shenzhen, Guangzhou",
+  "trole.citiesRotation": "Configured {count} cities: Platforms like BOSS limit selection to 4 at once. Smart rotation enabled (swapping in batches of 4).",
+  "trole.education": "Minimum Education",
+  // ---- DeliverySafetyCard ----
+  "dsafe.title": "Delivery Settings & Safety",
+  "dsafe.dailyLimit": "Daily Application Limit",
+  "dsafe.dailyLimitHint": "Automatically pauses after reaching limit",
+  "dsafe.perDay": "/day",
+  "dsafe.antiBan": "Smart Anti-Ban Protection",
+  "dsafe.antiBanDesc": "Human-like natural delays applied automatically",
+  "dsafe.protected": "Active",
+  // ---- SkillsExclusionCard ----
+  "skillex.title": "Skills & Exclusions",
+  "skillex.skills": "Key Skills / Technologies",
+  "skillex.skillsPlaceholder": "e.g. Python, FastAPI, React",
+  "skillex.exclusions": "Do Not Consider (Exclusions)",
+  "skillex.exclusionsPlaceholder": "e.g. Sales, Customer Service",
+  "skillex.hint": "Matches jobs containing your skills and automatically skips jobs containing unwanted terms.",
+  // ---- ResumeBindingCard ----
+  "rbind.title": "Attached Resume",
+  "rbind.manage": "Manage Resumes",
+  "rbind.attachmentHint": "Default attachment ready for recruiters",
+  "rbind.change": "Change",
 };
 
 const messages: Record<Lang, Record<string, string>> = { zh, en };

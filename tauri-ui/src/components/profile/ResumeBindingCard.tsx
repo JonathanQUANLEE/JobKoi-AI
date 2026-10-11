@@ -1,17 +1,19 @@
 import { FileText, ExternalLink } from "lucide-react";
+import { translate, type Lang } from "../../lib/i18n";
 import { MagicCard } from "../core/MagicBento";
 
 interface ResumeBindingCardProps {
   defaultResumeName: string;
   onGoToResumes: () => void;
-  isEn: boolean;
+  lang: Lang;
 }
 
 export default function ResumeBindingCard({
   defaultResumeName,
   onGoToResumes,
-  isEn,
+  lang,
 }: ResumeBindingCardProps) {
+  const t = (key: string, vars?: Record<string, string | number>) => translate(lang, key, vars);
   return (
     <MagicCard
       className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm space-y-4"
@@ -25,7 +27,7 @@ export default function ResumeBindingCard({
         <div className="flex items-center gap-2">
           <FileText className="size-4 text-amber-400" />
           <h2 className="text-xs font-bold uppercase tracking-wider text-stone-200">
-            {isEn ? "Attached Resume" : "当前使用简历"}
+            {t("rbind.title")}
           </h2>
         </div>
         <button
@@ -33,7 +35,7 @@ export default function ResumeBindingCard({
           onClick={onGoToResumes}
           className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer hover:underline"
         >
-          <span>{isEn ? "Manage Resumes" : "管理简历库"}</span>
+          <span>{t("rbind.manage")}</span>
           <ExternalLink className="size-3" />
         </button>
       </div>
@@ -51,7 +53,7 @@ export default function ResumeBindingCard({
               {defaultResumeName || "我的求职简历.docx"}
             </div>
             <div className="text-[10px] text-stone-400 mt-0.5">
-              {isEn ? "Default attachment ready for recruiters" : "默认简历附件 · 沟通后自动发送"}
+              {t("rbind.attachmentHint")}
             </div>
           </div>
         </div>
@@ -60,7 +62,7 @@ export default function ResumeBindingCard({
           onClick={onGoToResumes}
           className="px-3 py-1.5 rounded-lg border border-[var(--grid)] hover:border-stone-700 bg-[#1c1917] text-xs text-stone-300 hover:text-white shrink-0 cursor-pointer"
         >
-          {isEn ? "Change" : "更换"}
+          {t("rbind.change")}
         </button>
       </div>
     </MagicCard>

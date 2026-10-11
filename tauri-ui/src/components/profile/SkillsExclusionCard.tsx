@@ -1,12 +1,13 @@
 import { type Dispatch, type SetStateAction } from "react";
 import { Filter } from "lucide-react";
 import type { RuleForm } from "../../lib/profileForm";
+import { translate, type Lang } from "../../lib/i18n";
 import { MagicCard } from "../core/MagicBento";
 
 interface SkillsExclusionCardProps {
   rule: RuleForm;
   setRule: Dispatch<SetStateAction<RuleForm>>;
-  isEn: boolean;
+  lang: Lang;
   commonExcludes: string[];
   toggleExclude: (word: string) => void;
 }
@@ -14,10 +15,11 @@ interface SkillsExclusionCardProps {
 export default function SkillsExclusionCard({
   rule,
   setRule,
-  isEn,
+  lang,
   commonExcludes,
   toggleExclude,
 }: SkillsExclusionCardProps) {
+  const t = (key: string, vars?: Record<string, string | number>) => translate(lang, key, vars);
   return (
     <MagicCard
       className="rounded-2xl border border-[var(--grid)] bg-[var(--panel)] p-5 shadow-sm space-y-4"
@@ -30,33 +32,33 @@ export default function SkillsExclusionCard({
       <div className="flex items-center gap-2 pb-2.5 border-b border-[var(--grid)]">
         <Filter className="size-4 text-emerald-400" />
         <h2 className="text-xs font-bold uppercase tracking-wider text-stone-200">
-          {isEn ? "Skills & Exclusions" : "技能偏好与排除方向"}
+          {t("skillex.title")}
         </h2>
       </div>
 
       <div className="space-y-4 text-xs">
         <div>
           <label className="block text-stone-300 text-xs mb-1.5 font-medium">
-            {isEn ? "Key Skills / Technologies" : "想找的专业技能词 (包含任意即可)"}
+            {t("skillex.skills")}
           </label>
           <input
             type="text"
             value={rule.anyKeywords}
             onChange={(e) => setRule((prev) => ({ ...prev, anyKeywords: e.target.value }))}
-            placeholder={isEn ? "e.g. Python, FastAPI, React" : "例如：Python, FastAPI, 模电数电, 算法"}
+            placeholder={t("skillex.skillsPlaceholder")}
             className="w-full rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] px-3.5 py-2.5 text-xs text-emerald-300 placeholder-stone-600 focus:border-emerald-500/60 focus:outline-none font-mono"
           />
         </div>
 
         <div>
           <label className="block text-stone-300 text-xs mb-1.5 font-medium">
-            {isEn ? "Do Not Consider (Exclusions)" : "不想考虑的方向 (系统自动避开)"}
+            {t("skillex.exclusions")}
           </label>
           <input
             type="text"
             value={rule.excludeKeywords}
             onChange={(e) => setRule((prev) => ({ ...prev, excludeKeywords: e.target.value }))}
-            placeholder={isEn ? "e.g. Sales, Customer Service" : "例如：销售, 客服, 劳务外包, 培训机构"}
+            placeholder={t("skillex.exclusionsPlaceholder")}
             className="w-full rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] px-3.5 py-2.5 text-xs text-red-300 placeholder-stone-600 focus:border-red-500/60 focus:outline-none font-mono"
           />
           <div className="flex flex-wrap gap-1.5 mt-2">
@@ -82,9 +84,7 @@ export default function SkillsExclusionCard({
 
         <div className="p-3 rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] text-stone-400 text-[11px] leading-relaxed">
           💡{" "}
-          {isEn
-            ? "Matches jobs containing your skills and automatically skips jobs containing unwanted terms."
-            : "系统将优先匹配包含您技能词的职位，并自动滤除包含不想考虑词汇的岗位。"}
+          {t("skillex.hint")}
         </div>
       </div>
     </MagicCard>

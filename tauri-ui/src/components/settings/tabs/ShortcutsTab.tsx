@@ -1,5 +1,7 @@
+import { translate, type Lang } from "../../../lib/i18n";
+
 interface ShortcutsTabProps {
-  isEn: boolean;
+  lang: Lang;
 }
 
 function ShortcutRow({ keys, desc }: { keys: string[]; desc: string }) {
@@ -17,15 +19,16 @@ function ShortcutRow({ keys, desc }: { keys: string[]; desc: string }) {
   );
 }
 
-export default function ShortcutsTab({ isEn }: ShortcutsTabProps) {
+export default function ShortcutsTab({ lang }: ShortcutsTabProps) {
+  const t = (key: string, vars?: Record<string, string | number>) => translate(lang, key, vars);
   return (
     <div className="space-y-3">
       <div className="divide-y divide-[var(--grid)]/70">
-        <ShortcutRow keys={["Ctrl", "B"]} desc={isEn ? "Toggle Sidebar" : "展开 / 收起侧边栏"} />
-        <ShortcutRow keys={["Ctrl", ","]} desc={isEn ? "Open Settings" : "打开系统设置弹窗"} />
-        <ShortcutRow keys={["Enter"]} desc={isEn ? "Send message in AI chat" : "顾问对话框中直接发送"} />
-        <ShortcutRow keys={["Shift", "Enter"]} desc={isEn ? "New line in chat" : "对话框中换行"} />
-        <ShortcutRow keys={["Esc"]} desc={isEn ? "Close dialog or modal" : "关闭当前弹窗或菜单"} />
+        <ShortcutRow keys={["Ctrl", "B"]} desc={t("shortcut.toggleSidebar")} />
+        <ShortcutRow keys={["Ctrl", ","]} desc={t("shortcut.openSettings")} />
+        <ShortcutRow keys={["Enter"]} desc={t("shortcut.sendMessage")} />
+        <ShortcutRow keys={["Shift", "Enter"]} desc={t("shortcut.newLine")} />
+        <ShortcutRow keys={["Esc"]} desc={t("shortcut.closeDialog")} />
       </div>
     </div>
   );

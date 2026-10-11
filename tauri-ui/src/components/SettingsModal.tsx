@@ -9,7 +9,7 @@ import {
   Info,
   Bell,
 } from "lucide-react";
-import { isEnglish, type Lang } from "../lib/i18n";
+import { translate, type Lang } from "../lib/i18n";
 import { useRunStore } from "../store";
 import OptionWheel, { type OptionWheelItemData } from "./OptionWheel";
 import GeneralTab from "./settings/tabs/GeneralTab";
@@ -98,46 +98,46 @@ export default function SettingsModal({
 
   if (!isOpen) return null;
 
-  const isEn = isEnglish(lang);
+  const t = (key: string, vars?: Record<string, string | number>) => translate(lang, key, vars);
 
   const tabItems: OptionWheelItemData[] = [
     {
       id: "general",
-      label: isEn ? "General" : "通用设置",
+      label: t("smodal.tab.general"),
       icon: <Settings className="size-4" />,
     },
     {
       id: "schedule",
-      label: isEn ? "Scheduled Cruise" : "定时巡航系统",
+      label: t("smodal.tab.schedule"),
       icon: <Clock className="size-4" />,
     },
     {
       id: "profile",
-      label: isEn ? "Profile" : "个人主页",
+      label: t("smodal.tab.profile"),
       icon: <User className="size-4" />,
     },
     {
       id: "appearance",
-      label: isEn ? "Appearance" : "外观主题",
+      label: t("smodal.tab.appearance"),
       icon: <Palette className="size-4" />,
     },
     {
       id: "shortcuts",
-      label: isEn ? "Shortcuts" : "快捷键一览",
+      label: t("smodal.tab.shortcuts"),
       icon: <Keyboard className="size-4" />,
     },
     {
       id: "model",
-      label: isEn ? "AI Model" : "AI 大模型",
+      label: t("smodal.tab.model"),
       icon: <Bot className="size-4" />,
-      badge: llmConfig?.configured ? (isEn ? "Configured" : "已配置") : (isEn ? "Unset" : "未配置"),
+      badge: llmConfig?.configured ? t("smodal.badge.configured") : t("smodal.badge.unset"),
       badgeColor: llmConfig?.configured
         ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/30"
         : "bg-stone-800 text-stone-400 border border-stone-700/40",
     },
     {
       id: "notifications",
-      label: isEn ? "Audit Logs" : "操作记录与通知",
+      label: t("smodal.tab.notifications"),
       icon: <Bell className="size-4" />,
       badge: auditLogs.length > 0 ? String(auditLogs.length) : undefined,
       badgeColor: isMonochrome
@@ -146,7 +146,7 @@ export default function SettingsModal({
     },
     {
       id: "about",
-      label: isEn ? "About & Help" : "关于与帮助",
+      label: t("smodal.tab.about"),
       icon: <Info className="size-4" />,
     },
   ];
@@ -212,14 +212,14 @@ export default function SettingsModal({
                 {activeTab === "about" && <Info className="size-4" />}
               </span>
               <span>
-                {activeTab === "general" && (isEn ? "General Settings" : "通用设置")}
-                {activeTab === "schedule" && (isEn ? "Scheduled Cruise System" : "定时自动巡航系统")}
-                {activeTab === "profile" && (isEn ? "User Profile" : "个人主页与求职者信息")}
-                {activeTab === "appearance" && (isEn ? "Appearance & Theme" : "外观与显示主题")}
-                {activeTab === "shortcuts" && (isEn ? "Keyboard Shortcuts" : "常用快捷键")}
-                {activeTab === "model" && (isEn ? "AI Model Configuration" : "AI 大模型服务配置")}
-                {activeTab === "notifications" && (isEn ? "Audit & Notification Logs" : "操作记录与通知日志")}
-                {activeTab === "about" && (isEn ? "About JobHunter" : "关于与帮助支持")}
+                {activeTab === "general" && t("smodal.title.general")}
+                {activeTab === "schedule" && t("smodal.title.schedule")}
+                {activeTab === "profile" && t("smodal.title.profile")}
+                {activeTab === "appearance" && t("smodal.title.appearance")}
+                {activeTab === "shortcuts" && t("smodal.title.shortcuts")}
+                {activeTab === "model" && t("smodal.title.model")}
+                {activeTab === "notifications" && t("smodal.title.notifications")}
+                {activeTab === "about" && t("smodal.title.about")}
               </span>
             </h2>
             <button
@@ -269,7 +269,6 @@ export default function SettingsModal({
 
             {activeTab === "appearance" && (
               <AppearanceTab
-                isEn={isEn}
                 appTheme={appTheme}
                 setAppTheme={setAppTheme}
                 lang={lang}
@@ -279,7 +278,7 @@ export default function SettingsModal({
             )}
 
             {activeTab === "shortcuts" && (
-              <ShortcutsTab isEn={isEn} />
+              <ShortcutsTab lang={lang} />
             )}
 
             {activeTab === "model" && (
