@@ -12,7 +12,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import random
 import re
@@ -27,6 +26,13 @@ if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
 from liepin import driver  # noqa: E402
+from boss_zhipin.platforms.ledger import (  # noqa: E402
+    append_jsonl,
+    normalize_company,
+    sent_companies,
+    sent_job_ids,
+    today_sent,
+)
 
 LOGS = ROOT / "logs"
 SENT_LOG = LOGS / "liepin_sent.jsonl"
@@ -52,16 +58,6 @@ DEFAULT_KEYWORDS = [
 ]
 
 
-def _normalize_company(name: str) -> str:
-    s = re.sub(r"[\s\u3000]+", "", str(name or "")).lower()
-    s = re.sub(r"[\(（\[][^)）\]]*[\)）\]]", "", s)
-    for suffix in ("股份有限公司", "有限责任公司", "有限公司", "集团公司", "公司", "集团"):
-        if s.endswith(suffix) and len(s) > len(suffix):
-            s = s[: -len(suffix)]
-            break
-    return s
-
-
 # 标题过滤：用户要"AI 相关"，但猎聘搜索会混入不相关岗位（实测混进"海外市场专员"），
 # 这里要求标题命中任一 AI 关键词才投。英文词用词边界，避免 \bai\b 误伤 email/fair。
 AI_TITLE_PATTERNS = [
@@ -82,45 +78,14 @@ def _is_ai_title(title: str) -> bool:
     return False
 
 
-def _load_jsonl(path: Path) -> list[dict]:
-    if not path.exists():
-        return []
-    out = []
-    with path.open(encoding="utf-8", errors="replace") as f:
-        for line in f:
-            try:
-                out.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-    return out
-
-
-def _append_jsonl(path: Path, rec: dict) -> None:
-    with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-
-
-def _sent_job_ids() -> set[str]:
-    return {r.get("job_id") for r in _load_jsonl(SENT_LOG) if r.get("job_id")}
-
-
-def _sent_companies() -> set[str]:
-    return {_normalize_company(r.get("company")) for r in _load_jsonl(SENT_LOG) if r.get("company")}
-
-
-def _today_sent() -> int:
-    today = datetime.now().strftime("%Y-%m-%d")
-    return sum(1 for r in _load_jsonl(SENT_LOG) if str(r.get("ts") or "").startswith(today))
-
-
 def _log(msg: str) -> None:
     print(msg, flush=True)
 
 
 async def run(keywords: list[str], daily_limit: int, greeting: str) -> int:
     """跑一轮投递，返回本轮新发送条数。"""
-    sent_ids = _sent_job_ids()
-    sent_companies = _sent_companies()
+    sent_ids = sent_job_ids(SENT_LOG)
+    sent_companies = sent_companies(SENT_LOG)
     _log(f"[liepin] 已打招呼 {len(sent_ids)} 个岗位 / {len(sent_companies)} 家公司（将跳过）")
 
     tab = await driver.open_browser(driver.SEARCH_TMPL.format(kw="AI Agent"))
@@ -128,7 +93,7 @@ async def run(keywords: list[str], daily_limit: int, greeting: str) -> int:
         _log("[liepin] 未登录，请先跑 scripts/liepin_login.py 扫码")
         return -1
 
-    sent_today = _today_sent()
+    sent_today = today_sent(SENT_LOG)
     sent_this_run = 0
 
     for kw in keywords:
@@ -152,37 +117,37 @@ async def run(keywords: list[str], daily_limit: int, greeting: str) -> int:
             if job_id in sent_ids:
                 continue
             if not _is_ai_title(title):
-                _append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "not_ai_title"})
+                append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "not_ai_title"})
                 continue
-            if _normalize_company(company) in sent_companies and company:
-                _append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "company_dedup"})
+            if normalize_company(company) in sent_companies and company:
+                append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "company_dedup"})
                 continue
 
             # 打开详情页，抓公司名（更准），再点聊一聊
             await driver.open_detail(tab, href)
             detail_company = await driver.detail_company(tab)
             company = detail_company or company
-            if company and _normalize_company(company) in sent_companies:
-                _append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "company_dedup"})
+            if company and normalize_company(company) in sent_companies:
+                append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "company_dedup"})
                 sent_ids.add(job_id)
                 continue
 
             result = await driver.click_chat_and_send(tab, greeting)
             if result == "captcha":
                 _log("[liepin] 🛑 触发风控验证码，立即停止本轮（避免封号）")
-                _append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "captcha"})
+                append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "captcha"})
                 return sent_this_run
             if result == "limit":
                 _log("[liepin] 🛑 平台提示今日打招呼次数已达上限，安全停止本轮（已投 %s 个）", sent_today)
-                _append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "platform_limit"})
+                append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "platform_limit"})
                 return sent_this_run
             if result == "sent":
                 sent_ids.add(job_id)
                 if company:
-                    sent_companies.add(_normalize_company(company))
+                    sent_companies.add(normalize_company(company))
                 sent_today += 1
                 sent_this_run += 1
-                _append_jsonl(SENT_LOG, {
+                append_jsonl(SENT_LOG, {
                     "ts": datetime.now().isoformat(),
                     "job_id": job_id, "title": title, "company": company,
                     "sent": True, "keyword": kw,
@@ -192,7 +157,7 @@ async def run(keywords: list[str], daily_limit: int, greeting: str) -> int:
                 # 3 秒一个必触发风控。随机 40~80 秒。
                 await asyncio.sleep(random.uniform(40, 80))
             else:
-                _append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": result})
+                append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": result})
                 _log(f"[liepin] ⚠️ 跳过（{result}）：{title}")
                 await asyncio.sleep(random.uniform(5, 12))
 

@@ -6,8 +6,12 @@ import json
 import logging
 import os
 from pathlib import Path
-import re
 from typing import TYPE_CHECKING
+
+from boss_zhipin.platforms.ledger import (
+    append_jsonl as _append_jsonl,
+    normalize_company as _normalize_company,
+)
 
 if TYPE_CHECKING:
     from boss_zhipin.website_oper.core.models import JobPosting
@@ -42,24 +46,6 @@ def _read_seen_job_keys(path: Path | None) -> set[str]:
     return keys
 
 
-def _normalize_company(name: str) -> str:
-    """公司名规范化，用于'同一家公司只打一次招呼'。"""
-    s = re.sub(r"[\s\u3000]+", "", str(name or "")).lower()
-    s = re.sub(r"[\(（\[][^)）\]]*[\)）\]]", "", s)
-    for suffix in (
-        "股份有限公司",
-        "有限责任公司",
-        "有限公司",
-        "集团公司",
-        "公司",
-        "集团",
-    ):
-        if s.endswith(suffix) and len(s) > len(suffix):
-            s = s[: -len(suffix)]
-            break
-    return s
-
-
 def _read_contacted_companies(path: Path | None) -> set[str]:
     """读 sent 日志里已经联系过的公司名集合。"""
     if path is None or not path.exists():
@@ -81,14 +67,6 @@ def _read_contacted_companies(path: Path | None) -> set[str]:
             if name:
                 companies.add(name)
     return companies
-
-
-def _append_jsonl(path: Path | None, record: dict) -> None:
-    if path is None:
-        return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 def _job_payload(job: JobPosting) -> dict:
