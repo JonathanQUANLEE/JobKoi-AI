@@ -87,6 +87,28 @@ async def shutdown() -> None:
     finding_jobs._tab = None
 
 
+def is_browser_alive() -> bool:
+    """受控 Chrome 进程是否还活着（同步零网络：查子进程退出码）。
+
+    为什么需要它（2026-10-12 事故）：用户中途手动关浏览器后，上一轮巡航
+    从 API 流的翻页异常路径退出，``_browser``/``_tab`` 死引用残留；下一轮
+    巡航入口只看"引用是否为 None"就复用死会话——新浏览器永远不开、页面
+    筛选瞬间全失败、DOM 流空转成僵尸。入口复用前必须先验活。
+
+    实现：nodriver ``Browser.stopped`` 属性查 Chrome 子进程 returncode，
+    进程退出（含用户手关窗口）立即判死；不发起任何 CDP 网络请求。
+    """
+    from boss_zhipin.website_oper import finding_jobs
+
+    browser = finding_jobs._browser
+    if browser is None:
+        return False
+    try:
+        return not browser.stopped
+    except Exception:  # noqa: BLE001 — 验活失败按"已死"处理，宁可重开不可复用死引用
+        return False
+
+
 async def open_browser_with_options(url_target: str, browser: str) -> None:
     """启动 Chrome 并打开 url。``browser`` 仅接受 ``"chrome"``。"""
     from boss_zhipin.website_oper import finding_jobs
