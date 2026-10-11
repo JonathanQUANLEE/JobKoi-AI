@@ -138,8 +138,12 @@ export default function PlatformHub({
       if (res.status === "error") {
         setMessage(`提示: ${res.message || "拉起失败"}`);
       } else if (res.logged_in) {
-        // 扫码已成功（后端等到了登录态）→ 立即刷新平台卡状态
+        // 扫码已成功（后端等到了登录态并已自动关闭浏览器）→ 刷新状态 + 中央大字提示
         setMessage(`「${platformId}」已登录成功，状态已刷新！`);
+        useRunStore.getState().showCenterToast("检测到您已登录 · 认证成功", {
+          tone: "success",
+          duration: 2200,
+        });
         await loadPlatforms();
       } else {
         setMessage(`已打开「${platformId}」登录页，请在浏览器扫码；完成后点「刷新状态」。`);

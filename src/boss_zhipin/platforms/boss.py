@@ -138,6 +138,9 @@ class BossPlatform(BasePlatform):
         deadline = asyncio.get_event_loop().time() + 300
         while asyncio.get_event_loop().time() < deadline:
             if await _is_logged_in():
+                # 登录成功：cookie 已写入持久化 profile（重新开浏览器自动免登）。
+                # 立即关闭登录用的受控浏览器，回应用户"扫完码就关掉"的预期。
+                await finding_jobs.shutdown()
                 return {"status": "ok", "logged_in": True, "url": BOSS_LOGIN_URL}
             await asyncio.sleep(2)
         return {"status": "opened", "logged_in": False, "url": BOSS_LOGIN_URL}
