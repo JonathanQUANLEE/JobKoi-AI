@@ -1,29 +1,24 @@
 """BOSS 直聘平台适配器实现。
 
-登录态判定（2026-10-11 修复"假就绪"）：
-- 不再用「Cookies 文件存在」当已登录——文件永远存在，cookie 却会过期。
-- 读取 Chrome Cookies SQLite 里 zhipin.com 域 cookie 的 expires_utc
-  （Chrome 时间基准 1601-01-01，微秒），存在未过期的持久 cookie 才判「已就绪」；
-- 全部过期/无 cookie → 「未登录 (需扫码)」；数据库读不出（被 Chrome 锁定等）
-  → 「待验证」，绝不冒充已就绪。
-- 浏览器已打开时，`detect_login_state()` 再用 DOM + URL 双重探测覆盖
-  （`login_detector._is_logged_in`），静态快照进化为真实校验。
+登录态判定（2026-10-11 假就绪事故后的最终版）：
+- 只认**登录凭证 cookie ``bst``**（BOSS Session Token，登录后才有、游客绝无）
+  且必须持久未过期——游客的统计/防爬 cookie（__zp_stoken__ 等）一概不算；
+- 实测教训：扫完 7 条游客 cookie 也曾被误判"已就绪"，根因是判据太宽。
 """
 
 from __future__ import annotations
 
 import logging
-import sqlite3
-import time
 from pathlib import Path
 from typing import Any
 
 from boss_zhipin.platforms.base import BasePlatform, PlatformInfo
+from boss_zhipin.platforms.cookies_probe import read_cookie_state
 
 log = logging.getLogger(__name__)
 
-# Unix epoch 与 Chrome cookie 时间基准（1601-01-01T00:00:00Z）的微秒差
-_CHROME_EPOCH_OFFSET_MICROS = 11644473600000000
+# BOSS 网页登录的唯一凭证 cookie：登录成功才写入、游客绝无
+BOSS_LOGIN_COOKIE_NAMES = ("bst",)
 
 
 class BossPlatform(BasePlatform):
@@ -35,56 +30,17 @@ class BossPlatform(BasePlatform):
         return self.root_dir / "chrome_profile"
 
     def _cookie_login_state(self) -> bool | None:
-        """True=有未过期 cookie / False=无 cookie 或全过期 / None=读不出。
+        """True=有 bst 登录凭证 / False=明确未登录 / None=读不出（待验证）。
 
-        性能红线：本函数在平台列表的展示路径上（list_platforms 秒回），
-        **绝不等待数据库锁**——Chrome 运行时会独占锁定 Cookies 库，
-        timeout=0 让锁冲突立即失败返回 None（前端显示「待验证」），
-        而不是阻塞接口把平台卡片拖成空白（2026-10-11 实测教训）。
+        性能红线：在平台列表展示路径上（list_platforms 秒回），
+        timeout=0 绝不等 Chrome 的数据库锁。
         """
-        profile_dir = self._get_profile_dir()
-        if not profile_dir.is_dir():
-            return False
-        now_micros = int(time.time() * 1_000_000) + _CHROME_EPOCH_OFFSET_MICROS
-        candidates = [
-            profile_dir / "Default" / "Network" / "Cookies",
-            profile_dir / "Default" / "Cookies",
-        ]
-        found = False
-        for db_path in candidates:
-            if not db_path.is_file():
-                continue
-            found = True
-            try:
-                conn = sqlite3.connect(
-                    f"file:{db_path.as_posix()}?mode=ro", uri=True, timeout=0
-                )
-                rows = conn.execute(
-                    "SELECT expires_utc, is_persistent FROM cookies "
-                    "WHERE host_key LIKE '%zhipin.com'"
-                ).fetchall()
-                conn.close()
-            except sqlite3.Error as e:
-                # 最常见：Chrome 正在运行锁库（database is locked）——立即跳过，
-                # 状态显示「待验证」，等浏览器关闭后自然恢复准确判定。
-                log.debug("读 %s 失败（多被 Chrome 锁定）: %s", db_path.name, e)
-                continue
-            if not rows:
-                return False
-            # expires_utc=0 表示会话 cookie；持久 cookie 需未过期
-            alive = any(
-                not persistent or expires == 0 or expires > now_micros
-                for expires, persistent in rows
-            )
-            return alive
-        if not found:
-            # 连 Cookies 文件都没有：从没起过浏览器 → 确定未登录
-            return False
-        # 文件都在但全部锁定：Chrome 在跑 → 拿不到证据，判「待验证」
-        return None
+        return read_cookie_state(
+            self._get_profile_dir(), "%zhipin.com", BOSS_LOGIN_COOKIE_NAMES
+        )
 
     def check_login(self) -> bool:
-        """同步登录态（cookie 证据），契约用。运行时建议用 detect_login_state。"""
+        """同步登录态（bst cookie 证据），给平台中心展示用。"""
         return self._cookie_login_state() is True
 
     def get_info(self) -> PlatformInfo:
