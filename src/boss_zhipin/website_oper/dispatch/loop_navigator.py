@@ -1,6 +1,7 @@
 """推荐流分页加载、城市切批轮换与拿不到 JD 时的恢复逻辑（从 runner_loop 拆分）。"""
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -19,7 +20,7 @@ async def reload_feed_and_restart(page_filters: dict[str, Any]) -> bool:
         reloaded = await finding_jobs.reload_current_page()
         if not reloaded:
             return False
-    await write_response.asyncio.sleep(3)
+    await asyncio.sleep(3)
     return True
 
 
@@ -51,25 +52,25 @@ async def handle_missing_jd_recovery(
         )
 
     if await finding_jobs.scroll_to_load_more_jobs():
-        await write_response.asyncio.sleep(1)
+        await asyncio.sleep(1)
         return "continue", window_index, 0, barren_reloads
 
     if await finding_jobs.click_next_page_if_present():
-        await write_response.asyncio.sleep(1)
+        await asyncio.sleep(1)
         return "continue", 1, 0, barren_reloads
 
     if await finding_jobs.navigate_next_search_page():
-        await write_response.asyncio.sleep(2)
+        await asyncio.sleep(2)
         return "continue", 1, 0, barren_reloads
 
     latest_loaded_count = await finding_jobs.get_loaded_job_count()
     if loaded_count and window_index > loaded_count and latest_loaded_count >= window_index:
         log.info("第 %d 个岗位已出现在列表中，重新读取当前岗位", window_index)
-        await write_response.asyncio.sleep(1)
+        await asyncio.sleep(1)
         return "continue", window_index, 0, barren_reloads
 
     if loaded_count and window_index > loaded_count and consecutive_misses < max_consecutive_misses:
-        await write_response.asyncio.sleep(1)
+        await asyncio.sleep(1)
         return "continue", window_index, consecutive_misses, barren_reloads
 
     if consecutive_misses >= max_consecutive_misses:

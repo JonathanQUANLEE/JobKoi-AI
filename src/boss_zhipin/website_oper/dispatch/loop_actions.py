@@ -33,7 +33,7 @@ async def click_contact_and_send_response(response: str) -> None:
     if not await finding_jobs.click_by_xpath(contact_xpath, timeout=10):
         raise RuntimeError("立即沟通按钮未找到")
 
-    await write_response.asyncio.sleep(1)
+    await asyncio.sleep(1)
     await check_platform_limit()
 
     if await finding_jobs.click_stay_on_page_if_present():

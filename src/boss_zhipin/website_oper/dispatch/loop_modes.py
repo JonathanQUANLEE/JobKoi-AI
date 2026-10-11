@@ -1,7 +1,9 @@
 """三种投递模式的执行调度分支（从 runner_loop 拆分）。"""
 from __future__ import annotations
 
+import asyncio
 import logging
+import random
 from typing import Any
 
 log = logging.getLogger(__name__)
@@ -173,9 +175,9 @@ async def handle_auto_send_job(
         write_response._emit_progress("feed_exhausted", total=job_index)
         return True, sent_count, daily_sent_count
 
-    delay = write_response.random.uniform(delay_min, delay_max)
+    delay = random.uniform(delay_min, delay_max)
     log.info("自动发送节流等待 %.1f 秒后继续", delay)
-    await write_response.asyncio.sleep(delay)
+    await asyncio.sleep(delay)
     return False, sent_count, daily_sent_count
 
 
