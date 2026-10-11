@@ -47,6 +47,7 @@ def test_tauri_ipc_commands_match_gui_v02_contract():
         # 多平台适配层（多平台选择与扫码登录）
         "list_platforms",
         "open_platform_login",
+        "check_login_status",
         # 窗口控制
         "window_minimize",
         "window_toggle_maximize",

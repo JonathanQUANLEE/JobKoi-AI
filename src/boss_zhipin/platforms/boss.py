@@ -50,11 +50,11 @@ class BossPlatform(BasePlatform):
             profile_dir / "Default" / "Network" / "Cookies",
             profile_dir / "Default" / "Cookies",
         ]
-        checked = False
+        found = False
         for db_path in candidates:
             if not db_path.is_file():
                 continue
-            checked = True
+            found = True
             try:
                 conn = sqlite3.connect(
                     f"file:{db_path.as_posix()}?mode=ro", uri=True, timeout=0
@@ -77,9 +77,11 @@ class BossPlatform(BasePlatform):
                 for expires, persistent in rows
             )
             return alive
-        if not checked:
-            return None
-        return False
+        if not found:
+            # 连 Cookies 文件都没有：从没起过浏览器 → 确定未登录
+            return False
+        # 文件都在但全部锁定：Chrome 在跑 → 拿不到证据，判「待验证」
+        return None
 
     def check_login(self) -> bool:
         """同步登录态（cookie 证据），契约用。运行时建议用 detect_login_state。"""
@@ -105,9 +107,12 @@ class BossPlatform(BasePlatform):
         )
 
     async def open_login_browser(self) -> dict[str, Any]:
-        """打开 BOSS 登录页（直接导航到登录 URL），等待用户扫码完成后返回结果。"""
-        import asyncio
+        """打开 BOSS 登录页后**立即返回**（绝不阻塞等扫码）。
 
+        登录成功的确认由前端轮询 ``check_login_status`` 完成——一个 IPC
+        挂 300 秒等扫码会拖死后续所有 IPC（2026-10-11 平台卡片空白事故
+        根因），必须拆成「秒开 + 轮询确认」。
+        """
         from boss_zhipin.website_oper import finding_jobs
         from boss_zhipin.website_oper.core.login_detector import (
             BOSS_LOGIN_URL,
@@ -128,12 +133,9 @@ class BossPlatform(BasePlatform):
             pass
         await _wait_url_stable(stable_for=2.0, timeout=15)
 
-        deadline = asyncio.get_event_loop().time() + 300
-        while asyncio.get_event_loop().time() < deadline:
-            if await _is_logged_in():
-                # 登录成功：cookie 已写入持久化 profile（重新开浏览器自动免登）。
-                # 立即关闭登录用的受控浏览器，回应用户"扫完码就关掉"的预期。
-                await finding_jobs.shutdown()
-                return {"status": "ok", "logged_in": True, "url": BOSS_LOGIN_URL}
-            await asyncio.sleep(2)
-        return {"status": "opened", "logged_in": False, "url": BOSS_LOGIN_URL}
+        logged_in = False
+        try:
+            logged_in = await _is_logged_in()
+        except Exception:  # noqa: BLE001
+            logged_in = False
+        return {"status": "opened", "logged_in": logged_in, "url": BOSS_LOGIN_URL}

@@ -636,6 +636,33 @@ async def open_platform_login(body: _PlatformLoginBody) -> dict[str, Any]:
     return await get_platform_manager().open_login(body.platform_id)
 
 
+@commands.command()
+async def check_login_status(body: _PlatformLoginBody) -> dict[str, Any]:
+    """轻量登录态探测（有界 ≤6s）：前端登录后每几秒轮询一次。
+
+    性能红线：本命令**必须有界**——绝不能像旧版 open_platform_login 那样
+    挂 300 秒等扫码（会把后续所有 IPC 拖死，平台卡片全空白）。
+    - 浏览器已打开（BOSS 受控 tab 在）→ DOM+URL 探测，_safe_evaluate 自带 5s 超时；
+    - 浏览器没开 → 秒回（cookie SQLite 证据，timeout=0 不等锁）。
+    """
+    from boss_zhipin.platforms import get_platform_manager
+
+    platform = get_platform_manager().get_platform(body.platform_id)
+    if platform is None:
+        return {"logged_in": False, "verified": False}
+    if body.platform_id == "boss":
+        from boss_zhipin.website_oper import finding_jobs
+        from boss_zhipin.website_oper.core.login_detector import _is_logged_in
+
+        if finding_jobs.get_tab() is not None:
+            try:
+                live = await _is_logged_in()
+                return {"logged_in": bool(live), "verified": True}
+            except Exception as e:  # noqa: BLE001
+                log.warning("check_login_status DOM 探测失败: %s", e)
+    return {"logged_in": platform.check_login(), "verified": False}
+
+
 class _GetDeliveryHistoryBody(_CamelModel):
     platform: str = ""
     limit: int = 100
