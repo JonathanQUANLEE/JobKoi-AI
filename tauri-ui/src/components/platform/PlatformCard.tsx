@@ -1,7 +1,7 @@
 import React from "react";
 import { CheckSquare, Square, FileText, RefreshCw, Send, ShieldCheck, ExternalLink } from "lucide-react";
 import type { PlatformItem } from "../../lib/ipc";
-import type { Lang } from "../../lib/i18n";
+import { translate, type Lang } from "../../lib/i18n";
 import { MagicCard } from "../core/MagicBento";
 
 interface PlatformCardProps {
@@ -31,6 +31,8 @@ export default function PlatformCard({
   busy,
   onLogin,
 }: PlatformCardProps) {
+  const t = (key: string, vars?: Record<string, string | number>) => translate(lang, key, vars);
+
   const limit = p.daily_limit || 100;
   const liveTodaySent = (p.today_sent ?? 0) + (p.id === "boss" ? sessionSentCount : 0);
   const percentage = Math.min(100, Math.round((liveTodaySent / limit) * 100));
@@ -104,7 +106,7 @@ export default function PlatformCard({
           <div className="flex items-center justify-between text-xs">
             <span className="text-stone-300 flex items-center gap-1.5 font-medium">
               <Send className="size-3.5 text-amber-400" />
-              <span>{lang === "en" ? "Today Delivered:" : "今日已投递:"}</span>
+              <span>{t("pcard.todayDelivered")}</span>
             </span>
             <span className="font-mono text-sm font-bold text-amber-300">
               {liveTodaySent}{" "}
@@ -146,7 +148,7 @@ export default function PlatformCard({
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <span className="text-[11px] px-2.5 py-1 rounded-xl bg-stone-950/60 text-stone-400 border border-stone-800/80 flex items-center gap-1 font-medium">
             <ShieldCheck className="size-3.5 text-emerald-400" />
-            <span>{lang === "en" ? "Safe & Direct" : "免密安全直连"}</span>
+            <span>{t("pcard.safeDirect")}</span>
           </span>
           {p.total_sent != null && p.total_sent > 0 && (
             <span className="text-[11px] px-2.5 py-1 rounded-xl bg-stone-950/40 text-stone-400 border border-stone-800/60 font-mono">

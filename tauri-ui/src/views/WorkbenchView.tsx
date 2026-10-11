@@ -191,10 +191,10 @@ export default function WorkbenchView({
             className="group flex items-center gap-2.5 py-1.5 px-4 rounded-full bg-stone-950/80 hover:bg-stone-900/95 border border-white/10 hover:border-[#ff5722]/50 shadow-xl backdrop-blur-md transition-all duration-300 cursor-pointer outline-none hover:scale-105 active:scale-95"
             title={
               ringActiveIndex === 0
-                ? lang === "en" ? "Scroll down to Platform Hub" : "向下滚动进入招聘平台中心"
+                ? t("wb.hint.stage0")
                 : ringActiveIndex === 1
-                ? lang === "en" ? "Scroll down to Job Profile" : "向下滚动查看求职画像"
-                : lang === "en" ? "Scroll up to return" : "已至求职画像 · 点击或向上滚动返回"
+                ? t("wb.hint.stage1")
+                : t("wb.hint.stage2")
             }
           >
             {/* 拟物化 3D 滚轮鼠标微动胶囊 */}
@@ -205,19 +205,19 @@ export default function WorkbenchView({
             <span className="text-xs font-medium text-stone-300 group-hover:text-white transition-colors flex items-center gap-1">
               {ringActiveIndex === 0 && (
                 <>
-                  <span>{lang === "en" ? "Scroll to Explore Hub" : "向下滚动切换至招聘平台"}</span>
+                  <span>{t("wb.button.stage0")}</span>
                   <ChevronDown className="size-3.5 text-[#ff5722] animate-bounce" />
                 </>
               )}
               {ringActiveIndex === 1 && (
                 <>
-                  <span>{lang === "en" ? "Scroll to Job Profile" : "向下滚动切换至求职画像"}</span>
+                  <span>{t("wb.button.stage1")}</span>
                   <ChevronDown className="size-3.5 text-[#ff5722] animate-bounce" />
                 </>
               )}
               {ringActiveIndex === 2 && (
                 <>
-                  <span>{lang === "en" ? "Scroll to Return" : "向上滚动返回上一板块"}</span>
+                  <span>{t("wb.button.stage2")}</span>
                   <ChevronUp className="size-3.5 text-amber-400 animate-bounce" />
                 </>
               )}

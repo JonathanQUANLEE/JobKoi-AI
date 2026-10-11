@@ -9,7 +9,7 @@ import {
   Info,
   Bell,
 } from "lucide-react";
-import { type Lang } from "../lib/i18n";
+import { isEnglish, type Lang } from "../lib/i18n";
 import { useRunStore } from "../store";
 import OptionWheel, { type OptionWheelItemData } from "./OptionWheel";
 import GeneralTab from "./settings/tabs/GeneralTab";
@@ -98,7 +98,7 @@ export default function SettingsModal({
 
   if (!isOpen) return null;
 
-  const isEn = lang === "en";
+  const isEn = isEnglish(lang);
 
   const tabItems: OptionWheelItemData[] = [
     {

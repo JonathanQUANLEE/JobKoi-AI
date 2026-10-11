@@ -1,5 +1,5 @@
 import { PanelLeftOpen, SlidersHorizontal, Minus, Square, X } from "lucide-react";
-import type { Lang } from "../lib/i18n";
+import { translate, type Lang } from "../lib/i18n";
 import { useRunStore } from "../store";
 import type { NavItem } from "./Sidebar";
 import { ipc } from "../lib/ipc";
@@ -44,6 +44,8 @@ export default function DashboardHeader({
   lang,
   onOpenSettingsModal,
 }: DashboardHeaderProps) {
+  const t = (key: string, vars?: Record<string, string | number>) => translate(lang, key, vars);
+
   const isMonochrome = useRunStore((s) => s.theme === "monochrome");
 
   const handleMinimize = async (e: React.MouseEvent) => {
@@ -103,7 +105,7 @@ export default function DashboardHeader({
             className={`relative group flex items-center gap-1.5 rounded-lg border border-[var(--grid)] bg-[var(--panel-2)] hover:bg-[var(--panel-hover)] px-2.5 py-1 text-xs font-medium text-stone-200 shadow-sm transition-all cursor-pointer water-drop-btn mr-1.5 overflow-visible ${
               isMonochrome ? "hover:border-white/40 hover:text-white" : "hover:border-amber-500/50 hover:text-amber-400"
             }`}
-            title={lang === "en" ? "Expand Sidebar (Ctrl+B)" : "展开侧边栏 (Ctrl+B)"}
+            title={t("header.expandTitle")}
           >
             {expandRipple && (
               <span className="pointer-events-none absolute inset-0 -m-3 flex items-center justify-center">
@@ -112,7 +114,7 @@ export default function DashboardHeader({
               </span>
             )}
             <PanelLeftOpen className={`h-3.5 w-3.5 group-hover:scale-110 transition-transform relative z-10 ${isMonochrome ? "text-white" : "text-amber-400"}`} />
-            <span className="font-medium relative z-10">{lang === "en" ? "Expand" : "展开侧边栏"}</span>
+            <span className="font-medium relative z-10">{t("header.expand")}</span>
             <span className="hidden md:inline-block text-[10px] text-stone-500 font-mono ml-0.5 relative z-10">
               Ctrl+B
             </span>
@@ -122,11 +124,11 @@ export default function DashboardHeader({
         <span className="text-[var(--muted-fg)]">JobHunter</span>
         <span className="text-stone-600">/</span>
         <span className="font-semibold text-[var(--ink)]">
-          {activeNav === "workbench" && (lang === "en" ? "Workbench" : "巡航工作台")}
-          {activeNav === "profile" && (lang === "en" ? "Job Profile" : "求职画像")}
-          {activeNav === "resumes" && (lang === "en" ? "Resume Vault" : "简历资料库")}
-          {activeNav === "copilot" && (lang === "en" ? "Resume Polish" : "简历精修")}
-          {activeNav === "analytics" && (lang === "en" ? "Delivery Analytics & Morning Brief" : "数据统计与早报")}
+          {activeNav === "workbench" && t("header.nav.workbench")}
+          {activeNav === "profile" && t("header.nav.profile")}
+          {activeNav === "resumes" && t("header.nav.resumes")}
+          {activeNav === "copilot" && t("header.nav.copilot")}
+          {activeNav === "analytics" && t("header.nav.analytics")}
         </span>
       </div>
 
@@ -145,7 +147,7 @@ export default function DashboardHeader({
           }`}
         >
           <SlidersHorizontal className="h-3.5 w-3.5" />
-          <span>{lang === "en" ? "Settings" : "系统设置"}</span>
+          <span>{t("header.settings")}</span>
         </button>
         <span className={running ? "status-on" : "status-idle"}>
           <span

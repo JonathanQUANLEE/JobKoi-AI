@@ -1,7 +1,7 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
 import { UserCheck, ArrowLeft, Save, Check, Sparkles, ShieldCheck } from "lucide-react";
 import type { RuleForm } from "../lib/profileForm";
-import type { Lang } from "../lib/i18n";
+import { isEnglish, type Lang } from "../lib/i18n";
 import { useRunStore } from "../store";
 import TargetRolesCard from "./profile/TargetRolesCard";
 import SkillsExclusionCard from "./profile/SkillsExclusionCard";
@@ -71,7 +71,7 @@ export default function ProfilePanel({
   busy = false,
 }: ProfilePanelProps) {
   const [savedSuccess, setSavedSuccess] = useState(false);
-  const isEn = lang === "en";
+  const isEn = isEnglish(lang);
   const notify = useRunStore((s) => s.notify);
 
   const handleSave = async () => {
