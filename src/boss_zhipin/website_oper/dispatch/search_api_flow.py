@@ -132,6 +132,13 @@ async def _process_single_api_job(
     job = job_api.to_job_posting(api_job)
     dedupe_key = finding_jobs.job_key(job)
     if dedupe_key in seen_job_keys:
+        # 已投过/扫过的岗位：跳过也要让用户看见（否则浏览器静止像卡死）
+        write_response._emit_progress(
+            "job_skipped",
+            title=job.title,
+            reason="duplicate",
+            detail="本地历史记录中已处理过该岗位",
+        )
         return "seen", sent_count, daily_sent_count
 
     seen_job_keys.add(dedupe_key)
@@ -415,6 +422,9 @@ async def _run_search_api_flow(
             sent_count,
         )
         page += 1
+        # 页间节流：秒翻 6 页会触发 BOSS 搜索接口风控（实测 code=37），
+        # 拟人化页间停顿再翻下一页。
+        await asyncio.sleep(2.5)
 
     write_response._emit_progress("api_flow_finished", total=sent_count, page=page)
     log.info("[api-flow] 结束：本轮发送 %d 条，翻到第 %d 页", sent_count, page)

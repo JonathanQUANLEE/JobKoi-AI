@@ -63,8 +63,8 @@ async def send_job_descriptions_to_chat(
         actual_url=actual_url,
         redirected=bool(url and actual_url and url != actual_url),
     )
-    # log_in 返回 False = 确认未登录（等待扫码超时）；返回 True/None 视为已登录继续。
-    # 显式判断 False 是为了让旧的 mock（返回 None）及"未登录"两种语义清晰区分。
+    # log_in 返回 False = 确认未登录（等待扫码超时）；True/None 视为已登录继续。
+    # 显式判断 False（而非 not）：兼容返回 None 的旧 mock 与"已登录跳过"两种语义。
     if (await finding_jobs.log_in()) is False:
         # 登录已失效：直达登录页等扫码，超时未登录则明确提示用户后中止本轮
         write_response._emit_progress(
@@ -74,6 +74,28 @@ async def send_job_descriptions_to_chat(
         log.warning("BOSS 未登录，中止本轮巡航")
         return
     write_response._emit_progress("login_ok")
+
+    # 页面筛选先于 API/DOM 流分支执行（2026-10-11 顺序修正）：
+    # - 搜索页上点城市/学历等筛选会更新 URL（带上 city 等参数）；
+    # - 之后 API 流从最新 URL 提取搜索条件 → 拉回的岗位符合画像城市+方向。
+    #   旧顺序下 API 流直接跑，画像的城市筛选从未生效（实测：画像城市
+    #   广深北上，实际搜出的却是账号记忆的「郑州爬虫工程师」）。
+    if use_current_page:
+        write_response._emit_progress(
+            "page_filter",
+            group="manual",
+            value="current_page",
+            status="skipped",
+            message="已使用当前 BOSS 页面，跳过自动页面筛选，保留你在网页端手动选择的条件。",
+        )
+        log.info("使用当前 BOSS 页面运行，跳过自动页面筛选点击")
+    else:
+        await finding_jobs.apply_page_filters(
+            write_response._page_filters_for_click(cfg.page_filters),
+            emit_event=lambda payload: write_response._emit_progress("page_filter", **payload),
+        )
+        # 筛选点击会更新 URL——用最新的 URL 判定走哪条流
+        actual_url = finding_jobs.get_current_url()
 
     if (
         write_response._use_search_api_flow(actual_url)
@@ -89,20 +111,6 @@ async def send_job_descriptions_to_chat(
         )
         return
 
-    if use_current_page:
-        write_response._emit_progress(
-            "page_filter",
-            group="manual",
-            value="current_page",
-            status="skipped",
-            message="已使用当前 BOSS 页面，跳过自动页面筛选，保留你在网页端手动选择的条件。",
-        )
-        log.info("使用当前 BOSS 页面运行，跳过自动页面筛选点击")
-    else:
-        await finding_jobs.apply_page_filters(
-            write_response._page_filters_for_click(cfg.page_filters),
-            emit_event=lambda payload: write_response._emit_progress("page_filter", **payload),
-        )
     if cfg.stop_on_captcha and await finding_jobs.captcha_visible():
         raise RuntimeError("检测到验证码/安全验证，已按 BOSS_STOP_ON_CAPTCHA 停止")
 

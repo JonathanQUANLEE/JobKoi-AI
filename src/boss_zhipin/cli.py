@@ -75,8 +75,25 @@ def get_label() -> str:
 
 
 def get_start_url() -> str:
-    """BOSS 起始页。可用 BOSS_START_URL 指到手动筛好的城市/岗位搜索页。"""
-    return os.getenv("BOSS_START_URL", "").strip() or RECOMMEND_URL
+    """BOSS 起始页。
+
+    优先级（2026-10-11 语义升级）：
+    1. ``BOSS_START_URL`` 显式指定（旧 CLI/bat 流程）；
+    2. **画像搜索词构造搜索页 URL**（``BOSS_LABEL`` 存在时）——GUI 巡航
+       的关键：启动后直接导航到 ``/web/geek/jobs?query=<搜索词>``，
+       搜出来的岗位与画像强相关；否则会落在推荐页，搜出什么全凭账号
+       记忆（实测出现过「郑州爬虫工程师」这种与画像完全无关的 feed）；
+    3. 都没有 → 默认推荐 feed。
+    """
+    explicit = os.getenv("BOSS_START_URL", "").strip()
+    if explicit:
+        return explicit
+    label = os.getenv("BOSS_LABEL", "").strip()
+    if label:
+        from urllib.parse import quote
+
+        return f"https://www.zhipin.com/web/geek/jobs?query={quote(label)}"
+    return RECOMMEND_URL
 
 
 def scan_only_enabled() -> bool:
