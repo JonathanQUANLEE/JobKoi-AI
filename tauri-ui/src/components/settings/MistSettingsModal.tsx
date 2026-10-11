@@ -21,8 +21,6 @@ export type MistModalType = "rules" | "policy" | "greeting" | "model" | null;
 interface MistSettingsModalProps {
   type: MistModalType;
   onClose: () => void;
-  currentProfileData?: Record<string, unknown> | (() => Record<string, unknown>);
-  onSaveProfileData?: (data: Record<string, unknown>) => void;
   rule?: string | RuleForm;
   setRule?: any;
   dailyLimit?: string;
@@ -39,8 +37,6 @@ interface MistSettingsModalProps {
 export default function MistSettingsModal({
   type,
   onClose,
-  currentProfileData,
-  onSaveProfileData,
   rule = "",
   setRule,
   dailyLimit = "100",
@@ -109,12 +105,12 @@ export default function MistSettingsModal({
     } else {
       setRule?.(localRule);
     }
-    const resolvedProfile = typeof currentProfileData === "function" ? currentProfileData() : currentProfileData;
-    if (resolvedProfile && onSaveProfileData) {
-      const updated = { ...resolvedProfile, rule: localRule };
-      onSaveProfileData(updated);
-    }
-    onSaveConfig?.().catch(() => {});
+    // 时序坑（2026-10-12 事故）：React 18 批处理下，同一事件处理器里
+    // currentProfileData() 读到的还是 setState 之前的旧表单——旧值快照
+    // 经 hydrate/saveConfig 会把刚设的新值又盖回去（用户实测"保存后重开
+    // 弹窗又回到旧档"的根因）。正确姿势：只更新表单状态，等生效后再落盘。
+    window.setTimeout(() => onSaveConfig?.().catch(() => {}), 0);
+    useRunStore.getState().showCenterToast("规则已保存", { tone: "success" });
     notify({ type: "success", text: "过滤与避坑规则已保存" });
     onClose();
   };
@@ -124,17 +120,8 @@ export default function MistSettingsModal({
     setDailyLimit?.(localDailyLimit);
     setDelayMin?.(localDelayMin);
     setDelayMax?.(localDelayMax);
-    const resolvedProfile = typeof currentProfileData === "function" ? currentProfileData() : currentProfileData;
-    if (resolvedProfile && onSaveProfileData) {
-      const updated = {
-        ...resolvedProfile,
-        daily_limit: localDailyLimit,
-        delay_min: localDelayMin,
-        delay_max: localDelayMax,
-      };
-      onSaveProfileData(updated);
-    }
-    onSaveConfig?.().catch(() => {});
+    window.setTimeout(() => onSaveConfig?.().catch(() => {}), 0);
+    useRunStore.getState().showCenterToast("安全设置已保存", { tone: "success" });
     notify({ type: "success", text: "投递频率与防风控保护策略已生效" });
     onClose();
   };
@@ -143,7 +130,8 @@ export default function MistSettingsModal({
   const handleSaveGreeting = () => {
     setGreeting?.(localGreeting);
     ipc.saveGreeting(localGreeting).catch(() => {});
-    onSaveConfig?.().catch(() => {});
+    window.setTimeout(() => onSaveConfig?.().catch(() => {}), 0);
+    useRunStore.getState().showCenterToast("招呼语已保存", { tone: "success" });
     notify({ type: "success", text: "打招呼问候模板已更新" });
     onClose();
   };
@@ -160,6 +148,7 @@ export default function MistSettingsModal({
           configured: true,
           presets: llmConfig?.presets || [],
         });
+        useRunStore.getState().showCenterToast("模型配置已保存", { tone: "success" });
         notify({ type: "success", text: "AI 大模型配置保存成功" });
         onClose();
       }

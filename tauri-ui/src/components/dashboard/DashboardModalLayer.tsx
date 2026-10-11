@@ -130,14 +130,6 @@ export default function DashboardModalLayer({
       <MistSettingsModal
         type={mistModalType}
         onClose={() => setMistModalType(null)}
-        currentProfileData={profileForm.currentProfileData}
-        onSaveProfileData={(data) => {
-          profileForm.hydrateFromProfile({
-            name: profileForm.profileName,
-            path: "",
-            data,
-          });
-        }}
         rule={profileForm.rule}
         setRule={profileForm.setRule}
         dailyLimit={profileForm.dailyLimit}
