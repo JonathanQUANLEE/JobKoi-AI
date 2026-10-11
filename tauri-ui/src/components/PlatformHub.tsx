@@ -1,11 +1,21 @@
-import { useCallback, useEffect, useState } from "react";
-import { Globe, RefreshCw, X, FileText, CheckSquare } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Globe, RefreshCw, X, FileText, CheckSquare, AlertTriangle } from "lucide-react";
 import { ipc, type PlatformItem } from "../lib/ipc";
 import type { Lang } from "../lib/i18n";
 import { useRunStore } from "../store";
 import { MagicCard } from "./core/MagicBento";
 import PlatformCard from "./platform/PlatformCard";
 import DeliveryHistoryModal from "./analytics/DeliveryHistoryModal";
+
+/** IPC 兜底超时：后端正常毫秒级返回；一旦挂死，前端 12s 后显式报错（不再静默空白）。 */
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} 超时（${Math.round(ms / 1000)}s 无响应）`)), ms),
+    ),
+  ]);
+}
 
 const PLATFORM_GLOW_MAP: Record<string, string> = {
   boss: "0, 190, 189", // BOSS 直聘 翡翠青
@@ -32,6 +42,9 @@ export default function PlatformHub({
   const [platforms, setPlatforms] = useState<PlatformItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  // 平台列表加载状态：不再静默空白——失败/超时要在界面上明说，并给重试按钮
+  const [platformsLoading, setPlatformsLoading] = useState(true);
+  const [platformsError, setPlatformsError] = useState<string | null>(null);
 
   // 选中的多平台投递列表（支持 BOSS + 猎聘等同时勾选）
   const [enabledPlatforms, setEnabledPlatforms] = useState<string[]>(() => {
@@ -74,54 +87,23 @@ export default function PlatformHub({
   };
 
   const loadPlatforms = useCallback(async () => {
+    setPlatformsLoading(true);
+    setPlatformsError(null);
     try {
-      const res = await ipc.listPlatforms();
+      // 12s 兜底超时：后端正常毫秒级；挂死时把错误浮出水面而不是无限空白
+      const res = await withTimeout(ipc.listPlatforms(), 12_000, "加载平台列表");
       if (res && res.platforms) {
         setPlatforms(res.platforms);
+      } else {
+        setPlatformsError("后端返回了空的平台列表");
       }
-    } catch {
-      setPlatforms([
-        {
-          id: "boss",
-          name: "BOSS 直聘",
-          tagline: "互联网与高薪岗主力 · 每日限额 150",
-          daily_limit: 150,
-          theme_color: "#00bebd",
-          is_supported: true,
-          is_logged_in: true,
-          status_text: "已就绪 (免密免登)",
-        },
-        {
-          id: "liepin",
-          name: "猎聘 Liepin",
-          tagline: "中高端名企与猎头 · 每日限额 100",
-          daily_limit: 100,
-          theme_color: "#ff7033",
-          is_supported: true,
-          is_logged_in: true,
-          status_text: "已就绪 (免密免登)",
-        },
-        {
-          id: "job51",
-          name: "前程无忧 51job",
-          tagline: "传统名企与制造业 · 每日限额 40",
-          daily_limit: 40,
-          theme_color: "#ff5000",
-          is_supported: true,
-          is_logged_in: true,
-          status_text: "已就绪 (免密免登)",
-        },
-        {
-          id: "zhaopin",
-          name: "智联招聘 (筹备中)",
-          tagline: "国企央企与校招 · 即将开放",
-          daily_limit: 50,
-          theme_color: "#1976d2",
-          is_supported: false,
-          is_logged_in: false,
-          status_text: "筹备中",
-        },
-      ]);
+    } catch (err) {
+      // 不再塞硬编码假数据（会显示假的"已就绪"误导用户）——如实展示错误
+      const detail = String(err);
+      console.error("[PlatformHub] 加载平台列表失败:", detail);
+      setPlatformsError(detail);
+    } finally {
+      setPlatformsLoading(false);
     }
   }, []);
 
@@ -129,26 +111,81 @@ export default function PlatformHub({
     loadPlatforms();
   }, [loadPlatforms]);
 
+  // 登录确认轮询器：open_platform_login 现在秒回（不等扫码），
+  // 这里每 4s 轻量探测一次登录态；成功即自动关浏览器 + 中央大字 + 刷新卡片。
+  const loginPollRef = useRef<number | null>(null);
+  const stopLoginPoll = useCallback(() => {
+    if (loginPollRef.current != null) {
+      window.clearInterval(loginPollRef.current);
+      loginPollRef.current = null;
+    }
+  }, []);
+  useEffect(() => stopLoginPoll, [stopLoginPoll]);
+
+  const startLoginPoll = useCallback(
+    (platformId: string) => {
+      stopLoginPoll();
+      let attempts = 0;
+      loginPollRef.current = window.setInterval(async () => {
+        attempts += 1;
+        if (attempts > 120) {
+          stopLoginPoll(); // 4s × 120 = 8 分钟上限
+          return;
+        }
+        try {
+          const st = await withTimeout(
+            ipc.checkLoginStatus(platformId),
+            10_000,
+            "登录状态探测",
+          );
+          if (st && st.logged_in) {
+            stopLoginPoll();
+            // 登录成功：cookie 已写入持久化 profile，自动关掉登录浏览器
+            try {
+              await ipc.shutdownBrowser();
+            } catch {
+              /* 关闭失败不阻塞提示 */
+            }
+            useRunStore.getState().showCenterToast("检测到您已登录 · 认证成功", {
+              tone: "success",
+              duration: 2200,
+            });
+            await loadPlatforms();
+          }
+        } catch {
+          /* 单次探测失败/超时：继续下一轮，不打扰用户 */
+        }
+      }, 4000);
+    },
+    [stopLoginPoll, loadPlatforms],
+  );
+
   async function handleLogin(e: React.MouseEvent, platformId: string) {
     e.stopPropagation();
     setBusy(true);
-    setMessage(`正在拉起「${platformId}」浏览器，请稍候扫码...`);
+    setMessage(`正在拉起「${platformId}」登录页，请稍候...`);
     try {
-      const res = await ipc.openPlatformLogin(platformId);
+      const res = await withTimeout(
+        ipc.openPlatformLogin(platformId),
+        30_000,
+        "打开登录页",
+      );
       if (res.status === "error") {
         setMessage(`提示: ${res.message || "拉起失败"}`);
-      } else if (res.logged_in) {
-        // 扫码已成功（后端等到了登录态并已自动关闭浏览器）→ 刷新状态 + 中央大字提示
-        setMessage(`「${platformId}」已登录成功，状态已刷新！`);
+        return;
+      }
+      if (res.logged_in) {
+        // 打开时就探测到已登录（如 cookie 本来有效）
+        setMessage(`「${platformId}」已登录成功！`);
         useRunStore.getState().showCenterToast("检测到您已登录 · 认证成功", {
           tone: "success",
           duration: 2200,
         });
         await loadPlatforms();
-      } else {
-        setMessage(`已打开「${platformId}」登录页，请在浏览器扫码；完成后点「刷新状态」。`);
+        return;
       }
-      setTimeout(loadPlatforms, 5000);
+      setMessage(`已打开「${platformId}」登录页，请在浏览器扫码；登录成功会自动识别。`);
+      startLoginPoll(platformId);
     } catch (err) {
       setMessage(`异常: ${String(err)}`);
     } finally {
@@ -233,8 +270,35 @@ export default function PlatformHub({
           </div>
         )}
 
-        {/* 平台卡片网格 */}
+        {/* 平台卡片网格（空态必须有可见反馈，绝不静默空白） */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {platforms.length === 0 && platformsLoading && (
+            <div className="col-span-full flex items-center justify-center py-14 text-sm text-stone-400 gap-2">
+              <RefreshCw className="size-4 animate-spin text-amber-400" />
+              <span>正在加载平台状态...</span>
+            </div>
+          )}
+          {platforms.length === 0 && !platformsLoading && (
+            <div className="col-span-full flex flex-col items-center justify-center gap-2.5 py-12 px-4 rounded-2xl border border-amber-500/25 bg-amber-500/5">
+              <div className="flex items-center gap-2 text-sm font-semibold text-amber-300">
+                <AlertTriangle className="size-4" />
+                <span>{platformsError ? "平台状态加载失败" : "暂无平台数据"}</span>
+              </div>
+              {platformsError && (
+                <p className="text-xs text-stone-400 break-all max-w-xl text-center">
+                  {platformsError}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => loadPlatforms()}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/40 hover:bg-amber-500/25 cursor-pointer transition-all"
+              >
+                <RefreshCw className="size-3.5" />
+                <span>重试加载</span>
+              </button>
+            </div>
+          )}
           {platforms.map((p) => {
             const isSelected = selectedPlatform === p.id;
             const isEnabled = enabledPlatforms.includes(p.id);

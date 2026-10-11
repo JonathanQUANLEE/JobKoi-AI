@@ -251,6 +251,10 @@ export const ipc = {
       message?: string;
       logged_in?: boolean;
     }>("open_platform_login", { platformId }),
+  checkLoginStatus: (platformId: string) =>
+    pyInvoke<{ logged_in: boolean; verified: boolean }>("check_login_status", {
+      platformId,
+    }),
   getDeliveryHistory: (platform: string = "", limit: number = 100) =>
     pyInvoke<DeliveryHistoryResult>("get_delivery_history", { platform, limit }),
   resetTodayDelivery: (platform: string = "boss") =>
