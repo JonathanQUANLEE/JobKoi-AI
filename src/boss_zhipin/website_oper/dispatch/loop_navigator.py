@@ -11,9 +11,11 @@ log = logging.getLogger(__name__)
 async def reload_feed_and_restart(page_filters: dict[str, Any]) -> bool:
     """列表到底后整页刷新推荐流或轮换下一批意向城市。"""
     from boss_zhipin.website_oper import finding_jobs, write_response
+    from boss_zhipin.website_oper.dispatch.env_config import _page_filters_for_click
 
     rotated = await finding_jobs.rotate_next_city_batch(
-        write_response._page_filters_for_click(page_filters),
+        _page_filters_for_click(page_filters),
+        # _emit_progress 借道门面：14 处测试 patch 点在此，直连会绕过（P3-5 emit 专项批统一迁）
         emit_event=lambda payload: write_response._emit_progress("page_filter", **payload),
     )
     if not rotated:

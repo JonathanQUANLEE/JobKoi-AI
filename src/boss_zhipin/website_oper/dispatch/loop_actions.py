@@ -27,7 +27,7 @@ async def click_contact_and_send_response(response: str) -> None:
     """
     from boss_zhipin.website_oper import finding_jobs
     from boss_zhipin.website_oper.core.limit_guard import check_platform_limit
-    from boss_zhipin.website_oper import write_response
+    from boss_zhipin.website_oper import write_response  # noqa: F401 —— send_response_and_go_back 借道：test_review_send:626 patch 在门面属性上
 
     contact_xpath = "//a[contains(@class, 'op-btn-chat')]"
     if not await finding_jobs.click_by_xpath(contact_xpath, timeout=10):
