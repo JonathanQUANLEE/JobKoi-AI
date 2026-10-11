@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from boss_zhipin.gui import events
 from boss_zhipin.platforms.platform_limits import PlatformLimitReached
 from boss_zhipin.website_oper.dispatch.job_evaluator import evaluate_job_match
 from boss_zhipin.website_oper.dispatch.loop_actions import (
@@ -65,9 +66,7 @@ async def send_job_descriptions_to_chat(
     use_current_page: bool = False,
 ) -> None:
     """主循环（async）。"""
-    # write_response 仅为 _emit_progress 借道保留：测试把事件收集器 patch 在门面属性上，
-    # 直连 gui.events.emit 会绕过 patch 导致收不到事件；待 emit 专项批与测试 patch 点一起迁移。
-    from boss_zhipin.website_oper import finding_jobs, write_response
+    from boss_zhipin.website_oper import finding_jobs
 
     cfg = LoopConfig.load()
 
@@ -76,8 +75,8 @@ async def send_job_descriptions_to_chat(
     else:
         await finding_jobs.open_browser_with_options(url, browser_type)
     actual_url = finding_jobs.get_current_url()
-    write_response._emit_progress("browser_started")
-    write_response._emit_progress(
+    events.emit("browser_started")
+    events.emit(
         "page_opened",
         requested_url=url,
         actual_url=actual_url,
@@ -87,13 +86,13 @@ async def send_job_descriptions_to_chat(
     # 显式判断 False（而非 not）：兼容返回 None 的旧 mock 与"已登录跳过"两种语义。
     if (await finding_jobs.log_in()) is False:
         # 登录已失效：直达登录页等扫码，超时未登录则明确提示用户后中止本轮
-        write_response._emit_progress(
+        events.emit(
             "login_required",
             message="BOSS 登录已失效。请在浏览器里扫码登录后，再点一次「启动巡航」。",
         )
         log.warning("BOSS 未登录，中止本轮巡航")
         return
-    write_response._emit_progress("login_ok")
+    events.emit("login_ok")
 
     # 页面筛选先于 API/DOM 流分支执行（2026-10-11 顺序修正）：
     # - 搜索页上点城市/学历等筛选会更新 URL（带上 city 等参数）；
@@ -101,7 +100,7 @@ async def send_job_descriptions_to_chat(
     #   旧顺序下 API 流直接跑，画像的城市筛选从未生效（实测：画像城市
     #   广深北上，实际搜出的却是账号记忆的「郑州爬虫工程师」）。
     if use_current_page:
-        write_response._emit_progress(
+        events.emit(
             "page_filter",
             group="manual",
             value="current_page",
@@ -112,7 +111,7 @@ async def send_job_descriptions_to_chat(
     else:
         await finding_jobs.apply_page_filters(
             _page_filters_for_click(cfg.page_filters),
-            emit_event=lambda payload: write_response._emit_progress("page_filter", **payload),
+            emit_event=lambda payload: events.emit("page_filter", **payload),
         )
         # 筛选点击会更新 URL——用最新的 URL 判定走哪条流
         actual_url = finding_jobs.get_current_url()
@@ -140,7 +139,7 @@ async def send_job_descriptions_to_chat(
     job_index = start_job_index
     window_index = start_job_index
     if use_current_page:
-        write_response._emit_progress(
+        events.emit(
             "page_filter",
             group="manual",
             value=f"job_{start_job_index}",
@@ -227,7 +226,7 @@ async def send_job_descriptions_to_chat(
                             "reason": duplicate_detail,
                         },
                     )
-                    write_response._emit_progress(
+                    events.emit(
                         "job_skipped",
                         index=job_index,
                         reason="duplicate",
@@ -253,7 +252,7 @@ async def send_job_descriptions_to_chat(
                                 barren_reloads + 1,
                                 MAX_FEED_RELOADS,
                             )
-                            write_response._emit_progress(
+                            events.emit(
                                 "feed_reload",
                                 attempt=barren_reloads + 1,
                                 limit=MAX_FEED_RELOADS,
@@ -269,7 +268,7 @@ async def send_job_descriptions_to_chat(
                             MAX_CONSECUTIVE_DUPLICATES,
                             barren_reloads,
                         )
-                        write_response._emit_progress("feed_exhausted", total=job_index - 1)
+                        events.emit("feed_exhausted", total=job_index - 1)
                         break
 
                     await asyncio.sleep(3)
@@ -283,7 +282,7 @@ async def send_job_descriptions_to_chat(
                     barren_reloads = 0
                 consecutive_duplicates = 0
 
-                write_response._emit_progress(
+                events.emit(
                     "job_found",
                     index=job_index,
                     title=job_title,
@@ -316,7 +315,7 @@ async def send_job_descriptions_to_chat(
                             "button_text": button_text,
                         },
                     )
-                    write_response._emit_progress(
+                    events.emit(
                         "job_skipped",
                         index=job_index,
                         reason=skip_reason,
@@ -359,7 +358,7 @@ async def send_job_descriptions_to_chat(
                             reason=stage_name,
                             details=details,
                         )
-                        write_response._emit_progress(
+                        events.emit(
                             "job_skipped",
                             index=job_index,
                             reason=stage_name,
@@ -451,7 +450,7 @@ async def send_job_descriptions_to_chat(
             # 平台在页面上弹出了限额提示（动作点检测命中）——立即安全停机，
             # 本地 sent 账本已按实际投递逐条记账，前端可据日志统计今天投了多少。
             log.warning("检测到平台限额提示，安全停机: %s", e)
-            write_response._emit_progress(
+            events.emit(
                 "platform_limit_reached",
                 platform=e.platform,
                 matched_text=e.matched_text,
@@ -461,7 +460,7 @@ async def send_job_descriptions_to_chat(
             break
         except Exception as e:
             log.exception("主循环抛异常: %s", e)
-            write_response._emit_progress(
+            events.emit(
                 "error",
                 stage=f"job_index={job_index}",
                 message=f"{type(e).__name__}: {e}",
