@@ -35,7 +35,13 @@ class BossPlatform(BasePlatform):
         return self.root_dir / "chrome_profile"
 
     def _cookie_login_state(self) -> bool | None:
-        """True=有未过期 cookie / False=无 cookie 或全过期 / None=读不出。"""
+        """True=有未过期 cookie / False=无 cookie 或全过期 / None=读不出。
+
+        性能红线：本函数在平台列表的展示路径上（list_platforms 秒回），
+        **绝不等待数据库锁**——Chrome 运行时会独占锁定 Cookies 库，
+        timeout=0 让锁冲突立即失败返回 None（前端显示「待验证」），
+        而不是阻塞接口把平台卡片拖成空白（2026-10-11 实测教训）。
+        """
         profile_dir = self._get_profile_dir()
         if not profile_dir.is_dir():
             return False
@@ -51,7 +57,7 @@ class BossPlatform(BasePlatform):
             checked = True
             try:
                 conn = sqlite3.connect(
-                    f"file:{db_path.as_posix()}?mode=ro", uri=True, timeout=3
+                    f"file:{db_path.as_posix()}?mode=ro", uri=True, timeout=0
                 )
                 rows = conn.execute(
                     "SELECT expires_utc, is_persistent FROM cookies "
@@ -59,7 +65,9 @@ class BossPlatform(BasePlatform):
                 ).fetchall()
                 conn.close()
             except sqlite3.Error as e:
-                log.debug("读 %s 失败（可能被 Chrome 锁定）: %s", db_path.name, e)
+                # 最常见：Chrome 正在运行锁库（database is locked）——立即跳过，
+                # 状态显示「待验证」，等浏览器关闭后自然恢复准确判定。
+                log.debug("读 %s 失败（多被 Chrome 锁定）: %s", db_path.name, e)
                 continue
             if not rows:
                 return False
@@ -95,21 +103,6 @@ class BossPlatform(BasePlatform):
             is_logged_in=is_logged,
             status_text=status_text,
         )
-
-    async def detect_login_state(self) -> dict[str, Any]:
-        """真实登录态：浏览器已打开时用 DOM+URL 双重探测，否则回退 cookie 证据。"""
-        from boss_zhipin.website_oper import finding_jobs
-        from boss_zhipin.website_oper.core.login_detector import _is_logged_in
-
-        tab = finding_jobs.get_tab()
-        if tab is not None and "zhipin.com" in str(getattr(tab, "url", "") or ""):
-            try:
-                live = await _is_logged_in()
-                return {"verified": True, "logged_in": live}
-            except Exception as e:  # noqa: BLE001
-                log.debug("DOM 登录探测失败: %s", e)
-        cookie_state = self._cookie_login_state()
-        return {"verified": False, "logged_in": cookie_state is True}
 
     async def open_login_browser(self) -> dict[str, Any]:
         """打开 BOSS 登录页（直接导航到登录 URL），等待用户扫码完成后返回结果。"""
