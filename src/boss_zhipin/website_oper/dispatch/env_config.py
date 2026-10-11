@@ -7,6 +7,7 @@ import os
 from typing import TYPE_CHECKING
 
 from boss_zhipin.config.filter_rules import JobPosting as FilterJobPosting
+from boss_zhipin.platforms.limits import BOSS_DELAY_RANGE_SECONDS
 
 if TYPE_CHECKING:
     from boss_zhipin.website_oper.core.models import JobPosting
@@ -228,9 +229,29 @@ def _stop_on_captcha_enabled() -> bool:
     return raw in ("1", "true", "yes", "on")
 
 
+def _clamp_delay(name: str, value: float) -> float:
+    """把节流值收敛进拟人化安全区间（limits.BOSS_DELAY_RANGE_SECONDS）。"""
+    low, high = BOSS_DELAY_RANGE_SECONDS
+    if value < low:
+        log.warning(
+            "%s=%.1fs 低于拟人化节流安全下限 %.0fs（防风控），已自动收敛", name, value, low
+        )
+        return low
+    if value > high:
+        log.warning("%s=%.1fs 高于上限 %.0fs，已自动收敛", name, value, high)
+        return high
+    return value
+
+
 def _auto_send_delay_range() -> tuple[float, float]:
-    min_delay = _float_env("BOSS_AUTO_SEND_DELAY_MIN", 10.0, minimum=0.0)
-    max_delay = _float_env("BOSS_AUTO_SEND_DELAY_MAX", 60.0, minimum=0.0)
+    # 默认 = GUI「标准」档 20-40s（2026-10-12 用户拍板三档：效率 15-30 /
+    # 标准 20-40 / 稳健 30-45；越界一律钳进 [15, 45] 安全区间，见 limits.py）。
+    min_delay = _clamp_delay(
+        "BOSS_AUTO_SEND_DELAY_MIN", _float_env("BOSS_AUTO_SEND_DELAY_MIN", 20.0)
+    )
+    max_delay = _clamp_delay(
+        "BOSS_AUTO_SEND_DELAY_MAX", _float_env("BOSS_AUTO_SEND_DELAY_MAX", 40.0)
+    )
     if max_delay < min_delay:
         log.warning(
             "BOSS_AUTO_SEND_DELAY_MAX=%.1f 小于 MIN=%.1f，已交换两者",
