@@ -11,7 +11,7 @@ import {
   Clock,
   MoreVertical,
 } from "lucide-react";
-import type { Lang } from "../lib/i18n";
+import { translate, type Lang } from "../lib/i18n";
 import { useRunStore } from "../store";
 import PillNavButton from "./core/PillNavButton";
 import NotificationDock from "./NotificationDock";
@@ -59,6 +59,8 @@ export default function Sidebar({
   collapsed = false,
   onToggleCollapse,
 }: SidebarProps) {
+  const t = (key: string, vars?: Record<string, string | number>) => translate(lang, key, vars);
+
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapseRipple, setCollapseRipple] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -140,11 +142,11 @@ export default function Sidebar({
                       : "bg-pink-500/15 border-pink-500/30 text-pink-300"
                   }`}
                 >
-                  {lang === "en" ? "Pro" : "Offer版"}
+                  {t("sidebar.proTag")}
                 </span>
               </div>
               <p className="text-[10px] text-[var(--muted-fg)] truncate">
-                {lang === "en" ? "Smart Job Assistant" : "全平台智能求职助手"}
+                {t("sidebar.subtitle")}
               </p>
             </div>
           </div>
@@ -155,8 +157,8 @@ export default function Sidebar({
               type="button"
               onClick={handleCollapseClick}
               className="relative flex h-7 w-7 items-center justify-center rounded-lg border border-transparent hover:border-[var(--grid)] text-stone-400 hover:text-stone-200 hover:bg-[var(--panel-hover)] active:scale-95 transition-all ml-1 shrink-0 cursor-pointer overflow-visible"
-              title={lang === "en" ? "Collapse Sidebar (Ctrl+B)" : "收起侧边栏 (Ctrl+B)"}
-              aria-label={lang === "en" ? "Collapse Sidebar" : "收起侧边栏"}
+              title={t("sidebar.collapseTitle")}
+              aria-label={t("sidebar.collapseLabel")}
             >
               {collapseRipple && (
                 <span className="pointer-events-none absolute inset-0 -m-3 flex items-center justify-center">
@@ -177,7 +179,7 @@ export default function Sidebar({
               disabled={busy}
               variant="primary"
               icon={<Play className="h-4 w-4 fill-current shrink-0" />}
-              label={lang === "en" ? "Start Cruise" : "启动自动巡航"}
+              label={t("sidebar.startCruise")}
             />
           ) : (
             <button
@@ -187,7 +189,7 @@ export default function Sidebar({
               className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-600 to-red-700 px-3 py-2.5 text-xs font-bold text-white shadow-md shadow-red-600/30 hover:from-red-500 hover:to-red-600 active:scale-[0.98] transition-all disabled:opacity-50 animate-pulse cursor-pointer"
             >
               <Square className="h-4 w-4 fill-current shrink-0" />
-              <span>{lang === "en" ? "Stop Cruise" : "停止当前巡航"}</span>
+              <span>{t("sidebar.stopCruise")}</span>
             </button>
           )}
         </div>
@@ -195,15 +197,15 @@ export default function Sidebar({
         {/* 导航菜单列表 */}
         <nav className="flex-1 space-y-1 px-2.5 py-1 text-xs overflow-y-auto">
           <div className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-stone-500">
-            {lang === "en" ? "NAVIGATION" : "功能模块"}
+            {t("sidebar.navigation")}
           </div>
 
           <NavItemButton
             active={activeNav === "workbench"}
             onClick={() => onSelectNav("workbench")}
             icon={<Compass className="h-4 w-4 shrink-0" />}
-            label={lang === "en" ? "Workbench" : "巡航工作台"}
-            badge={running ? (lang === "en" ? "Running" : "运行中") : undefined}
+            label={t("sidebar.nav.workbench")}
+            badge={running ? t("sidebar.nav.workbenchBadge") : undefined}
             badgeColor="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
           />
 
@@ -211,8 +213,8 @@ export default function Sidebar({
             active={activeNav === "profile"}
             onClick={() => onSelectNav("profile")}
             icon={<UserCheck className="h-4 w-4 shrink-0" />}
-            label={lang === "en" ? "Job Profile" : "求职画像"}
-            badge={lang === "en" ? "Synced" : "已同步"}
+            label={t("sidebar.nav.profile")}
+            badge={t("sidebar.nav.profileBadge")}
             badgeColor="bg-amber-500/15 text-amber-400 border border-amber-500/30"
           />
 
@@ -220,7 +222,7 @@ export default function Sidebar({
             active={activeNav === "resumes"}
             onClick={() => onSelectNav("resumes")}
             icon={<FolderOpen className="h-4 w-4 shrink-0" />}
-            label={lang === "en" ? "Resume Vault" : "简历资料库"}
+            label={t("sidebar.nav.resumes")}
           />
 
           <NavItemButton
@@ -231,8 +233,8 @@ export default function Sidebar({
                 className={`h-4 w-4 shrink-0 ${isMonochrome ? "text-zinc-300" : "text-amber-400"}`}
               />
             }
-            label={lang === "en" ? "Resume Polish" : "简历精修"}
-            badge={lang === "en" ? "Skills" : "AI 诊断"}
+            label={t("sidebar.nav.copilot")}
+            badge={t("sidebar.nav.copilotBadge")}
             badgeColor={
               isMonochrome
                 ? "bg-white/10 text-zinc-300 border border-white/20"
@@ -248,7 +250,7 @@ export default function Sidebar({
                 className={`h-4 w-4 shrink-0 ${isMonochrome ? "text-zinc-300" : "text-amber-400"}`}
               />
             }
-            label={lang === "en" ? "Analytics & Brief" : "数据统计与早报"}
+            label={t("sidebar.nav.analytics")}
           />
         </nav>
 
@@ -261,20 +263,20 @@ export default function Sidebar({
             <div className="flex items-center gap-1.5">
               <span className="text-amber-400 text-sm">🐰</span>
               <span className="text-[11px] font-semibold text-stone-200">
-                {lang === "en" ? "Usagi Assistant" : "乌萨奇特助"}
+                {t("sidebar.usagi")}
               </span>
               <span className="text-[9px] text-stone-500 font-normal">
-                {lang === "en" ? "Free Docking" : "可全屏拖拽"}
+                {t("sidebar.usagiDock")}
               </span>
             </div>
             <button
               type="button"
               onClick={() => onOpenSettingsModal?.("schedule")}
               className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-stone-800 hover:bg-stone-700 text-amber-300 cursor-pointer transition-colors"
-              title={lang === "en" ? "Schedule Timer" : "快捷定时设置"}
+              title={t("sidebar.scheduleTitle")}
             >
               <Clock className="h-3 w-3" />
-              <span>{lang === "en" ? "Schedule" : "定时"}</span>
+              <span>{t("sidebar.schedule")}</span>
             </button>
           </div>
         </div>
@@ -314,7 +316,7 @@ export default function Sidebar({
               />
               <div className="min-w-0 text-left">
                 <div className="font-semibold text-xs text-[var(--ink)] truncate leading-tight">
-                  {lang === "en" ? "Job Hunter" : "求职锦鲤"}
+                  {t("sidebar.userName")}
                 </div>
                 <div className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-950/70 px-2 py-0.5 shadow-sm">
                   <span className="relative flex size-1.5 shrink-0">
@@ -323,12 +325,8 @@ export default function Sidebar({
                   </span>
                   <span className="text-[10px] font-medium text-emerald-300 leading-none truncate tracking-tight">
                     {running
-                      ? lang === "en"
-                        ? "AI Cruising"
-                        : "AI 巡航中"
-                      : lang === "en"
-                      ? "AI Advisor Online"
-                      : "AI 顾问在线"}
+                      ? t("sidebar.statusCruising")
+                      : t("sidebar.statusOnline")}
                   </span>
                 </div>
               </div>

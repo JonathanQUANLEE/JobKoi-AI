@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Globe, RefreshCw, X, FileText, CheckSquare, AlertTriangle } from "lucide-react";
 import { ipc, type PlatformItem } from "../lib/ipc";
-import type { Lang } from "../lib/i18n";
+import { translate, type Lang } from "../lib/i18n";
 import { withTimeout } from "../lib/withTimeout";
 import { useRunStore } from "../store";
 import { MagicCard } from "./core/MagicBento";
@@ -30,6 +30,8 @@ export default function PlatformHub({
   className = "",
   style,
 }: PlatformHubProps) {
+  const t = (key: string, vars?: Record<string, string | number>) => translate(lang, key, vars);
+
   const [platforms, setPlatforms] = useState<PlatformItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -239,7 +241,7 @@ export default function PlatformHub({
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-bold text-stone-100 tracking-tight flex items-center gap-2.5">
-                <span>{lang === "en" ? "Job Platforms Center" : "招聘平台中心"}</span>
+                <span>{t("phub.title")}</span>
                 <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
                   4 大主流直聘
                 </span>
@@ -251,9 +253,7 @@ export default function PlatformHub({
                 )}
               </h2>
               <p className="text-xs text-stone-400 mt-0.5">
-                {lang === "en"
-                  ? "Unified delivery hub. Choose your target platforms and start automated cruising."
-                  : "全平台多合一聚合中心：勾选启用的投递平台（支持同时勾选多平台），点击左侧启动即可自动投递沟通。"}
+                {t("phub.subtitle")}
               </p>
             </div>
           </div>
