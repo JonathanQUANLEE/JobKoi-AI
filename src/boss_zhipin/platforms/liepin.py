@@ -46,6 +46,11 @@ class LiepinPlatform(BasePlatform):
         import nodriver as uc
         from nodriver import Config
 
+        # 换号语义：先回收本 profile 的孤儿 Chrome + Singleton 锁，再全新启动
+        # （与 BOSS 同款防护：防止旧实例占着 profile 导致启动失败）
+        from liepin.driver import cleanup_profile
+
+        cleanup_profile()
         cfg = Config()
         cfg.user_data_dir = str(self._get_profile_dir())
         cfg.headless = False

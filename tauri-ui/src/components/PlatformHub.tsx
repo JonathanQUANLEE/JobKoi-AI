@@ -187,7 +187,23 @@ export default function PlatformHub({
       setMessage(`已打开「${platformId}」登录页，请在浏览器扫码；登录成功会自动识别。`);
       startLoginPoll(platformId);
     } catch (err) {
-      setMessage(`异常: ${String(err)}`);
+      // 把技术报错翻译成人话：连接类错误多半是浏览器被关/旧进程残留，重试即可
+      const raw = String(err);
+      let friendly: string;
+      if (/ConnectionRefused|拒绝网络连接|Failed to connect|10061|1225/i.test(raw)) {
+        friendly =
+          "浏览器连接已断开（可能刚被关闭或旧进程残留）。请再点一次「换号/刷新」，系统会关掉旧会话并弹出一个全新的登录窗口。";
+      } else if (/超时/.test(raw)) {
+        friendly = "打开登录页超时，浏览器启动较慢或被占用。请再点一次「换号/刷新」重试。";
+      } else {
+        friendly = `打开登录页失败，请重试一次换号/刷新。原始错误：${raw}`;
+      }
+      setMessage(friendly);
+      useRunStore.getState().notify({
+        type: "error",
+        text: friendly,
+        source: "换号登录",
+      });
     } finally {
       setBusy(false);
     }

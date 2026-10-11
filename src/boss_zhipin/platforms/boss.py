@@ -107,11 +107,15 @@ class BossPlatform(BasePlatform):
         )
 
     async def open_login_browser(self) -> dict[str, Any]:
-        """打开 BOSS 登录页后**立即返回**（绝不阻塞等扫码）。
+        """换号/登录：**无条件关掉旧会话，开一个全新的登录窗口**（立即返回不等扫码）。
 
-        登录成功的确认由前端轮询 ``check_login_status`` 完成——一个 IPC
-        挂 300 秒等扫码会拖死后续所有 IPC（2026-10-11 平台卡片空白事故
-        根因），必须拆成「秒开 + 轮询确认」。
+        2026-10-11 报错实锤的两种死法，本实现从根上消灭：
+        ① 用户手误关掉浏览器后 ``_tab`` 仍是死引用 → 旧代码 ``tab.get()``
+           直接抛 ConnectionRefusedError（"远程计算机拒绝网络连接"）；
+        ② 旧应用遗留的孤儿 Chrome 占着 profile → 新启动连不上调试端口。
+        现在换号 = shutdown 清引用关旧浏览器 → open_browser_with_options
+        内部 reap 孤儿 Chrome + 清 Singleton 锁 → 全新窗口直达登录页。
+        用户每次点「换号」都得到响应本次点击的新登录页。
         """
         from boss_zhipin.website_oper import finding_jobs
         from boss_zhipin.website_oper.core.login_detector import (
@@ -120,12 +124,12 @@ class BossPlatform(BasePlatform):
             _wait_url_stable,
         )
 
+        # 1) 无条件回收旧会话（活着的旧浏览器关掉；已死的清引用）
+        await finding_jobs.shutdown()
+
+        # 2) 全新启动（内部先 reap 占 profile 的孤儿 Chrome，再起浏览器）
+        await finding_jobs.open_browser_with_options(BOSS_LOGIN_URL, "chrome")
         tab = finding_jobs.get_tab()
-        if tab is None:
-            await finding_jobs.open_browser_with_options(BOSS_LOGIN_URL, "chrome")
-            tab = finding_jobs.get_tab()
-        else:
-            await tab.get(BOSS_LOGIN_URL)
         try:
             await tab.activate()
             await tab.bring_to_front()
