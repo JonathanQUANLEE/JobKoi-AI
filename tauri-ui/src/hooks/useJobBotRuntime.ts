@@ -8,6 +8,7 @@ import {
   latestJob,
   summarizeEvents,
   formatLocalTime,
+  hasUnsavedProfileChanges,
 } from "../lib/dashboardHelpers";
 
 /** 读取平台中心勾选的巡航平台（localStorage 由 PlatformHub 写入）。 */
@@ -167,6 +168,25 @@ export function useJobBotRuntime({
     : t("status.idle");
 
   const startRun = useCallback(async () => {
+    // 知情确认（方案 1）：表单与磁盘不一致时先弹窗告知"启动会自动保存"。
+    // 行为零变化——只是把 startRun 原有的启动前自动保存从"静默"变"可见"。
+    if (running) {
+      // 已在巡航中：不做未保存判断，直接走原有流程（后端会报 already_running）
+    } else {
+      const dirty = await hasUnsavedProfileChanges({
+        profileName,
+        currentProfileData,
+        greeting,
+        greetingPath,
+      });
+      if (dirty) {
+        const proceed = await new Promise<boolean>((resolve) => {
+          useRunStore.getState().requestStartConfirm(resolve);
+        });
+        if (!proceed) return;
+      }
+    }
+
     const error = validateBeforeRun();
     if (error) {
       setMessage(error);
@@ -263,6 +283,7 @@ export function useJobBotRuntime({
     greetingPath,
     profileName,
     currentProfileData,
+    running,
     clear,
     setRunning,
     pushEvent,
