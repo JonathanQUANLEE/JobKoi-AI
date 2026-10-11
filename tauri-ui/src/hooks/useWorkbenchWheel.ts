@@ -298,22 +298,44 @@ export function useWorkbenchWheel({
     };
   }, [applyStageTarget, renderStageTransforms, activeNav]);
 
-  // 导航切换：切回工作台时把舞台强制吸附到最近整数站台并重渲染，
-  // 同时清理离开期间残留的 rAF 帧与滚轮吸附计时器——否则舞台会残留
-  // "两个站台之间"的中间态（模块缩小 + 半透明 + 上下模块露头）。
+  // 导航切换：回到工作台 = 固定恢复「平台中心」站台（用户期望语义）。
+  // WorkbenchView 是条件渲染：切走即卸载、切回才重挂载——effect 首轮
+  // DOM/refs 可能尚未就绪导致 renderStageTransforms 空引用早退、视觉
+  // 卡在旧的折叠姿态（平台中心缩小 + 半透明）。因此用「立即 + 双 rAF +
+  // 150ms + 600ms」多重尝试，保证挂载稳定后一定能画上正确姿态。
   useEffect(() => {
-    if (activeNav === "workbench") {
-      const snapped = Math.min(
-        2,
-        Math.max(0, Math.round(stagePosRef.current)),
-      ) as 0 | 1 | 2;
+    if (activeNav !== "workbench") {
+      return () => {
+        if (stageRafRef.current != null) {
+          cancelAnimationFrame(stageRafRef.current);
+          stageRafRef.current = null;
+        }
+        if (stageWheelTimerRef.current) {
+          clearTimeout(stageWheelTimerRef.current);
+          stageWheelTimerRef.current = null;
+        }
+      };
+    }
+
+    const applySnap = () => {
+      const snapped = 1 as 0 | 1 | 2;
       stagePosRef.current = snapped;
       stageTargetRef.current = snapped;
       ringActiveIndexRef.current = snapped;
       setRingActiveIndex(snapped);
       renderStageTransforms(snapped);
-    }
+    };
+
+    applySnap();
+    const raf1 = requestAnimationFrame(applySnap);
+    const raf2 = requestAnimationFrame(applySnap);
+    const timer = window.setTimeout(applySnap, 150);
+    const lateTimer = window.setTimeout(applySnap, 600);
     return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      window.clearTimeout(timer);
+      window.clearTimeout(lateTimer);
       if (stageRafRef.current != null) {
         cancelAnimationFrame(stageRafRef.current);
         stageRafRef.current = null;

@@ -306,7 +306,7 @@ export default function Dashboard() {
               onGoToResumes={() => setActiveNav("resumes")}
               onBackToWorkbench={() => {
                 setActiveNav("workbench");
-                wheel.scrollToRingStage(2, true);
+                wheel.scrollToRingStage(1, true);
               }}
               onSaveConfig={profileForm.saveConfig}
               lang={lang}
