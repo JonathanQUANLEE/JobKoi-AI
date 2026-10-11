@@ -195,6 +195,70 @@ def test_run_reuses_live_current_page(monkeypatch):
     asyncio.run(scenario())
 
 
+# ---------- 带站岗的节流睡眠：浏览器中途死掉 ~2s 内中止 ----------
+
+
+def test_guarded_sleep_aborts_when_browser_dies_midway(monkeypatch):
+    """节流睡眠中手关浏览器：不等满 10-30s，下一小段（默认 2s）立刻抛错。"""
+
+    async def scenario():
+        fj = write_response.finding_jobs
+        monkeypatch.setattr(fj, "_browser", _FakeBrowser(stopped=False))
+        monkeypatch.setattr(fj, "_tab", object())
+
+        async def sleep_then_die(delay: float):
+            # 模拟用户在第一小段睡眠期间关掉了浏览器（进程退出）
+            monkeypatch.setattr(fj, "_browser", _FakeBrowser(stopped=True))
+
+        monkeypatch.setattr(write_response.asyncio, "sleep", sleep_then_die)
+
+        with pytest.raises(RuntimeError, match="浏览器已关闭"):
+            await fj.sleep_with_browser_guard(30.0)
+
+    asyncio.run(scenario())
+
+
+def test_guarded_sleep_is_plain_sleep_without_tab(monkeypatch):
+    """无受控 tab（测试/无浏览器场景）→ 退化为纯睡眠：分段睡满、不验活不抛错。"""
+
+    async def scenario():
+        fj = write_response.finding_jobs
+        monkeypatch.setattr(fj, "_browser", None)
+        monkeypatch.setattr(fj, "_tab", None)
+
+        calls: list[float] = []
+
+        async def record_sleep(delay: float):
+            calls.append(delay)
+
+        monkeypatch.setattr(write_response.asyncio, "sleep", record_sleep)
+
+        await fj.sleep_with_browser_guard(5.0)
+
+        assert calls == [2.0, 2.0, 1.0]  # 分段睡满：2+2+1=5s
+
+    asyncio.run(scenario())
+
+
+def test_guarded_sleep_shorter_than_chunk_skips_check(monkeypatch):
+    """时长不足一个站岗小段（<2s）→ 不做中途检查，行为等同普通 sleep。"""
+
+    async def scenario():
+        fj = write_response.finding_jobs
+        # tab 在、浏览器已死——但时长太短，检查点在下一轮主循环开头兜底
+        monkeypatch.setattr(fj, "_browser", _FakeBrowser(stopped=True))
+        monkeypatch.setattr(fj, "_tab", object())
+
+        async def fast_sleep(delay: float):
+            return None
+
+        monkeypatch.setattr(write_response.asyncio, "sleep", fast_sleep)
+
+        await fj.sleep_with_browser_guard(1.5)  # 不抛错
+
+    asyncio.run(scenario())
+
+
 # ---------- 巡航中浏览器死亡：主循环干净中止 ----------
 
 
