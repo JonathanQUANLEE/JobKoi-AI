@@ -266,7 +266,7 @@ export default function HeroStage({
 
             <div className="relative px-6 pt-3.5 sm:px-8 sm:pt-4.5">
               <textarea
-                rows={isSunkMode ? 1 : 2}
+                rows={isSunkMode ? 1 : 3}
                 value={heroInputText}
                 onChange={(e) => setHeroInputText(e.target.value)}
                 onFocus={() => {
@@ -287,7 +287,7 @@ export default function HeroStage({
                     ? "继续输入向 AI 顾问补充更多要求、技能或修改画像..."
                     : PLACEHOLDERS[placeholderIndex]
                 }
-                className="block min-h-[3rem] sm:min-h-[3.6rem] w-full resize-none bg-transparent text-base sm:text-[17px] leading-6 sm:leading-7 text-stone-100 outline-none placeholder:text-stone-500"
+                className="block min-h-[5rem] sm:min-h-[6rem] w-full resize-none bg-transparent text-base sm:text-[17px] leading-6 sm:leading-7 text-stone-100 outline-none placeholder:text-stone-500"
               />
             </div>
 
