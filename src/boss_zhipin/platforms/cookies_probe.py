@@ -71,8 +71,14 @@ def read_cookie_state(
             continue
 
         def _alive(name: str, expires_utc: int, persistent: int) -> bool:
-            # 会话 cookie（is_persistent=0）不算登录证据：游客也有一堆，
-            # 且它随浏览器关闭而失效。
+            # 有登录凭证名单时（BOSS 的 bst 等）：名字命中即强证据——
+            # **会话 cookie 也算**（2026-10-11 实测教训：用户 bst 是会话
+            # cookie、浏览器重启自动恢复登录，却被"排除会话"规则误杀成
+            # 未登录，出现"网页已登录、卡片待扫码"的矛盾）。游客绝无 bst。
+            if required_names and name in required_names and not persistent:
+                return True
+            # 其余（含无名单的退化路径）：会话 cookie 一概不算——游客的
+            # 统计/防爬会话 cookie 太多，必须用持久+未过期过滤。
             if not persistent:
                 return False
             return expires_utc == 0 or expires_utc > now_micros

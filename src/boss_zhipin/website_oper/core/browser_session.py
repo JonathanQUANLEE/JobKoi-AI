@@ -64,12 +64,21 @@ async def shutdown() -> None:
         try:
             from nodriver import cdp
 
-            # 优雅退出：Chrome 收到 Browser.close 会保存所有会话数据再退出
-            await finding_jobs._browser.connection.send(cdp.browser.close())
+            # 优雅退出：Chrome 收到 Browser.close 会保存所有会话数据再退出。
+            # 常见误报：close 已送达、Chrome 正在退出时连接先断 → send 抛
+            # ConnectionRefused(1225)——这不代表失败，走下面的兜底判断。
+            try:
+                await finding_jobs._browser.connection.send(cdp.browser.close())
+            except Exception as e:  # noqa: BLE001
+                log.info("CDP close 连接断开（多为 Chrome 正常退出中）: %s", e)
+                # 清理没退干净的残留孤儿：否则它继续锁着 Cookies 库，
+                # 下次点换号/平台卡全部读成「待验证」（2026-10-11 实测）。
+                _reap_profile_chrome(CHROME_PROFILE_DIR)
             # 给 Chrome 时间完成退出流程 + cookie 落盘（正常 <1s，留 2s 余量）
             await asyncio.sleep(2.0)
         except Exception as e:
             log.warning("CDP 优雅关闭失败（改用 stop 兜底）: %s", e)
+            _reap_profile_chrome(CHROME_PROFILE_DIR)
         try:
             finding_jobs._browser.stop()
         except Exception as e:

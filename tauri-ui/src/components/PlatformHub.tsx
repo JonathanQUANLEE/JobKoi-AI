@@ -180,12 +180,19 @@ export default function PlatformHub({
         return;
       }
       if (res.logged_in) {
-        // 打开时就探测到已登录（如 cookie 本来有效）
-        setMessage(`「${platformId}」已登录成功！`);
+        // 打开时就探测到已登录（如 cookie/session 有效，页面自动跳过登录页）
+        // → 自动关掉登录浏览器（优雅退出保 cookie 落盘）→ 刷新卡片状态
+        setBusy(true);
+        try {
+          await withTimeout(ipc.shutdownBrowser(), 10_000, "关闭登录浏览器");
+        } catch {
+          /* 关闭失败不阻塞提示 */
+        }
         useRunStore.getState().showCenterToast("检测到您已登录 · 认证成功", {
           tone: "success",
           duration: 2200,
         });
+        setMessage(`「${platformId}」已登录成功，状态已刷新！`);
         await loadPlatforms();
         return;
       }

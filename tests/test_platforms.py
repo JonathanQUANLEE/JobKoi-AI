@@ -125,6 +125,56 @@ def test_boss_platform_rejects_expired_bst(tmp_path: Path):
     assert boss.check_login() is False
 
 
+def test_boss_platform_accepts_session_bst(tmp_path: Path):
+    """bst 是会话 cookie（is_persistent=0）→ 也是登录证据（2026-10-11 实测回归）。
+
+    用户实测：bst 以会话 cookie 形态存在（浏览器重启自动恢复登录），
+    旧规则"排除所有会话 cookie"把它误杀成未登录，出现
+    「网页已登录、平台卡待扫码」的矛盾状态。
+    """
+    import sqlite3
+
+    boss = BossPlatform(root_dir=tmp_path)
+    db_file = tmp_path / "chrome_profile" / "Default" / "Network" / "Cookies"
+    db_file.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(
+        "CREATE TABLE cookies (host_key TEXT, name TEXT, expires_utc INTEGER, is_persistent INTEGER)"
+    )
+    # bst：会话 cookie（expires=0, is_persistent=0）——旧规则误杀的形态
+    conn.execute(
+        "INSERT INTO cookies VALUES ('.zhipin.com', 'bst', 0, 0)"
+    )
+    # 游客会话 cookie 依然不算数（不能因为有它就误判）
+    conn.execute(
+        "INSERT INTO cookies VALUES ('.zhipin.com', '__zp_stoken__', 0, 0)"
+    )
+    conn.commit()
+    conn.close()
+
+    assert boss.check_login() is True
+
+
+def test_liepin_rejects_tourist_session_cookies(tmp_path: Path):
+    """无名单退化路径：游客会话 cookie 不算登录（猎聘判定）。"""
+    import sqlite3
+
+    liepin = LiepinPlatform(root_dir=tmp_path)
+    db_file = tmp_path / "liepin_profile" / "Default" / "Network" / "Cookies"
+    db_file.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(
+        "CREATE TABLE cookies (host_key TEXT, name TEXT, expires_utc INTEGER, is_persistent INTEGER)"
+    )
+    conn.execute(
+        "INSERT INTO cookies VALUES ('.liepin.com', 'track_id', 0, 0)"
+    )
+    conn.commit()
+    conn.close()
+
+    assert liepin.check_login() is False
+
+
 def test_zhaopin_platform_open_login_unsupported():
     zhaopin = ZhaopinPlatform()
     res = asyncio.run(zhaopin.open_login_browser())
