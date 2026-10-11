@@ -33,6 +33,7 @@ from boss_zhipin.platforms.ledger import (  # noqa: E402
     sent_job_ids,
     today_sent,
 )
+from boss_zhipin.platforms.limits import DEFAULT_DAILY_LIMITS  # noqa: E402
 
 LOGS = ROOT / "logs"
 SENT_LOG = LOGS / "liepin_sent.jsonl"
@@ -171,7 +172,7 @@ async def run(keywords: list[str], daily_limit: int, greeting: str) -> int:
 def main() -> int:
     import nodriver as uc
 
-    limit = int(os.environ.get("LIEPIN_DAILY_LIMIT", "100"))
+    limit = int(os.environ.get("LIEPIN_DAILY_LIMIT", str(DEFAULT_DAILY_LIMITS["liepin"])))
     greeting = driver._greeting_text()
     result = uc.loop().run_until_complete(run(DEFAULT_KEYWORDS, limit, greeting))
     return 0 if result >= 0 else 1

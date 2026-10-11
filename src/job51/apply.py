@@ -28,6 +28,7 @@ from boss_zhipin.platforms.ledger import (  # noqa: E402
     sent_job_ids,
     today_sent,
 )
+from boss_zhipin.platforms.limits import DEFAULT_DAILY_LIMITS  # noqa: E402
 
 LOGS = ROOT / "logs"
 SENT_LOG = LOGS / "job51_sent.jsonl"
@@ -195,7 +196,7 @@ async def run(keywords: list[str], daily_limit: int, tab=None) -> int:
 def main() -> int:
     import nodriver as uc
 
-    limit = int(os.environ.get("JOB51_DAILY_LIMIT", "40"))
+    limit = int(os.environ.get("JOB51_DAILY_LIMIT", str(DEFAULT_DAILY_LIMITS["job51"])))
     result = uc.loop().run_until_complete(run(DEFAULT_KEYWORDS, limit))
     return 0 if result >= 0 else 1
 

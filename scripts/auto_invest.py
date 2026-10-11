@@ -24,6 +24,8 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(ROOT / "src"))
 LOGS = ROOT / "logs"
 SENT_LOG = LOGS / "sent_jobs.jsonl"
 WATCHED_LOGS = [
@@ -32,7 +34,9 @@ WATCHED_LOGS = [
     LOGS / "seen_jobs.jsonl",
 ]
 
-DAILY_LIMIT = 150      # 用户要求：BOSS 每日 150 份（与 profiles/0my.yml 的 daily_sent_limit 一致）
+from boss_zhipin.platforms.limits import DEFAULT_DAILY_LIMITS  # noqa: E402
+
+DAILY_LIMIT = DEFAULT_DAILY_LIMITS["boss"]  # 用户要求：BOSS 每日 150 份（与 profiles/0my.yml 的 daily_sent_limit 一致）
 STALL_SECONDS = 360    # 日志无增长超过这个秒数判定挂死
 RESTART_PAUSE = 20     # 杀掉后等多久再重启
 MAX_IDLE_ROUNDS = 3    # 连续这么多轮"零新增投递"就退出（下限）；实际阈值见 main() 的 idle_limit

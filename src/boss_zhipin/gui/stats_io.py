@@ -17,15 +17,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from boss_zhipin.platforms.limits import DEFAULT_DAILY_LIMITS
+
 log = logging.getLogger(__name__)
 
 # src/boss_zhipin/gui/stats_io.py → 仓库根（gui → boss_zhipin → src → repo）
 ROOT = Path(__file__).resolve().parent.parent.parent.parent
 DEFAULT_LOGS_DIR = ROOT / "logs"
 
-BOSS_DAILY_LIMIT = 150
-LIEPIN_DAILY_LIMIT = 100
-JOB51_DAILY_LIMIT = 40
+BOSS_DAILY_LIMIT = DEFAULT_DAILY_LIMITS["boss"]
+LIEPIN_DAILY_LIMIT = DEFAULT_DAILY_LIMITS["liepin"]
+JOB51_DAILY_LIMIT = DEFAULT_DAILY_LIMITS["job51"]
 
 # key → (展示名, sent 日志文件名, 日限额)
 PLATFORMS: dict[str, tuple[str, str, int]] = {
