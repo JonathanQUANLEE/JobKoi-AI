@@ -70,10 +70,22 @@ async def send_job_descriptions_to_chat(
 
     cfg = LoopConfig.load()
 
+    # 复用当前页面前必须先验活（2026-10-12 事故）：用户中途手关浏览器后，
+    # 上一轮巡航可能从 API 流翻页异常路径退出，_browser/_tab 死引用残留——
+    # 只看"引用是否存在"会复用死会话：新浏览器永远不开、不导航画像起始页，
+    # 筛选瞬间全失败、DOM 流空转成僵尸。死了就清理残留并全新启动。
     if use_current_page or finding_jobs.get_tab() is not None:
-        await finding_jobs.ensure_current_tab()
+        if finding_jobs.is_browser_alive():
+            await finding_jobs.ensure_current_tab()
+        else:
+            log.warning("受控浏览器已关闭（或进程不存在），清理残留会话后全新启动")
+            await finding_jobs.shutdown()
+            await finding_jobs.open_browser_with_options(url, browser_type)
     else:
         await finding_jobs.open_browser_with_options(url, browser_type)
+    # 本轮是否真的持有受控浏览器：tests 里 open_browser 被 mock、不设 _tab → False，
+    # 主循环的浏览器死亡检测自动跳过；生产环境开浏览器/复用活页后必为 True。
+    had_live_browser = finding_jobs.get_tab() is not None
     actual_url = finding_jobs.get_current_url()
     events.emit("browser_started")
     events.emit(
@@ -179,6 +191,15 @@ async def send_job_descriptions_to_chat(
         window_index += 1
 
     while True:
+        # 浏览器死掉（用户中途手关）→ 立刻干净中止，不做僵尸空转。
+        # 依据：_safe_evaluate 检测到连接断开会调 shutdown() 清引用，所以
+        # _browser 变 None = 浏览器已死（换号按钮在巡航中会被拦截，不存在
+        # 其他中途清引用的路径）。检测放 try 外：要穿透到 runner._wrap
+        # （emit error + loop_ended(error)），不被下面的宽 except 吞成正常结束。
+        if had_live_browser and not finding_jobs.is_browser_alive():
+            raise RuntimeError(
+                "浏览器已关闭，本轮巡航中止。可修改画像后重新点「开启巡航」。"
+            )
         try:
             if is_limit_reached(
                 cfg,

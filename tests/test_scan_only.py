@@ -430,6 +430,8 @@ def test_use_current_page_skips_open_url_and_page_filters(monkeypatch):
         )
         monkeypatch.setattr(write_response.finding_jobs, "open_browser_with_options", open_browser)
         monkeypatch.setattr(write_response.finding_jobs, "ensure_current_tab", ensure_current_tab)
+        # 前提：用户有一个活着的受控浏览器页面（无此 patch 会按新行为全新启动浏览器）
+        monkeypatch.setattr(write_response.finding_jobs, "is_browser_alive", lambda: True)
         monkeypatch.setattr(write_response.finding_jobs, "get_selected_job_index", get_selected_job_index)
         monkeypatch.setattr(write_response.finding_jobs, "get_current_url", lambda: "https://www.zhipin.com/web/geek/jobs")
         monkeypatch.setattr(write_response.finding_jobs, "apply_page_filters", apply_filters)
