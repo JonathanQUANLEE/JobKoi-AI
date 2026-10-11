@@ -50,10 +50,26 @@ async def _start_browser_with_retry(config: Config, attempts: int = 3) -> uc.Bro
 
 
 async def shutdown() -> None:
-    """关 Chrome 并清空模块级 ``_browser`` / ``_tab``。"""
+    """优雅关闭 Chrome 并清空模块级 ``_browser`` / ``_tab``。
+
+    为什么必须优雅（2026-10-11 事故实锤）：nodriver 的 ``stop()`` 只断开
+    CDP 连接，相当于把 Chrome 进程丢下不管/硬杀——**新登录的 cookie 还在
+    Chrome 内存里没写盘就跟着死了**，用户扫码登录成功再关浏览器，下次
+    启动巡航又变成未登录。改用 CDP ``browser.close()`` 让 Chrome 走正常
+    退出流程（flush 全部 session/cookie 到磁盘），再兜底 stop。
+    """
     from boss_zhipin.website_oper import finding_jobs
 
     if finding_jobs._browser is not None:
+        try:
+            from nodriver import cdp
+
+            # 优雅退出：Chrome 收到 Browser.close 会保存所有会话数据再退出
+            await finding_jobs._browser.connection.send(cdp.browser.close())
+            # 给 Chrome 时间完成退出流程 + cookie 落盘（正常 <1s，留 2s 余量）
+            await asyncio.sleep(2.0)
+        except Exception as e:
+            log.warning("CDP 优雅关闭失败（改用 stop 兜底）: %s", e)
         try:
             finding_jobs._browser.stop()
         except Exception as e:

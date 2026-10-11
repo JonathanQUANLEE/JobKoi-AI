@@ -108,7 +108,6 @@ async def _process_single_api_job(
     *,
     api_job: dict[str, Any],
     seen_job_keys: set[str],
-    contacted_companies: set[str],
     seen_jobs_path: Path | None,
     sent_log_path: Path | None,
     skipped_log_path: Path | None,
@@ -125,7 +124,7 @@ async def _process_single_api_job(
     """处理 API 搜索结果中的单个岗位。
 
     返回值：(status, sent_count, daily_sent_count)
-    status 可取值: 'seen', 'company_skipped', 'captcha', 'filtered',
+    status 可取值: 'seen', 'captcha', 'filtered',
                    'already_contacted', 'dry_run', 'sent', 'failed'
     """
     from boss_zhipin.website_oper import finding_jobs, job_api, write_response
@@ -138,27 +137,8 @@ async def _process_single_api_job(
     seen_job_keys.add(dedupe_key)
     write_response._log_seen(seen_jobs_path, job=job, job_key=dedupe_key, send_mode="auto")
 
-    company_key = write_response._normalize_company(job.company)
-    if company_key and company_key in contacted_companies:
-        write_response._log_skipped(
-            skipped_log_path,
-            job=job,
-            job_key=dedupe_key,
-            send_mode="auto",
-            reason="company_already_contacted",
-            details={
-                "stage": "company_dedupe",
-                "company": job.company,
-                "job_title": job.title,
-            },
-        )
-        write_response._emit_progress(
-            "job_skipped",
-            title=job.title,
-            reason="company_already_contacted",
-            detail=job.company,
-        )
-        return "company_skipped", sent_count, daily_sent_count
+    # 企业级去重已按用户规格移除（2026-10-11）：同一企业常有多个岗位，
+    # 不能因为投过该企业就跳过它的其他岗位；去重只按岗位（dedupe_key）。
 
     # 标题预过滤（观感修复：别开着浏览器逐个点不相干岗位）——
     # 规则全部只依赖卡片字段时，先用 API 卡片数据过滤一轮；不命中直接跳过，
@@ -285,8 +265,6 @@ async def _process_single_api_job(
     if status == "sent":
         sent_count += 1
         daily_sent_count += 1
-        if company_key:
-            contacted_companies.add(company_key)
         write_response._log_sent(
             sent_log_path,
             job=job,
@@ -359,11 +337,6 @@ async def _run_search_api_flow(
         sent_log_path, profile=write_response._profile_name()
     )
     seen_job_keys: set[str] = write_response._read_seen_job_keys(seen_jobs_path)
-    contacted_companies: set[str] = write_response._read_contacted_companies(sent_log_path)
-    if contacted_companies:
-        log.info(
-            "已联系过的公司 %d 家，这些公司的岗位将全部跳过", len(contacted_companies)
-        )
     query = job_api.search_query_from_url(url)
     tab = finding_jobs.get_tab()
     if tab is None:
@@ -410,7 +383,6 @@ async def _run_search_api_flow(
             status, sent_count, daily_sent_count = await _process_single_api_job(
                 api_job=api_job,
                 seen_job_keys=seen_job_keys,
-                contacted_companies=contacted_companies,
                 seen_jobs_path=seen_jobs_path,
                 sent_log_path=sent_log_path,
                 skipped_log_path=skipped_log_path,

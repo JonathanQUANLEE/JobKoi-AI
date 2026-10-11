@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from boss_zhipin.platforms.base import BasePlatform, PlatformInfo
+from boss_zhipin.platforms.cookies_probe import read_cookie_state
 
 log = logging.getLogger(__name__)
 
@@ -20,14 +21,10 @@ class Job51Platform(BasePlatform):
         return self.root_dir / "job51_profile"
 
     def check_login(self) -> bool:
-        profile_dir = self._get_profile_dir()
-        if not profile_dir.is_dir():
-            return False
-        cookie_candidates = [
-            profile_dir / "Default" / "Network" / "Cookies",
-            profile_dir / "Default" / "Cookies",
-        ]
-        return any(c.is_file() and c.stat().st_size > 0 for c in cookie_candidates)
+        """登录态 = 域内存在持久且未过期的 cookie（SQLite 真检查，不再只看文件存在）。"""
+        return (
+            read_cookie_state(self._get_profile_dir(), "%51job.com") is True
+        )
 
     def get_info(self) -> PlatformInfo:
         is_logged = self.check_login()
