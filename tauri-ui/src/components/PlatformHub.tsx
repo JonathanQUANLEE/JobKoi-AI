@@ -2,20 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Globe, RefreshCw, X, FileText, CheckSquare, AlertTriangle } from "lucide-react";
 import { ipc, type PlatformItem } from "../lib/ipc";
 import type { Lang } from "../lib/i18n";
+import { withTimeout } from "../lib/withTimeout";
 import { useRunStore } from "../store";
 import { MagicCard } from "./core/MagicBento";
 import PlatformCard from "./platform/PlatformCard";
 import DeliveryHistoryModal from "./analytics/DeliveryHistoryModal";
-
-/** IPC 兜底超时：后端正常毫秒级返回；一旦挂死，前端 12s 后显式报错（不再静默空白）。 */
-function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
-  return Promise.race([
-    p,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} 超时（${Math.round(ms / 1000)}s 无响应）`)), ms),
-    ),
-  ]);
-}
 
 const PLATFORM_GLOW_MAP: Record<string, string> = {
   boss: "0, 190, 189", // BOSS 直聘 翡翠青
