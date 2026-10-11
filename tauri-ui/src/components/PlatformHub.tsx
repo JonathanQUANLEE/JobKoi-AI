@@ -125,17 +125,25 @@ export default function PlatformHub({
       }
       if (res.logged_in) {
         // 打开时就探测到已登录（如 cookie/session 有效，页面自动跳过登录页）
-        // → 自动关掉登录浏览器（优雅退出保 cookie 落盘）→ 刷新卡片状态
+        // → 同样走 FaceID 式成功反馈（绿对勾 + 叮一声 → 1.5s 淡出），再接
+        //   自动关浏览器（优雅退出保 cookie 落盘）→ 刷新卡片状态。
+        //   2026-10-12 用户反馈：只弹绿字 toast 少了 FaceID 特效，两条登录
+        //   路径（扫码/已登录）的仪式感应当一致。
+        useRunStore.getState().showLoginOverlay(platformId);
+        useRunStore.getState().updateLoginOverlay({ status: "success" });
         setBusy(true);
         try {
           await withTimeout(ipc.shutdownBrowser(), 10_000, "关闭登录浏览器");
         } catch {
           /* 关闭失败不阻塞提示 */
         }
-        useRunStore.getState().showCenterToast("检测到您已登录 · 认证成功", {
-          tone: "success",
-          duration: 2200,
-        });
+        window.setTimeout(() => {
+          useRunStore.getState().hideLoginOverlay();
+          useRunStore.getState().showCenterToast("检测到您已登录 · 认证成功", {
+            tone: "success",
+            duration: 2200,
+          });
+        }, 1500);
         setMessage(`「${platformId}」已登录成功，状态已刷新！`);
         await loadPlatforms();
         return;
