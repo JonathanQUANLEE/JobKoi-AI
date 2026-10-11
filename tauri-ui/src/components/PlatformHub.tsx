@@ -146,10 +146,15 @@ export default function PlatformHub({
             } catch {
               /* 关闭失败不阻塞提示 */
             }
-            useRunStore.getState().showCenterToast("检测到您已登录 · 认证成功", {
-              tone: "success",
-              duration: 2200,
-            });
+            // FaceID 式反馈：圆圈 → 绿色对勾 + 叮一声 → 1.5s 后自动淡出
+            useRunStore.getState().updateLoginOverlay({ status: "success" });
+            window.setTimeout(() => {
+              useRunStore.getState().hideLoginOverlay();
+              useRunStore.getState().showCenterToast("检测到您已登录 · 认证成功", {
+                tone: "success",
+                duration: 2200,
+              });
+            }, 1500);
             await loadPlatforms();
           }
         } catch {
@@ -184,6 +189,8 @@ export default function PlatformHub({
         await loadPlatforms();
         return;
       }
+      // 打开成功、等扫码 → FaceID 式全屏引导浮层（背景模糊+圆圈扫描动画）
+      useRunStore.getState().showLoginOverlay(platformId);
       setMessage(`已打开「${platformId}」登录页，请在浏览器扫码；登录成功会自动识别。`);
       startLoginPoll(platformId);
     } catch (err) {
@@ -199,6 +206,9 @@ export default function PlatformHub({
         friendly = `打开登录页失败，请重试一次换号/刷新。原始错误：${raw}`;
       }
       setMessage(friendly);
+      // 若 FaceID 浮层还开着，把失败状态同步进去（圆圈变红叉+原因）
+      useRunStore.getState().updateLoginOverlay({ status: "error", message: friendly });
+      window.setTimeout(() => useRunStore.getState().hideLoginOverlay(), 3200);
       useRunStore.getState().notify({
         type: "error",
         text: friendly,
