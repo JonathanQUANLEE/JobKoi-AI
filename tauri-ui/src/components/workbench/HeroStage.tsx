@@ -5,9 +5,8 @@ import {
   Bot,
   Paperclip,
 } from "lucide-react";
-import { ipc, type AgentChatMessage } from "../../lib/ipc";
-import { useRunStore } from "../../store";
-import { readFileAsBase64 } from "../../lib/resumeUtils";
+import type { AgentChatMessage } from "../../lib/ipc";
+import { useResumeUpload } from "../../hooks/useResumeUpload";
 import LatticeLoader from "../core/LatticeLoader";
 import type { RuleForm } from "../../lib/profileForm";
 import type { Lang } from "../../lib/i18n";
@@ -64,14 +63,23 @@ export default function HeroStage({
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [recBatchIndex, setRecBatchIndex] = useState(0);
   const [isRotatingRec, setIsRotatingRec] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const dialogueScrollRef = useRef<HTMLDivElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [isUploadingResume, setIsUploadingResume] = useState(false);
-  const [uploadStatusText, setUploadStatusText] = useState("");
 
   // Codex 式无界画布下沉模式状态
   const [isSunkMode, setIsSunkMode] = useState<boolean>(false);
+
+  // 简历上传业务链路（文件 ref + 上传状态条 + 保存/解析 IPC + 拼画像 prompt）
+  // 已下沉到 hooks/useResumeUpload；上传成功 → 进入沉浸模式并把 prompt 交给 AI 对话入口
+  const {
+    fileInputRef,
+    isUploadingResume,
+    uploadStatusText,
+    handleResumeUpload,
+  } = useResumeUpload((prompt: string) => {
+    setIsSunkMode(true);
+    onChatSubmit(prompt);
+  });
 
   // 当外部开始 AI 思考时，自动触发下沉
   useEffect(() => {
@@ -116,44 +124,6 @@ export default function HeroStage({
       });
     }
   }, [isSunkMode, heroChatMessages.length, heroChatting, heroProfileResult]);
-
-  async function handleResumeUpload(file?: File | null) {
-    if (!file) return;
-    setIsUploadingResume(true);
-    setUploadStatusText(`正在同步「${file.name}」到资料库...`);
-    try {
-      const b64 = await readFileAsBase64(file);
-      await ipc.saveResumeFile(file.name, b64);
-      useRunStore.getState().notify({
-        type: "success",
-        text: `已成功导入简历资料库：${file.name}`,
-        source: "资料档案",
-      });
-
-      setUploadStatusText(`正在解析简历「${file.name}」文本内容...`);
-      let parsedText = "";
-      try {
-        const contentRes = await ipc.getResumeContent(file.name);
-        parsedText = contentRes.text?.trim() || "";
-      } catch {}
-
-      const prompt = parsedText
-        ? `【已同步导入简历: ${file.name}】\n提取简历主要信息:\n${parsedText.slice(0, 1200)}\n\n请根据以上简历内容，分析我的技术栈与求职意向，定制匹配的求职画像（目标岗位、城市、必须与偏好技能、排除方向）。`
-        : `【已同步导入简历资料: ${file.name}】\n请为我规划专属的求职岗位偏好与技能画像。`;
-
-      setIsSunkMode(true);
-      onChatSubmit(prompt);
-    } catch (err) {
-      useRunStore.getState().notify({
-        type: "error",
-        text: `简历同步导入失败: ${String(err)}`,
-      });
-    } finally {
-      setIsUploadingResume(false);
-      setUploadStatusText("");
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  }
 
   // 占位词轮播定时器
   useEffect(() => {
