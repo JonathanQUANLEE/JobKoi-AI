@@ -11,6 +11,7 @@ import { type SettingsTab } from "../components/SettingsModal";
 import { type MistModalType } from "../components/settings/MistSettingsModal";
 import Sidebar, { type NavItem } from "../components/Sidebar";
 import DashboardModalLayer from "../components/dashboard/DashboardModalLayer";
+import StartConfirmDialog from "../components/core/StartConfirmDialog";
 import { useWorkbenchWheel } from "../hooks/useWorkbenchWheel";
 import { useProfileFormState } from "../hooks/useProfileFormState";
 import { useJobBotRuntime } from "../hooks/useJobBotRuntime";
@@ -370,6 +371,7 @@ export default function Dashboard() {
       </div>
 
       {/* 弹窗与悬浮层外壳 */}
+      <StartConfirmDialog />
       <DashboardModalLayer
         drawerOpen={drawerOpen}
         setDrawerOpen={setDrawerOpen}

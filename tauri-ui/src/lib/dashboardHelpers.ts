@@ -1,5 +1,6 @@
-import type { ProgressEvent } from "./ipc";
+import type { ProgressEvent, ProfileData } from "./ipc";
 import type { Mode, Scope, MatchMode, RuleForm } from "./profileForm";
+import { ipc } from "./ipc";
 
 export const DEFAULT_PROFILE_NAME = "gui-default";
 export const DEFAULT_GREETING = "";
@@ -251,4 +252,57 @@ export function formatLocalTime(): string {
   const date = new Date();
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+/** 启动巡航时招呼语为空的高情商兜底文案（与 useJobBotRuntime.startRun 的口径一致）。 */
+export const FALLBACK_GREETING_TEXT =
+  "您好！我对贵公司的岗位非常感兴趣，希望能与您进一步沟通交流！";
+
+/** 递归键序稳定的 JSON 序列化：对象键排序后再拼接，"内容相同、键序不同"的两个对象结果一致。 */
+export function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`);
+    return `{${entries.join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+/**
+ * 表单是否有未保存到磁盘的修改（启动前知情确认弹窗的判据）。
+ *
+ * 与 startRun 启动时自动保存的口径完全一致：比较 buildProfileData 生成的
+ * 画像数据与磁盘 getProfile、招呼语文本/文件路径与磁盘 getGreeting。
+ * - 画像读不到（从未保存过/名称不存在）→ 视为有修改：先保存，后端才能加载；
+ * - 招呼语文件为空（从未保存过）→ 不算修改，避免首次启动弹窗噪音；
+ * - 招呼语 IPC 异常 → 不拦截（fail-open，交给原有流程兜底）。
+ */
+export async function hasUnsavedProfileChanges(opts: {
+  profileName: string;
+  currentProfileData: () => ProfileData;
+  greeting: string;
+  greetingPath: string;
+}): Promise<boolean> {
+  const name = opts.profileName.trim() || DEFAULT_PROFILE_NAME;
+  try {
+    const disk = await ipc.getProfile(name);
+    if (stableStringify(disk.data) !== stableStringify(opts.currentProfileData())) {
+      return true;
+    }
+  } catch {
+    return true;
+  }
+  try {
+    const { path, text } = await ipc.getGreeting();
+    const formPath = opts.greetingPath.trim() || "./greetings/default.txt";
+    if (toRepoRelativePath(path) !== formPath) return true;
+    const formText = opts.greeting.trim() || FALLBACK_GREETING_TEXT;
+    if (text && text.trim() !== formText) return true;
+  } catch {
+    /* 招呼语读取失败不拦截巡航 */
+  }
+  return false;
 }

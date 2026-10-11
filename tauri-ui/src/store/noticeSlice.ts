@@ -45,9 +45,15 @@ export type NoticeSlice = {
   removeNotification: (id: string) => void;
   clearNotification: () => void;
   clearAllNotifications: () => void;
+
+  // 启动前未保存修改确认浮层（方案 1 知情确认）：resolve 回调由 startRun
+  // 的 Promise 挂进来，弹窗按钮 resolve(true)=保存并开始 / resolve(false)=取消。
+  startConfirm: { resolve: (ok: boolean) => void } | null;
+  requestStartConfirm: (resolve: (ok: boolean) => void) => void;
+  resolveStartConfirm: (ok: boolean) => void;
 };
 
-export const createNoticeSlice: StateCreator<RunStore, [], [], NoticeSlice> = (set) => ({
+export const createNoticeSlice: StateCreator<RunStore, [], [], NoticeSlice> = (set, get) => ({
   centerToast: null,
   showCenterToast: (text, opts) =>
     set({
@@ -131,4 +137,12 @@ export const createNoticeSlice: StateCreator<RunStore, [], [], NoticeSlice> = (s
       };
     }),
   clearAllNotifications: () => set({ notifications: [] }),
+
+  startConfirm: null,
+  requestStartConfirm: (resolve) => set({ startConfirm: { resolve } }),
+  resolveStartConfirm: (ok) => {
+    const pending = get().startConfirm;
+    set({ startConfirm: null });
+    pending?.resolve(ok);
+  },
 });
