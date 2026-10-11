@@ -6,6 +6,18 @@ import logging
 import random
 from typing import Any
 
+from boss_zhipin.audit import validate_letter
+from boss_zhipin.website_oper.dispatch.history_logger import (
+    _log_sent,
+    _log_skipped,
+    _match_explanation,
+)
+from boss_zhipin.website_oper.dispatch.loop_actions import compose_greeting
+from boss_zhipin.website_oper.dispatch.review_flow import (
+    _ask_gui_review_decision,
+    _ask_review_decision,
+)
+
 log = logging.getLogger(__name__)
 
 
@@ -19,6 +31,8 @@ async def handle_scan_only_match(
     details: dict[str, Any],
 ) -> None:
     """处理 scan_only 命中：只记录与上报，不发消息。"""
+    # write_response 仅为 _emit_progress/_log_scan_match 借道保留：测试把事件收集器与
+    # 扫描匹配记录器 patch 在门面属性上，直连会绕过 patch；待 emit 专项批一起迁移。
     from boss_zhipin.website_oper import write_response
 
     log.info("✅ [扫描命中 #%d] %s", job_index, details.get("reason", ""))
@@ -27,7 +41,7 @@ async def handle_scan_only_match(
         job_description=job_description,
         details=details,
     )
-    write_response._log_sent(
+    _log_sent(
         sent_log_path,
         job=job,
         job_key=dedupe_key,
@@ -64,10 +78,12 @@ async def handle_auto_send_job(
     daily_sent_count: int,
 ) -> tuple[bool, int, int]:
     """处理 auto 模式发送。返回 (should_stop, new_sent_count, new_daily_sent_count)。"""
+    # write_response 仅为 _emit_progress/log_attempt/click_contact_and_send_response 借道保留：
+    # 测试把这三者 patch 在门面属性上，直连会绕过 patch；待 emit 专项批一起迁移。
     from boss_zhipin.website_oper import write_response
 
     response = fixed_greeting
-    validation = write_response.validate_letter(response)
+    validation = validate_letter(response)
     if not validation.ok:
         log.warning(
             "[BLOCKED] 固定招呼语未通过校验: %s — preview: %r",
@@ -89,10 +105,10 @@ async def handle_auto_send_job(
             status="blocked",
             score=None,
             letter_len=len(response),
-            match_explanation=write_response._match_explanation(details),
+            match_explanation=_match_explanation(details),
             match_details=details,
         )
-        write_response._log_skipped(
+        _log_skipped(
             skipped_log_path,
             job=job,
             job_key=dedupe_key,
@@ -123,10 +139,10 @@ async def handle_auto_send_job(
             status="dry_run",
             score=None,
             letter_len=len(response),
-            match_explanation=write_response._match_explanation(details),
+            match_explanation=_match_explanation(details),
             match_details=details,
         )
-        write_response._log_sent(
+        _log_sent(
             sent_log_path,
             job=job,
             job_key=dedupe_key,
@@ -157,10 +173,10 @@ async def handle_auto_send_job(
         status="sent",
         score=None,
         letter_len=len(response),
-        match_explanation=write_response._match_explanation(details),
+        match_explanation=_match_explanation(details),
         match_details=details,
     )
-    write_response._log_sent(
+    _log_sent(
         sent_log_path,
         job=job,
         job_key=dedupe_key,
@@ -195,12 +211,14 @@ async def handle_review_send_job(
     details: dict[str, Any],
 ) -> str:
     """处理 review 模式人工审核与发送。返回 'sent' | 'skip' | 'quit' | 'blocked'。"""
+    # write_response 仅为 _emit_progress/log_attempt/click_contact_and_send_response 借道保留：
+    # 测试把这三者 patch 在门面属性上，直连会绕过 patch；待 emit 专项批一起迁移。
     from boss_zhipin.website_oper import write_response
 
-    response, _greeting_source = await write_response._compose_greeting(
+    response, _greeting_source = await compose_greeting(
         job_description, fixed_greeting
     )
-    validation = write_response.validate_letter(response)
+    validation = validate_letter(response)
     if not validation.ok:
         log.warning(
             "[BLOCKED] 固定招呼语未通过校验: %s — preview: %r",
@@ -222,10 +240,10 @@ async def handle_review_send_job(
             status="blocked",
             score=None,
             letter_len=len(response),
-            match_explanation=write_response._match_explanation(details),
+            match_explanation=_match_explanation(details),
             match_details=details,
         )
-        write_response._log_skipped(
+        _log_skipped(
             skipped_log_path,
             job=job,
             job_key=dedupe_key,
@@ -236,7 +254,7 @@ async def handle_review_send_job(
         return "blocked"
 
     if gui_review:
-        decision = await write_response._ask_gui_review_decision(
+        decision = await _ask_gui_review_decision(
             index=job_index,
             job=job,
             job_description=job_description,
@@ -244,7 +262,7 @@ async def handle_review_send_job(
             greeting=response,
         )
     else:
-        decision = await write_response._ask_review_decision(
+        decision = await _ask_review_decision(
             index=job_index,
             job_description=job_description,
             details=details,
@@ -258,7 +276,7 @@ async def handle_review_send_job(
 
     if decision == "skip":
         log.info("用户跳过岗位 #%d", job_index)
-        write_response._log_skipped(
+        _log_skipped(
             skipped_log_path,
             job=job,
             job_key=dedupe_key,
@@ -296,10 +314,10 @@ async def handle_review_send_job(
             status="dry_run",
             score=None,
             letter_len=len(response),
-            match_explanation=write_response._match_explanation(details),
+            match_explanation=_match_explanation(details),
             match_details=details,
         )
-        write_response._log_sent(
+        _log_sent(
             sent_log_path,
             job=job,
             job_key=dedupe_key,
@@ -327,10 +345,10 @@ async def handle_review_send_job(
             status="sent",
             score=None,
             letter_len=len(response),
-            match_explanation=write_response._match_explanation(details),
+            match_explanation=_match_explanation(details),
             match_details=details,
         )
-        write_response._log_sent(
+        _log_sent(
             sent_log_path,
             job=job,
             job_key=dedupe_key,
