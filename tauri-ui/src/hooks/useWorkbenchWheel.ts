@@ -298,53 +298,11 @@ export function useWorkbenchWheel({
     };
   }, [applyStageTarget, renderStageTransforms, activeNav]);
 
-  // 导航切换：回到工作台 = 固定恢复「平台中心」站台（用户期望语义）。
-  // WorkbenchView 是条件渲染：切走即卸载、切回才重挂载——effect 首轮
-  // DOM/refs 可能尚未就绪导致 renderStageTransforms 空引用早退、视觉
-  // 卡在旧的折叠姿态（平台中心缩小 + 半透明）。因此用「立即 + 双 rAF +
-  // 150ms + 600ms」多重尝试，保证挂载稳定后一定能画上正确姿态。
+  // 监听导航切换：保持当前目标站台，渲染对应姿态，不再生硬重置为 0
   useEffect(() => {
-    if (activeNav !== "workbench") {
-      return () => {
-        if (stageRafRef.current != null) {
-          cancelAnimationFrame(stageRafRef.current);
-          stageRafRef.current = null;
-        }
-        if (stageWheelTimerRef.current) {
-          clearTimeout(stageWheelTimerRef.current);
-          stageWheelTimerRef.current = null;
-        }
-      };
+    if (activeNav === "workbench") {
+      renderStageTransforms(stagePosRef.current);
     }
-
-    const applySnap = () => {
-      const snapped = 1 as 0 | 1 | 2;
-      stagePosRef.current = snapped;
-      stageTargetRef.current = snapped;
-      ringActiveIndexRef.current = snapped;
-      setRingActiveIndex(snapped);
-      renderStageTransforms(snapped);
-    };
-
-    applySnap();
-    const raf1 = requestAnimationFrame(applySnap);
-    const raf2 = requestAnimationFrame(applySnap);
-    const timer = window.setTimeout(applySnap, 150);
-    const lateTimer = window.setTimeout(applySnap, 600);
-    return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
-      window.clearTimeout(timer);
-      window.clearTimeout(lateTimer);
-      if (stageRafRef.current != null) {
-        cancelAnimationFrame(stageRafRef.current);
-        stageRafRef.current = null;
-      }
-      if (stageWheelTimerRef.current) {
-        clearTimeout(stageWheelTimerRef.current);
-        stageWheelTimerRef.current = null;
-      }
-    };
   }, [activeNav, renderStageTransforms]);
 
   // Pointer 拖拽处理（支持鼠标光标按住上下拖动 3D 轮盘卡片）

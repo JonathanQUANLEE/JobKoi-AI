@@ -617,33 +617,15 @@ class _PlatformLoginBody(_CamelModel):
 async def list_platforms() -> dict[str, Any]:
     """返回所有平台元数据及其登录态（BOSS、猎聘、51job、智联）。
 
-    BOSS 的登录态用真实探测覆盖（浏览器已开时 DOM+URL 双重检测），
-    避免「cookie 文件还在但登录已失效」的假就绪。
+    性能红线：本命令**必须秒回**——前端平台中心挂载即调用，任何慢操作
+    （DOM 探测/长等待）都会让四张平台卡片长时间空白。登录探测不得放在
+    这里（2026-10-11 教训：加过一次 detect_login_state 导致浏览器僵死时
+    接口挂起、卡片不渲染）。BOSS 卡的真实状态由 get_info 的 cookie 证据
+    提供；DOM 级探测只在「换号/登录」和「启动巡航」两个动作里做。
     """
     from boss_zhipin.platforms import get_platform_manager
 
-    manager = get_platform_manager()
-    platforms = manager.list_platforms()
-    boss = manager.get_platform("boss")
-    if boss is not None:
-        try:
-            detection = await boss.detect_login_state()
-        except Exception as e:  # noqa: BLE001
-            log.warning("BOSS 登录态探测失败: %s", e)
-            detection = {"verified": False, "logged_in": boss.check_login()}
-        verified = bool(detection.get("verified"))
-        logged_in = bool(detection.get("logged_in"))
-        for item in platforms:
-            if item["id"] == "boss":
-                item["is_logged_in"] = logged_in
-                if logged_in:
-                    item["status_text"] = "已就绪 (免密免登)"
-                elif verified:
-                    item["status_text"] = "未登录 (需扫码)"
-                else:
-                    item["status_text"] = "待验证 (点「换号」确认登录)"
-                break
-    return {"platforms": platforms}
+    return {"platforms": get_platform_manager().list_platforms()}
 
 
 @commands.command()
