@@ -21,6 +21,14 @@
 - 日志通过 ``gui.log_bridge.install`` 注入到 PyTauri Channel
 - 主循环还是 ``website_oper.write_response.send_job_descriptions_to_chat``
 
+**命令层按业务域拆分至 ``boss_zhipin.tauri.commands`` 包**（P2-5，2026-10）：
+runtime/profile/resume/agent/platform/window/schedule 七个域模块 +
+``_registry``（共享 Commands 实例）+ ``_base``（camelCase 模型基类）。
+本模块保留：env 初始化、全部命令与 body 模型的**兼容 re-export**（老消费者
+``__main__`` / ``scripts/agent_smoke.py`` / ``tests/test_preview.py`` 不破）、
+``main()`` 入口。IPC 契约（38 个命令名）由
+``tests/test_tauri_ipc_contract.py`` 守门（扫描本文件 + ``commands/*.py``）。
+
 **关键约束**（见 project memory）：
 - `start_blocking_portal("asyncio")` —— 不能默认 trio/uvloop，否则 nodriver
   重启 Chrome 会 timeout。
@@ -35,725 +43,96 @@ from pathlib import Path
 environ.setdefault("_PYTAURI_DIST", "pytauri-wheel")
 
 import logging
-from typing import Any, Optional
+from typing import Optional
 
 from anyio.from_thread import start_blocking_portal
-from pydantic import BaseModel, ConfigDict
-from pydantic.alias_generators import to_camel
-from pytauri import Commands
-from pytauri.ipc import JavaScriptChannelId
-from pytauri.webview import WebviewWindow
 
-from boss_zhipin.gui import log_bridge, runner
-from boss_zhipin.gui.events import ProgressEvent
+# import 即注册：commands 包内各域模块把 @commands.command() 挂到共享 registry。
+from boss_zhipin.tauri.commands import commands
+
+# ---------- 兼容 re-export（老消费者不破；新代码请直接 import commands.* 域模块） ----------
+
+from boss_zhipin.tauri.commands._base import _CamelModel  # noqa: F401
+from boss_zhipin.tauri.commands.agent import (  # noqa: F401
+    _AgentChatBody,
+    _AgentExecuteActionBody,
+    _CalculateATSScoreBody,
+    _DiagnoseResumeBody,
+    _SaveLLMConfigBody,
+    agent_chat,
+    agent_execute_action,
+    calculate_ats_score,
+    check_boss_replies,
+    diagnose_resume,
+    get_llm_config,
+    save_llm_config,
+)
+from boss_zhipin.tauri.commands.platform import (  # noqa: F401
+    _GetDeliveryHistoryBody,
+    _PlatformLoginBody,
+    _ResetTodayDeliveryBody,
+    check_login_status,
+    get_delivery_history,
+    list_platforms,
+    open_platform_login,
+    reset_today_delivery,
+)
+from boss_zhipin.tauri.commands.profile import (  # noqa: F401
+    _GreetingPathBody,
+    _ProfileNameBody,
+    _SaveGreetingBody,
+    _SaveProfileBody,
+    get_greeting,
+    get_profile,
+    list_profiles,
+    save_greeting,
+    save_profile,
+)
+from boss_zhipin.tauri.commands.resume import (  # noqa: F401
+    _DeleteResumeFileBody,
+    _GetResumeContentBody,
+    _OpenResumeNativeBody,
+    _SaveResumeFileBody,
+    _SetDefaultResumeBody,
+    delete_resume_file,
+    get_resume_content,
+    list_resumes,
+    open_resume_native,
+    save_resume_file,
+    set_default_resume,
+)
+from boss_zhipin.tauri.commands.runtime import (  # noqa: F401
+    _OpenManualBrowserBody,
+    _ReviewDecisionBody,
+    RunConfig,
+    StartRunBody,
+    _build_main_loop_factory,
+    _safe_send,
+    get_browser_page_state,
+    get_run_state,
+    open_manual_browser,
+    shutdown_browser,
+    start_run,
+    stop_run,
+    submit_review_decision,
+)
+from boss_zhipin.tauri.commands.schedule import (  # noqa: F401
+    _SaveScheduleBody,
+    cancel_schedule,
+    get_schedule_status,
+    save_schedule,
+)
+from boss_zhipin.tauri.commands.window import (  # noqa: F401
+    window_close,
+    window_minimize,
+    window_toggle_maximize,
+)
 
 SRC_TAURI_DIR = Path(__file__).parent.absolute()
 BOSS_DEV = environ.get("BOSS_TAURI_DEV") == "1"
 BOSS_STANDALONE = environ.get("BOSS_TAURI_STANDALONE") == "1"
 
 log = logging.getLogger(__name__)
-
-commands = Commands()
-
-
-class _CamelModel(BaseModel):
-    """前端 TS 用 camelCase，Python 用 snake_case。"""
-
-    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
-
-
-class RunConfig(_CamelModel):
-    """``start_run`` 的参数（2026-10-11 用户拍板：产品删除 Dry-run 演练概念）。
-
-    GUI 永远真实投递（点击立即沟通；不发消息、不发简历——那两个由
-    BOSS_CLICK_ONLY / BOSS_SEND_RESUME_AFTER_GREETING 开关管，默认关）。
-    DRY_RUN 仅保留给开发者 CLI 调试，GUI 启动前强制清掉。
-    """
-
-    usr_name: str
-    label: str = ""
-    profile: str = ""
-    use_current_page: bool = False
-    # 本轮要跑的招聘平台 id 列表（默认只跑 BOSS；勾选多个则并发巡航）
-    platforms: list[str] = ["boss"]
-
-
-class StartRunBody(_CamelModel):
-    config: RunConfig
-    progress_channel: JavaScriptChannelId[ProgressEvent]
-    log_channel: JavaScriptChannelId[str]
-
-
-def _build_main_loop_factory(config: RunConfig):
-    """把 RunConfig + env var 折叠成一个无参的 coroutine 工厂。
-
-    工厂调用时（runner.start_run 内部）才真正 import 业务代码并进入浏览器自动化。
-    这一切都在主 portal loop 里跑，nodriver 要求的"同一 loop"约束满足。
-    """
-
-    async def factory():
-        # 延迟 import，让没装 ``tauri`` 可选依赖时 import boss_zhipin.tauri 不立即炸。
-        from boss_zhipin.cli import apply_profile_to_env, run_automation
-        from boss_zhipin.config.profiles import load_profile
-
-        # GUI 永远真实投递（产品已删除 Dry-run 演练概念）。DRY_RUN 仅限开发者
-        # CLI 调试用——启动前强制清掉，防止开发者手动设的 DRY_RUN=1 把用户
-        # 巡航悄悄变成"不真实点击"的演练。
-        environ.pop("DRY_RUN", None)
-        environ["BOSS_GUI_REVIEW"] = "1"
-        environ["BOSS_USR_NAME"] = config.usr_name
-        if config.label:
-            environ["BOSS_LABEL"] = config.label
-        if config.profile:
-            loaded_profile = load_profile(config.profile)
-            apply_profile_to_env(
-                loaded_profile.data,
-                base_dir=loaded_profile.path.parent.parent,
-                profile_name=loaded_profile.name,
-            )
-            # GUI 表单里的搜索词优先，便于用户临时调整后直接运行。
-            if config.label:
-                environ["BOSS_LABEL"] = config.label
-
-        # 主循环全部走 cli.run_automation——CLI 和 GUI 共用一份逻辑。
-        platforms = [str(p) for p in (config.platforms or []) if str(p)]
-        if "boss" not in platforms:
-            platforms.insert(0, "boss")
-
-        if len(platforms) == 1:
-            await run_automation(
-                usr_name=config.usr_name,
-                label=config.label or environ.get("BOSS_LABEL", ""),
-                dry_run=False,
-                use_current_page=config.use_current_page,
-            )
-            return
-
-        # 多平台巡航：BOSS + 猎聘 + 51job 在同一个事件循环里并发跑。
-        # 三平台各自独立的浏览器 profile / 去重账本 / 限额，互不干扰；
-        # 任一平台异常不影响其他平台，统一收敛到日志。
-        import asyncio as _asyncio
-
-        boss_coro = run_automation(
-            usr_name=config.usr_name,
-            label=config.label or environ.get("BOSS_LABEL", ""),
-            dry_run=False,
-            use_current_page=config.use_current_page,
-        )
-
-        async def _wrap_platform(name: str, coro) -> None:
-            try:
-                await coro
-            except Exception as e:  # noqa: BLE001 — 单平台失败不拖垮其他链路
-                log.warning("[multi-platform] %s 链异常终止: %s", name, e)
-
-        tasks = [_asyncio.create_task(_wrap_platform("boss", boss_coro))]
-
-        if "liepin" in platforms:
-            from liepin import apply as liepin_apply
-            from liepin import driver as liepin_driver
-
-            liepin_limit = int(environ.get("LIEPIN_DAILY_LIMIT", "100"))
-            liepin_coro = liepin_apply.run(
-                list(liepin_apply.DEFAULT_KEYWORDS),
-                liepin_limit,
-                liepin_driver._greeting_text(),
-            )
-            tasks.append(_asyncio.create_task(_wrap_platform("liepin", liepin_coro)))
-
-        if "job51" in platforms:
-            from job51 import apply as job51_apply
-
-            job51_limit = int(environ.get("JOB51_DAILY_LIMIT", "40"))
-            tasks.append(
-                _asyncio.create_task(
-                    _wrap_platform(
-                        "job51", job51_apply.run(list(job51_apply.DEFAULT_KEYWORDS), job51_limit)
-                    )
-                )
-            )
-
-        for task in tasks:
-            await task
-
-    return factory
-
-
-@commands.command()
-async def start_run(
-    body: StartRunBody, webview_window: WebviewWindow
-) -> dict[str, str]:
-    """前端 ``pyInvoke('start_run', { config, progressChannel, logChannel })`` 调。
-
-    立刻返回 ``{status: "started"}``；进度通过 progress channel 推，日志通过
-    log channel 推，前端订阅那两个 channel 自己消费。
-
-    报错：
-    - already running → ``RuntimeError`` 由 PyTauri 自动序列化成前端 ``catch`` 能拿到的字符串
-    - 没填用户名 → ``ValueError``
-    """
-    from boss_zhipin.gui.i18n import msg
-
-    if runner.is_running():
-        raise RuntimeError(msg("err.already_running"))
-
-    # 名字非空前置校验：usr_name 会作为招呼语署名直接传给业务代码。
-    if not body.config.usr_name.strip():
-        raise ValueError(msg("err.need_name"))
-
-    progress_channel = body.progress_channel.channel_on(webview_window.as_ref_webview())
-    log_channel = body.log_channel.channel_on(webview_window.as_ref_webview())
-
-    # 进度事件 → Channel
-    def on_event(ev: ProgressEvent) -> None:
-        from boss_zhipin.gui import run_state
-
-        run_state.record(ev)
-        try:
-            progress_channel.send_model(ev)
-        except Exception:
-            pass
-
-    # logging → Channel
-    log_handler = log_bridge.install(lambda msg: _safe_send(log_channel, msg))
-
-    factory = _build_main_loop_factory(body.config)
-
-    # 包一层：run 结束后卸 log handler
-    async def factory_with_cleanup():
-        try:
-            await factory()
-        finally:
-            log_bridge.uninstall(log_handler)
-
-    runner.start_run(factory_with_cleanup, on_event=on_event)
-    return {"status": "started"}
-
-
-def _safe_send(channel, msg: str) -> None:
-    try:
-        channel.send(msg)
-    except Exception:
-        pass
-
-
-@commands.command()
-async def stop_run() -> dict[str, str]:
-    """前端 stop 按钮调。idempotent——没在跑也不报错。"""
-    stopped = await runner.stop_run(timeout=30.0)
-    return {"status": "stopped" if stopped else "idle"}
-
-
-@commands.command()
-async def shutdown_browser() -> dict[str, str]:
-    """关 Chrome——给"完全重置"按钮用。stop_run 之后再调这个才能从头来。"""
-    from boss_zhipin.website_oper import finding_jobs
-
-    await finding_jobs.shutdown()
-    return {"status": "ok"}
-
-
-class _OpenManualBrowserBody(_CamelModel):
-    url: str = ""
-
-
-@commands.command()
-async def open_manual_browser(body: _OpenManualBrowserBody) -> dict:
-    """只打开受控 Chrome，供用户在 BOSS 网页端手动筛选后再运行。"""
-    from boss_zhipin.website_oper import finding_jobs
-
-    if runner.is_running():
-        raise RuntimeError("任务运行中，不能重新打开手动筛选页")
-
-    return await finding_jobs.prepare_manual_boss_page(body.url)
-
-
-# ---------- GUI v0.2 profile / greeting ----------
-
-
-class _ProfileNameBody(_CamelModel):
-    name: str
-
-
-class _SaveProfileBody(_CamelModel):
-    name: str
-    data: dict
-
-
-class _GreetingPathBody(_CamelModel):
-    path: str = ""
-
-
-class _SaveGreetingBody(_CamelModel):
-    text: str
-    path: str = ""
-
-
-class _ReviewDecisionBody(_CamelModel):
-    decision: str
-
-
-@commands.command()
-async def list_profiles() -> dict[str, list[dict[str, str]]]:
-    """列出 ``profiles/*.yml``，供 GUI 下拉选择。"""
-    from boss_zhipin.gui.profile_io import list_profiles as _list_profiles
-
-    return {"profiles": _list_profiles()}
-
-
-@commands.command()
-async def get_profile(body: _ProfileNameBody) -> dict:
-    """读取合并后的 profile，用于 GUI 表单回填。"""
-    from boss_zhipin.gui.profile_io import get_profile as _get_profile
-
-    return _get_profile(body.name)
-
-
-@commands.command()
-async def save_profile(body: _SaveProfileBody) -> dict[str, str]:
-    """保存 GUI 表单生成的 profile YAML。"""
-    from boss_zhipin.gui.profile_io import save_profile as _save_profile
-
-    return _save_profile(body.name, body.data)
-
-
-@commands.command()
-async def get_greeting(body: _GreetingPathBody | None = None) -> dict[str, str]:
-    """读取固定招呼语文件。"""
-    from boss_zhipin.gui.profile_io import get_greeting as _get_greeting
-
-    path = body.path if body and body.path else None
-    return _get_greeting(path=path) if path else _get_greeting()
-
-
-@commands.command()
-async def save_greeting(body: _SaveGreetingBody) -> dict[str, str]:
-    """保存固定招呼语文件。"""
-    from boss_zhipin.gui.profile_io import save_greeting as _save_greeting
-
-    return (
-        _save_greeting(body.text, path=body.path)
-        if body.path
-        else _save_greeting(body.text)
-    )
-
-
-@commands.command()
-async def submit_review_decision(body: _ReviewDecisionBody) -> dict[str, str]:
-    """提交 GUI 审核按钮结果。"""
-    from boss_zhipin.gui import review_control
-
-    if body.decision not in ("send", "skip", "quit"):
-        raise ValueError("审核决策只能是 send、skip 或 quit")
-    return review_control.decide(body.decision)
-
-
-@commands.command()
-async def get_run_state() -> dict:
-    """返回当前运行面板需要的基础状态。
-
-    详细岗位信息仍通过 ProgressEvent 实时推送；这里提供刷新后的兜底状态。
-    """
-    from boss_zhipin.gui import review_control
-    from boss_zhipin.gui import run_state
-
-    return run_state.get_state(
-        running=runner.is_running(),
-        review=review_control.get_state(),
-    )
-
-
-@commands.command()
-async def get_browser_page_state() -> dict:
-    """返回当前受控 BOSS 页面状态，供 GUI 判断能否复用当前页面。"""
-    from boss_zhipin.website_oper import finding_jobs
-
-    return finding_jobs.get_browser_page_state()
-
-# ---------- 智能助手（agent 里程碑 1：对话式入口） ----------
-# 设计要点见 boss_zhipin.agent.profile_generator 的模块 docstring：
-# agent 只产出「表单可回填的 profile」，永不直接触发投递（隔离由
-# tests/test_agent_isolation.py 固化）。入参走 _CamelModel（camelCase），
-# 返回值保持 snake_case 原样透传——前端 hydrateFromProfile 读的就是
-# snake_case 键，套别名转换会把回填全弄坏。
-
-
-class _AgentChatBody(_CamelModel):
-    message: str
-    history: list[dict[str, Any]] = []
-    current_form: dict[str, Any] = {}
-
-
-class _SaveLLMConfigBody(_CamelModel):
-    base_url: str = ""
-    api_key: str = ""
-    model: str = ""
-
-
-@commands.command()
-async def agent_chat(body: _AgentChatBody) -> dict:
-    """智能助手一轮对话：LLM 把自然语言翻译成 profile（结构化错误走返回值）。"""
-    from boss_zhipin.agent import profile_generator
-
-    if not body.message.strip():
-        raise ValueError("消息不能为空")
-    return await profile_generator.generate(
-        body.message, history=body.history, current_form=body.current_form
-    )
-
-
-@commands.command()
-async def get_llm_config() -> dict:
-    """读 LLM 端点配置（api_key 脱敏）+ 免费模型预置列表。"""
-    from boss_zhipin.agent.config_io import mask_key, read_config
-    from boss_zhipin.agent.presets import LLM_PRESETS
-
-    config = read_config()
-    return {
-        "base_url": config.base_url,
-        "api_key": mask_key(config.api_key),
-        "model": config.model,
-        "configured": config.is_configured(),
-        "presets": LLM_PRESETS,
-    }
-
-
-@commands.command()
-async def save_llm_config(body: _SaveLLMConfigBody) -> dict:
-    """保存 LLM 端点配置。api_key 提交空串/掩码 = 保留旧值。"""
-    from boss_zhipin.agent.config_io import (
-        AgentConfig,
-        mask_key,
-        merge_saved_key,
-        read_config,
-        write_config,
-    )
-
-    existing = read_config()
-    config = AgentConfig(
-        base_url=body.base_url.strip(),
-        api_key=merge_saved_key(body.api_key, existing.api_key),
-        model=body.model.strip(),
-    )
-    write_config(config)
-    return {
-        "status": "saved",
-        "api_key": mask_key(config.api_key),
-        "configured": config.is_configured(),
-    }
-
-
-# ---------- 简历管理（F1：resume/ 目录 + 默认简历） ----------
-
-
-class _SetDefaultResumeBody(_CamelModel):
-    name: str = ""
-
-
-@commands.command()
-async def list_resumes() -> dict:
-    """列出 resume/ 目录里的简历文件（pdf/doc/docx/png/jpg）。"""
-    from boss_zhipin.gui.resume_io import list_resumes as _list_resumes
-
-    return {"resumes": _list_resumes()}
-
-
-@commands.command()
-async def set_default_resume(body: _SetDefaultResumeBody) -> dict:
-    """把某个简历设为默认（写 resume/default.txt 标记），传空则取消默认。"""
-    from boss_zhipin.gui.resume_io import (
-        set_default_resume as _set_default,
-        unset_default_resume as _unset_default,
-    )
-
-    if not body.name or body.name.strip() in ("", "__none__"):
-        return _unset_default()
-    return _set_default(body.name)
-
-
-class _GetResumeContentBody(_CamelModel):
-    name: str
-
-
-@commands.command()
-async def get_resume_content(body: _GetResumeContentBody) -> dict:
-    """读取指定简历文件内容（返回 base64 及提取文本供前端即时预览）。"""
-    from boss_zhipin.gui.resume_io import get_resume_content as _get_content
-
-    return _get_content(body.name)
-
-
-class _SaveResumeFileBody(_CamelModel):
-    name: str
-    content_b64: str
-
-
-@commands.command()
-async def save_resume_file(body: _SaveResumeFileBody) -> dict:
-    """保存/上传简历文件到 resume/ 目录。"""
-    from boss_zhipin.gui.resume_io import save_resume_file as _save_file
-
-    return _save_file(body.name, body.content_b64)
-
-
-class _DeleteResumeFileBody(_CamelModel):
-    name: str
-
-
-@commands.command()
-async def delete_resume_file(body: _DeleteResumeFileBody) -> dict:
-    """删除指定的简历文件。"""
-    from boss_zhipin.gui.resume_io import delete_resume_file as _delete_file
-
-    return _delete_file(body.name)
-
-
-class _OpenResumeNativeBody(_CamelModel):
-    name: str
-
-
-@commands.command()
-async def open_resume_native(body: _OpenResumeNativeBody) -> dict:
-    """使用系统原生应用直接打开简历源文件（如 WPS、Word、PDF 查阅器等）。"""
-    from boss_zhipin.gui.resume_io import open_resume_native as _open_native
-
-    return _open_native(body.name)
-
-
-class _DiagnoseResumeBody(_CamelModel):
-    resume_text: str
-    target_role: str = ""
-    active_skills: list[str] | None = None
-    user_prompt: str = ""
-
-
-@commands.command()
-async def diagnose_resume(body: _DiagnoseResumeBody) -> dict:
-    """Agent 2：针对简历文本进行启发式算法评分与 LLM 深度精修建议。"""
-    from boss_zhipin.agent import resume_polisher
-
-    return await resume_polisher.diagnose_and_polish(
-        resume_text=body.resume_text,
-        target_role=body.target_role,
-        active_skills=body.active_skills,
-        user_prompt=body.user_prompt,
-    )
-
-
-class _CalculateATSScoreBody(_CamelModel):
-    resume_text: str
-
-
-@commands.command()
-async def calculate_ats_score(body: _CalculateATSScoreBody) -> dict:
-    """纯本地快速计算 ATS 启发式算法评分指标。"""
-    from boss_zhipin.algorithms.ats_scorer import ATSScorer
-
-    res = ATSScorer.score(body.resume_text)
-    return res.to_dict()
-
-
-
-# ---------- 工具执行层（F4：agent 声明意图，这里执行） ----------
-# 隔离红线：agent 包只产出 action 意图；真正动手（读日志/读页面）在这里，
-# 保证「LLM 永不直接触发投递」——prepare_run 也不在此执行，只由前端渲染
-# 确认按钮走现有 start_run。
-
-
-class _AgentExecuteActionBody(_CamelModel):
-    type: str
-    params: dict[str, Any] = {}
-
-
-@commands.command()
-async def agent_execute_action(body: _AgentExecuteActionBody) -> dict:
-    """执行智能助手声明的工具（白名单：get_stats / preview_jobs）。"""
-    if body.type == "get_stats":
-        from boss_zhipin.gui.stats_io import format_stats, query_stats
-
-        stats = query_stats()
-        return {
-            "status": "ok",
-            "type": "get_stats",
-            "text": format_stats(stats),
-            "data": stats,
-        }
-    if body.type == "preview_jobs":
-        from boss_zhipin.gui.preview import preview_jobs
-
-        n = body.params.get("n", 5)
-        try:
-            count = int(n)
-        except (TypeError, ValueError):
-            count = 5
-        return await preview_jobs(count)
-    raise ValueError(f"未知或不支持自动执行的动作: {body.type}")
-
-
-# ---------- F3：BOSS 新回复检测（提醒档） ----------
-
-
-@commands.command()
-async def check_boss_replies() -> dict:
-    """读当前页面导航的未读消息数（前端 60s 轮询，仅空闲时）。"""
-    from boss_zhipin.website_oper import message_check
-
-    return await message_check.check_new_replies()
-
-
-# ---------- 平台适配器层（多平台选择与扫码登录） ----------
-
-
-class _PlatformLoginBody(_CamelModel):
-    platform_id: str
-
-
-@commands.command()
-async def list_platforms() -> dict[str, Any]:
-    """返回所有平台元数据及其登录态（BOSS、猎聘、51job、智联）。
-
-    性能红线：本命令**必须秒回**——前端平台中心挂载即调用，任何慢操作
-    （DOM 探测/长等待）都会让四张平台卡片长时间空白。登录探测不得放在
-    这里（2026-10-11 教训：加过一次 detect_login_state 导致浏览器僵死时
-    接口挂起、卡片不渲染）。BOSS 卡的真实状态由 get_info 的 cookie 证据
-    提供；DOM 级探测只在「换号/登录」和「启动巡航」两个动作里做。
-    """
-    from boss_zhipin.platforms import get_platform_manager
-
-    return {"platforms": get_platform_manager().list_platforms()}
-
-
-@commands.command()
-async def open_platform_login(body: _PlatformLoginBody) -> dict[str, Any]:
-    """打开指定平台的扫码登录页面。
-
-    前置拦截：巡航运行中禁止换号——换号会关掉正在投递的受控浏览器。
-    """
-    from boss_zhipin.gui import runner
-
-    if runner.is_running():
-        raise RuntimeError("巡航运行中，请先停止巡航再换号登录")
-    from boss_zhipin.platforms import get_platform_manager
-
-    return await get_platform_manager().open_login(body.platform_id)
-
-
-@commands.command()
-async def check_login_status(body: _PlatformLoginBody) -> dict[str, Any]:
-    """轻量登录态探测（有界 ≤6s）：前端登录后每几秒轮询一次。
-
-    性能红线：本命令**必须有界**——绝不能像旧版 open_platform_login 那样
-    挂 300 秒等扫码（会把后续所有 IPC 拖死，平台卡片全空白）。
-    - 浏览器已打开（BOSS 受控 tab 在）→ DOM+URL 探测，_safe_evaluate 自带 5s 超时；
-    - 浏览器没开 → 秒回（cookie SQLite 证据，timeout=0 不等锁）。
-    """
-    from boss_zhipin.platforms import get_platform_manager
-
-    platform = get_platform_manager().get_platform(body.platform_id)
-    if platform is None:
-        return {"logged_in": False, "verified": False}
-    if body.platform_id == "boss":
-        from boss_zhipin.website_oper import finding_jobs
-        from boss_zhipin.website_oper.core.login_detector import _is_logged_in
-
-        if finding_jobs.get_tab() is not None:
-            try:
-                live = await _is_logged_in()
-                return {"logged_in": bool(live), "verified": True}
-            except Exception as e:  # noqa: BLE001
-                log.warning("check_login_status DOM 探测失败: %s", e)
-    return {"logged_in": platform.check_login(), "verified": False}
-
-
-class _GetDeliveryHistoryBody(_CamelModel):
-    platform: str = ""
-    limit: int = 100
-
-
-@commands.command()
-async def get_delivery_history(body: _GetDeliveryHistoryBody) -> dict[str, Any]:
-    """返回全平台/指定平台的投递明细记录列表（时间、岗位、公司、薪资、状态）。"""
-    from boss_zhipin.gui.stats_io import get_delivery_records
-
-    records = get_delivery_records(platform=body.platform, limit=body.limit)
-    return {"records": records}
-
-
-class _ResetTodayDeliveryBody(_CamelModel):
-    platform: str = "boss"
-
-
-@commands.command()
-async def reset_today_delivery(body: _ResetTodayDeliveryBody) -> dict[str, Any]:
-    """重置今日投递计数（归档今日数据，防止测试时被 150 限制卡住）。"""
-    from boss_zhipin.gui.stats_io import reset_today_delivery as _reset_today
-
-    return _reset_today(platform=body.platform)
-
-
-@commands.command()
-async def window_minimize(webview_window: WebviewWindow) -> dict[str, str]:
-    """最小化主窗口。"""
-    webview_window.minimize()
-    return {"status": "ok"}
-
-
-@commands.command()
-async def window_toggle_maximize(webview_window: WebviewWindow) -> dict[str, str]:
-    """最大化或还原主窗口。"""
-    if webview_window.is_maximized():
-        webview_window.unmaximize()
-    else:
-        webview_window.maximize()
-    return {"status": "ok"}
-
-
-@commands.command()
-async def window_close(webview_window: WebviewWindow) -> dict[str, str]:
-    """关闭主窗口。"""
-    webview_window.close()
-    return {"status": "ok"}
-
-
-# ---------- 定时巡航闹钟（系统级 Windows 计划任务） ----------
-# 用户设定时间保存后 -> 写成计划任务「JobHunter定时巡航」，App 关掉也到点自动跑；
-# 执行体是 scripts/scheduled_cruise.py（三平台并行 + GUI 画像 gui-default）。
-
-
-class _SaveScheduleBody(_CamelModel):
-    time: str = "09:00"
-    enabled: bool = False
-    repeat_days: list[int] = []
-    auto_run: bool = False
-
-
-@commands.command()
-async def get_schedule_status() -> dict:
-    """查询定时巡航计划任务落盘状态。"""
-    from boss_zhipin.gui.scheduler import get_scheduled_task_status
-
-    return get_scheduled_task_status()
-
-
-@commands.command()
-async def save_schedule(body: _SaveScheduleBody) -> dict:
-    """保存闹钟：启用则创建/覆盖 Windows 计划任务，停用则删除。"""
-    from boss_zhipin.gui.scheduler import (
-        create_scheduled_task,
-        delete_scheduled_task,
-    )
-
-    if not body.enabled or not body.auto_run:
-        return delete_scheduled_task()
-    return create_scheduled_task(time=body.time, repeat_days=body.repeat_days)
-
-
-@commands.command()
-async def cancel_schedule() -> dict:
-    """停用闹钟：删除计划任务。"""
-    from boss_zhipin.gui.scheduler import delete_scheduled_task
-
-    return delete_scheduled_task()
 
 
 def main() -> int:

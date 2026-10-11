@@ -5,17 +5,28 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).parent.parent
-TAURI_ENTRY = REPO_ROOT / "src" / "boss_zhipin" / "tauri" / "__init__.py"
+TAURI_PKG = REPO_ROOT / "src" / "boss_zhipin" / "tauri"
+TAURI_ENTRY = TAURI_PKG / "__init__.py"
+COMMANDS_DIR = TAURI_PKG / "commands"
 
 
-def test_tauri_ipc_commands_match_gui_v02_contract():
-    tree = ast.parse(TAURI_ENTRY.read_text(encoding="utf-8"))
-    commands = {
+def _collect_commands(path: Path) -> set[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return {
         node.name
         for node in tree.body
         if isinstance(node, ast.AsyncFunctionDef)
         and any(_is_commands_command(decorator) for decorator in node.decorator_list)
     }
+
+
+def test_tauri_ipc_commands_match_gui_v02_contract():
+    # P2-5 起命令层按业务域拆在 commands/*.py；__init__.py 保留兼容 re-export
+    # 与 main()。契约扫描范围 = 入口 + 全部域模块，命令集合断言不变。
+    paths = [TAURI_ENTRY, *sorted(COMMANDS_DIR.glob("*.py"))]
+    commands: set[str] = set()
+    for path in paths:
+        commands |= _collect_commands(path)
 
     assert commands == {
         "list_profiles",
