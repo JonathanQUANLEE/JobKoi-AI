@@ -298,11 +298,31 @@ export function useWorkbenchWheel({
     };
   }, [applyStageTarget, renderStageTransforms, activeNav]);
 
-  // 监听导航切换：保持当前目标站台，渲染对应姿态，不再生硬重置为 0
+  // 导航切换：切回工作台时把舞台强制吸附到最近整数站台并重渲染，
+  // 同时清理离开期间残留的 rAF 帧与滚轮吸附计时器——否则舞台会残留
+  // "两个站台之间"的中间态（模块缩小 + 半透明 + 上下模块露头）。
   useEffect(() => {
     if (activeNav === "workbench") {
-      renderStageTransforms(stagePosRef.current);
+      const snapped = Math.min(
+        2,
+        Math.max(0, Math.round(stagePosRef.current)),
+      ) as 0 | 1 | 2;
+      stagePosRef.current = snapped;
+      stageTargetRef.current = snapped;
+      ringActiveIndexRef.current = snapped;
+      setRingActiveIndex(snapped);
+      renderStageTransforms(snapped);
     }
+    return () => {
+      if (stageRafRef.current != null) {
+        cancelAnimationFrame(stageRafRef.current);
+        stageRafRef.current = null;
+      }
+      if (stageWheelTimerRef.current) {
+        clearTimeout(stageWheelTimerRef.current);
+        stageWheelTimerRef.current = null;
+      }
+    };
   }, [activeNav, renderStageTransforms]);
 
   // Pointer 拖拽处理（支持鼠标光标按住上下拖动 3D 轮盘卡片）
