@@ -87,6 +87,35 @@ export function formatEventForDisplay(
         payload,
         status === "sent" || status === "dry_run" ? "success" : "warning",
       );
+    case "job_sent":
+      return view(
+        time,
+        "已投递岗位",
+        [title, text(payload.company)].filter(Boolean).join(" / ")
+          || `本轮第 ${text(payload.sent) || "-"} 份`,
+        payload,
+        "success",
+      );
+    case "api_flow_started":
+      return view(
+        time,
+        "API 直读巡航启动",
+        `今日已投 ${text(payload.daily_sent) || "0"} 份，开始逐页扫描岗位`,
+        payload,
+        "info",
+      );
+    case "api_flow_finished":
+      return view(time, "本轮巡航汇总", message || "扫描结束", payload, "info");
+    case "api_flow_error":
+      return view(time, "搜索接口异常", message || "接口返回异常，已停止翻页", payload, "warning");
+    case "captcha_stopped":
+      return view(
+        time,
+        "验证码安全停机",
+        `检测到安全验证，已停止：${title || "详见浏览器"}`,
+        payload,
+        "warning",
+      );
     case "feed_exhausted":
       return view(time, "列表已结束", `已处理到第 ${text(payload.total) || "-"} 个岗位`, payload, "info");
     case "limit_reached":

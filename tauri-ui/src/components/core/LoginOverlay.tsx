@@ -18,6 +18,11 @@ function playUnlockChime() {
       (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!Ctx) return;
     const ctx = new Ctx();
+    // 浏览器 autoplay 策略：await/定时器之后的调用栈已脱离用户手势，
+    // AudioContext 可能创建在 suspended 状态——显式 resume 才能出声。
+    if (ctx.state === "suspended") {
+      void ctx.resume().catch(() => {});
+    }
     const notes = [
       { freq: 987.77, at: 0.0 }, // B5
       { freq: 1318.51, at: 0.12 }, // E6
@@ -29,7 +34,7 @@ function playUnlockChime() {
       osc.frequency.value = freq;
       const start = ctx.currentTime + at;
       gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(0.16, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.3, start + 0.015);
       gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.38);
       osc.connect(gain);
       gain.connect(ctx.destination);

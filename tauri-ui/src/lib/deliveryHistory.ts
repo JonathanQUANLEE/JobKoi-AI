@@ -288,16 +288,22 @@ export const deliveryHistoryDb = {
  * 诚实性红线（2026-10-12 用户拍板"不能骗用户"）：三平台没有回复检测能力，
  * 回复相关字段一律 0 + hasReplyData=false，前端展示层显示「回复统计建设中」，
  * 绝不用编造数字冒充真实回复。
+ *
+ * @param targetDate 指定查看哪一天的战报（折线图点选历史回看）；缺省=昨日。
  */
 export function buildRealMorningBrief(
   days: { date: string; bossSent: number; liepinSent: number; job51Sent: number; totalSent: number }[],
+  targetDate?: string | null,
 ): MorningBrief {
   const now = new Date();
   const todayStr = formatDateKey(now);
   const yesterday = new Date(now.getTime() - 86400000);
   const yesterdayStr = formatDateKey(yesterday);
-  // 满窗口末位兜底：昨天数据缺失（如刚部署当天）时取最后一天，避免早报空引用
-  const yesterdayRecord = days.find((r) => r.date === yesterdayStr) || days[days.length - 1];
+  const isHistorical = !!targetDate && targetDate !== yesterdayStr;
+  // 指定日期优先；昨天数据缺失（如刚部署当天）时取窗口最后一天兜底，避免空引用
+  const yesterdayRecord = targetDate
+    ? days.find((r) => r.date === targetDate)
+    : days.find((r) => r.date === yesterdayStr) || days[days.length - 1];
 
   const totalSent = yesterdayRecord?.totalSent || 0;
   const bossSent = yesterdayRecord?.bossSent || 0;
@@ -306,8 +312,9 @@ export function buildRealMorningBrief(
 
   let insight: string;
   if (totalSent <= 0) {
-    insight =
-      "昨日没有投递记录。HR 通常在上午集中筛选简历，建议今早启动一轮巡航抢占先机。";
+    insight = isHistorical
+      ? `${targetDate} 没有投递记录。`
+      : "昨日没有投递记录。HR 通常在上午集中筛选简历，建议今早启动一轮巡航抢占先机。";
   } else {
     const platformParts = [
       bossSent > 0 ? `BOSS ${bossSent}` : "",
@@ -316,12 +323,13 @@ export function buildRealMorningBrief(
     ]
       .filter(Boolean)
       .join(" / ");
-    insight = `昨日真实投递 ${totalSent} 份（${platformParts}）。回复率统计暂未开放（平台未提供回复数据），可在「招聘平台中心」查看 BOSS 未读消息。`;
+    const dayLabel = isHistorical ? targetDate! : "昨日";
+    insight = `${dayLabel}真实投递 ${totalSent} 份（${platformParts}）。回复率统计暂未开放（平台未提供回复数据），可在「招聘平台中心」查看 BOSS 未读消息。`;
   }
 
   return {
     todayDate: todayStr,
-    yesterdayDate: yesterdayRecord ? yesterdayRecord.date : yesterdayStr,
+    yesterdayDate: yesterdayRecord ? yesterdayRecord.date : targetDate || yesterdayStr,
     generatedAt: "09:00",
     totalSent,
     repliedCount: 0,
@@ -333,8 +341,48 @@ export function buildRealMorningBrief(
       { id: "job51", name: "前程无忧 51job", sent: job51Sent, replied: 0, rate: 0, color: "#ff5000" },
     ],
     insight,
-    actionAdvice:
-      "今日早晨 09:00 前后是招聘者集中上线筛选简历的时段，建议启动巡航优先拉满早间批次。",
+    actionAdvice: isHistorical
+      ? "点击折线图的其他日期可继续回看，或点「返回昨日」回到最新战报。"
+      : "今日早晨 09:00 前后是招聘者集中上线筛选简历的时段，建议启动巡航优先拉满早间批次。",
     hasReplyData: false,
+  };
+}
+
+/**
+ * 演示数据模式的历史回看早报：按点选日期从本地演示记录构造
+ * （演示记录自带回复字段，回复照常展示）。
+ */
+export function buildDemoBriefForDate(
+  records: DayDeliveryRecord[],
+  targetDate: string,
+): MorningBrief {
+  const now = new Date();
+  const record = records.find((r) => r.date === targetDate);
+  const totalSent = record?.totalSent || 0;
+  const replied = record?.totalReplies || 0;
+  const replyRate = totalSent > 0 ? Number(((replied / totalSent) * 100).toFixed(1)) : 0;
+  const mk = (id: "boss" | "liepin" | "job51", name: string, color: string) => {
+    const sent = (record?.[`${id}Sent` as const] as number) || 0;
+    const rep = (record?.[`${id}Replies` as const] as number) || 0;
+    return { id, name, sent, replied: rep, rate: sent > 0 ? Number(((rep / sent) * 100).toFixed(1)) : 0, color };
+  };
+  return {
+    todayDate: formatDateKey(now),
+    yesterdayDate: targetDate,
+    generatedAt: "09:00",
+    totalSent,
+    repliedCount: replied,
+    unrepliedCount: Math.max(0, totalSent - replied),
+    replyRate,
+    platformBreakdown: [
+      mk("boss", "BOSS 直聘", "#00bebd"),
+      mk("liepin", "猎聘 Liepin", "#ff7033"),
+      mk("job51", "前程无忧 51job", "#ff5000"),
+    ],
+    insight: totalSent > 0
+      ? `${targetDate} 投递 ${totalSent} 份，收到回复 ${replied} 家。`
+      : `${targetDate} 没有投递记录。`,
+    actionAdvice: "点击折线图的其他日期可继续回看，或点「返回昨日」回到最新战报。",
+    hasReplyData: true,
   };
 }

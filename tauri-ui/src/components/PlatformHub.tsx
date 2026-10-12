@@ -125,13 +125,16 @@ export default function PlatformHub({
       }
       if (res.logged_in) {
         // 打开时就探测到已登录（如 cookie/session 有效，页面自动跳过登录页）
-        // → 同样走 FaceID 式成功反馈（绿对勾 + 叮一声 → 1.5s 淡出），再接
-        //   自动关浏览器（优雅退出保 cookie 落盘）→ 刷新卡片状态。
-        //   2026-10-12 用户反馈：只弹绿字 toast 少了 FaceID 特效，两条登录
-        //   路径（扫码/已登录）的仪式感应当一致。
+        // → 同样走**完整** FaceID 式反馈流程：扫描动画 → 绿对勾 + 叮一声 →
+        //   1.5s 淡出，再接自动关浏览器（优雅退出保 cookie 落盘）→ 刷新卡片。
+        //   2026-10-12 用户实测两轮反馈：① 只弹绿字 toast 少了 FaceID 特效；
+        //   ② 同步直切 success 后 React 批处理把 waiting+success 合并成一次
+        //   渲染——扫描动画完全被跳过，浮层一出现就是绿勾，简陋且没声音。
+        //   必须先渲染 waiting（看到扫描脉冲），真实等待 ~900ms 再切 success。
         useRunStore.getState().showLoginOverlay(platformId);
-        useRunStore.getState().updateLoginOverlay({ status: "success" });
         setBusy(true);
+        await new Promise((resolve) => window.setTimeout(resolve, 900));
+        useRunStore.getState().updateLoginOverlay({ status: "success" });
         try {
           await withTimeout(ipc.shutdownBrowser(), 10_000, "关闭登录浏览器");
         } catch {

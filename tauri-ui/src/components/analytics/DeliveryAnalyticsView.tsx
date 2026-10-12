@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { TrendingUp, MessageSquare, Award, Calendar, Play, Download, RotateCcw, Database, FlaskConical, RefreshCw, Inbox } from "lucide-react";
 import {
   deliveryHistoryDb,
+  buildDemoBriefForDate,
   buildRealMorningBrief,
   type DayDeliveryRecord,
   type MorningBrief,
@@ -38,6 +39,10 @@ export default function DeliveryAnalyticsView({ onStartCruise }: DeliveryAnalyti
   const [realStats, setRealStats] = useState<DeliveryDailyStatsResult | null>(null);
   const [realLoading, setRealLoading] = useState(false);
   const [realError, setRealError] = useState<string | null>(null);
+  // 折线图点选的历史回看日期（null = 昨日战报）
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  // 真实模式 KPI：BOSS 当前未读消息数（实时读导航；浏览器没开 = null）
+  const [bossUnread, setBossUnread] = useState<number | null>(null);
 
   const fetchRealStats = useCallback(async () => {
     setRealLoading(true);
@@ -56,6 +61,15 @@ export default function DeliveryAnalyticsView({ onStartCruise }: DeliveryAnalyti
   useEffect(() => {
     if (mode === "real") fetchRealStats();
   }, [mode, fetchRealStats]);
+
+  // 真实模式 KPI 的 BOSS 未读消息：读当前受控页面导航未读数（浏览器没开 = null）
+  useEffect(() => {
+    if (mode !== "real") return;
+    ipc
+      .checkBossReplies()
+      .then((res) => setBossUnread(res.status === "ok" ? (res.unread ?? 0) : null))
+      .catch(() => setBossUnread(null));
+  }, [mode, realStats]);
   const prevRunningRef = useRef(running);
   useEffect(() => {
     if (mode === "real" && prevRunningRef.current && !running) fetchRealStats();
@@ -96,12 +110,27 @@ export default function DeliveryAnalyticsView({ onStartCruise }: DeliveryAnalyti
       })),
     [realStats],
   );
-  const realBrief = useMemo(() => buildRealMorningBrief(realStats?.days || []), [realStats]);
+  const realBrief = useMemo(
+    () => buildRealMorningBrief(realStats?.days || [], selectedDate),
+    [realStats, selectedDate],
+  );
+  // 演示模式：点选日期时回看那天战报，否则显示昨日（本地假库自带回复字段）
+  const demoBriefForDate = useMemo(
+    () => (selectedDate ? buildDemoBriefForDate(demoRecords, selectedDate) : demoBrief),
+    [demoRecords, selectedDate, demoBrief],
+  );
 
   const isReal = mode === "real";
   const records = isReal ? realRecords : demoRecords;
-  const brief = isReal ? realBrief : demoBrief;
+  const brief = isReal ? realBrief : demoBriefForDate;
   const hasReplyData = isReal ? false : true;
+  // 真实模式 KPI：回复数据不可得，换成两个真实指标（BOSS 未读 / 日均投递）
+  const dailyAvg = useMemo(() => {
+    if (!isReal || !realStats) return 0;
+    return realStats.totals.activeDays > 0
+      ? Math.round((realStats.totals.sentSum / realStats.totals.activeDays) * 10) / 10
+      : 0;
+  }, [isReal, realStats]);
 
   // 计算全局历史累计指标
   const totals = useMemo(() => {
@@ -289,17 +318,33 @@ export default function DeliveryAnalyticsView({ onStartCruise }: DeliveryAnalyti
           </div>
         </div>
 
+        {/* 卡 2：演示=编造的回复数；真实=BOSS 当前未读消息（实时真数据） */}
         <div
           className={`p-4 rounded-2xl border backdrop-blur-xl ${
             isMonochrome ? "bg-zinc-950/70 border-white/10" : "bg-stone-900/40 border-white/10"
           }`}
         >
           <div className="flex items-center justify-between text-stone-400 text-xs mb-1">
-            <span>收到 HR 回复总数</span>
+            <span>{isReal ? "BOSS 未读消息" : "收到 HR 回复总数"}</span>
             <MessageSquare className={`size-4 ${isMonochrome ? "text-zinc-300" : "text-emerald-400"}`} />
           </div>
           <div className="flex items-baseline gap-1.5">
-            {hasReplyData ? (
+            {isReal ? (
+              bossUnread !== null ? (
+                <>
+                  <AnimatedNumber
+                    value={bossUnread}
+                    className="text-2xl font-black font-mono text-white"
+                  />
+                  <span className="text-xs text-stone-500">条 · 实时</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-2xl font-black font-mono text-stone-500">—</span>
+                  <span className="text-xs text-stone-500">浏览器未打开</span>
+                </>
+              )
+            ) : (
               <>
                 <AnimatedNumber
                   value={totals.replySum}
@@ -307,24 +352,34 @@ export default function DeliveryAnalyticsView({ onStartCruise }: DeliveryAnalyti
                 />
                 <span className={`text-xs ${isMonochrome ? "text-zinc-400" : "text-emerald-500/80"}`}>人次</span>
               </>
-            ) : (
-              <span className="text-2xl font-black font-mono text-stone-500">—</span>
             )}
           </div>
-          {!hasReplyData && <p className="text-[10px] text-stone-500 mt-0.5">回复统计 · 建设中</p>}
+          {isReal && (
+            <p className="text-[10px] text-stone-500 mt-0.5">HR 回复统计建设中 · 此为当前未读数</p>
+          )}
         </div>
 
+        {/* 卡 3：演示=编造的回复率；真实=日均投递（真数据） */}
         <div
           className={`p-4 rounded-2xl border backdrop-blur-xl ${
             isMonochrome ? "bg-zinc-950/70 border-white/10" : "bg-stone-900/40 border-white/10"
           }`}
         >
           <div className="flex items-center justify-between text-stone-400 text-xs mb-1">
-            <span>历史综合平均回复率</span>
+            <span>{isReal ? "活跃日日均投递" : "历史综合平均回复率"}</span>
             <Award className={`size-4 ${isMonochrome ? "text-zinc-300" : "text-purple-400"}`} />
           </div>
           <div className="flex items-baseline gap-1">
-            {hasReplyData ? (
+            {isReal ? (
+              <>
+                <AnimatedNumber
+                  value={dailyAvg}
+                  decimalPlaces={1}
+                  className={`text-2xl font-black font-mono ${isMonochrome ? "text-white" : "text-purple-300"}`}
+                />
+                <span className={`text-sm font-bold ${isMonochrome ? "text-zinc-400" : "text-purple-300"}`}>份</span>
+              </>
+            ) : (
               <>
                 <AnimatedNumber
                   value={totals.avgRate}
@@ -333,11 +388,13 @@ export default function DeliveryAnalyticsView({ onStartCruise }: DeliveryAnalyti
                 />
                 <span className={`text-sm font-bold ${isMonochrome ? "text-zinc-400" : "text-purple-300"}`}>%</span>
               </>
-            ) : (
-              <span className="text-2xl font-black font-mono text-stone-500">—</span>
             )}
           </div>
-          {!hasReplyData && <p className="text-[10px] text-stone-500 mt-0.5">回复统计 · 建设中</p>}
+          {isReal && (
+            <p className="text-[10px] text-stone-500 mt-0.5">
+              按有投递记录的 {realStats?.totals.activeDays ?? 0} 天平均
+            </p>
+          )}
         </div>
 
         <div
@@ -359,16 +416,22 @@ export default function DeliveryAnalyticsView({ onStartCruise }: DeliveryAnalyti
         </div>
       </div>
 
-      {/* 模块 1: 投递早报功能 (包含昨日回复情况与回复率) */}
+      {/* 模块 1: 投递早报（点选折线图日期可回看历史战报） */}
       <MorningBriefCard
         brief={brief}
         isMonochrome={isMonochrome}
         onRefreshBrief={handleRefresh}
         onStartCruise={onStartCruise}
+        viewingDate={selectedDate}
+        onBackToYesterday={() => setSelectedDate(null)}
       />
 
-      {/* 模块 2: 历史投递折线图 (针对支持的三个平台分别统计展示) */}
-      <PlatformTrendChart records={records} isMonochrome={isMonochrome} />
+      {/* 模块 2: 历史投递折线图（点击某天 → 早报回看那天战报） */}
+      <PlatformTrendChart
+        records={records}
+        isMonochrome={isMonochrome}
+        onDayClick={(date) => setSelectedDate(date)}
+      />
 
       {/* 底部操作与导出栏 */}
       <div

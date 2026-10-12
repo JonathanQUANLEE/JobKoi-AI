@@ -31,9 +31,15 @@ EventKind = Literal[
     "review_requested",  # GUI 审核模式等待用户决策，payload: {index, job, details, greeting}
     "review_cleared",  # GUI 审核卡片可清空，payload: {index, decision}
     "letter_sent",  # 招呼语处理完成，payload: {index, status, letter_len, match_explanation?, match_details?}
+    "job_sent",  # API 流真实投递成功，payload: {title, company, sent}
     "feed_exhausted",  # 推荐 feed 跑到底（连续 N 次拿不到 JD），payload: {total}
     "limit_reached",  # 本地安全限额停机，payload: {reason, limit, current, message}
     "platform_limit_reached",  # 平台页面弹出限额提示（投递动作后检出），payload: {platform, matched_text}
+    "api_flow_started",  # API 直读流启动，payload: {usr_name, daily_sent, dry_run, scan}
+    "api_flow_finished",  # API 直读流结束汇总（跳过分类计数 + 停机原因 + 人话解释）
+    "api_flow_error",  # 搜索接口异常（风控 code=37 等），payload: {page, message}
+    "captcha_stopped",  # 详情页检出验证码安全停机，payload: {title}
+    "feed_reload",  # 推荐 feed 刷新换一批，payload: {attempt, limit}
     "loop_ended",  # runner 包的整段结束，payload: {reason: "completed"|"cancelled"|"error"}
     "error",  # 任何阶段抛了未捕获异常，payload: {stage, message}
 ]

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Sparkles, Sun, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
+import { Sparkles, Sun, CheckCircle2, XCircle, RefreshCw, History } from "lucide-react";
 import type { MorningBrief } from "../../lib/deliveryHistory";
 import { AnimatedNumber } from "../core/animated-number";
 
@@ -8,12 +8,18 @@ interface MorningBriefCardProps {
   isMonochrome: boolean;
   onRefreshBrief?: () => void;
   onStartCruise?: () => void;
+  /** 折线图点选的历史回看日期（null = 昨日战报） */
+  viewingDate?: string | null;
+  /** 回看模式下点「返回昨日」 */
+  onBackToYesterday?: () => void;
 }
 
 export default function MorningBriefCard({
   brief,
   isMonochrome,
   onRefreshBrief,
+  viewingDate,
+  onBackToYesterday,
 }: MorningBriefCardProps) {
   const [copied, setCopied] = useState(false);
   // hasReplyData=false（真实模式）：三平台无回复检测能力，回复区域显示「建设中」，绝不编造数字
@@ -51,33 +57,62 @@ export default function MorningBriefCard({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-white">投递早报 · 昨日反馈归纳复盘</h3>
-              <span
-                className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${
-                  isMonochrome
-                    ? "bg-white/10 text-zinc-200 border-white/20"
-                    : "bg-amber-500/15 text-amber-300 border-amber-500/30"
-                }`}
-              >
-                每日 09:00 定时结算
-              </span>
+              <h3 className="text-sm font-bold text-white">
+                {viewingDate ? "历史战报回看" : "投递早报 · 昨日反馈归纳复盘"}
+              </h3>
+              {viewingDate ? (
+                <span
+                  className={`text-[10px] px-2 py-0.5 rounded-full border font-medium flex items-center gap-1 ${
+                    isMonochrome
+                      ? "bg-white/10 text-zinc-200 border-white/20"
+                      : "bg-sky-500/15 text-sky-300 border-sky-500/30"
+                  }`}
+                >
+                  <History className="size-3" />
+                  {viewingDate}
+                </span>
+              ) : (
+                <span
+                  className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${
+                    isMonochrome
+                      ? "bg-white/10 text-zinc-200 border-white/20"
+                      : "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                  }`}
+                >
+                  每日 09:00 定时结算
+                </span>
+              )}
             </div>
             <p className="text-xs text-stone-400 mt-0.5">
-              统计周期: {brief.yesterdayDate} 昨日全天投递成效
+              {viewingDate
+                ? `统计周期: ${viewingDate}（点击折线图日期回看）`
+                : `统计周期: ${brief.yesterdayDate} 昨日全天投递成效`}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onRefreshBrief}
-            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-stone-300 text-xs transition-colors cursor-pointer flex items-center gap-1 border border-white/10"
-            title="刷新昨日统计"
-          >
-            <RefreshCw className="size-3.5" />
-            <span>刷新</span>
-          </button>
+          {viewingDate ? (
+            <button
+              type="button"
+              onClick={onBackToYesterday}
+              className="px-3 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 text-xs transition-colors cursor-pointer flex items-center gap-1 border border-sky-500/30"
+              title="返回最新昨日战报"
+            >
+              <RefreshCw className="size-3.5" />
+              <span>返回昨日</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onRefreshBrief}
+              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-stone-300 text-xs transition-colors cursor-pointer flex items-center gap-1 border border-white/10"
+              title="刷新昨日统计"
+            >
+              <RefreshCw className="size-3.5" />
+              <span>刷新</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={handleCopySummary}

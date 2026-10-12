@@ -16,10 +16,15 @@ export type EventKind =
   | "review_requested"
   | "review_cleared"
   | "letter_sent"
+  | "job_sent"
   | "feed_exhausted"
   | "limit_reached"
   | "platform_limit_reached"
   | "loop_ended"
+  | "api_flow_started"
+  | "api_flow_finished"
+  | "api_flow_error"
+  | "captcha_stopped"
   | "error";
 
 export type ProgressEvent = {
