@@ -1,0 +1,80 @@
+import { describe, expect, it } from "vitest";
+import type { ProgressEvent } from "./ipc";
+import { buildLiveFeed, currentProcessingJob, toLiveFeedItem } from "./liveFeed";
+
+function ev(kind: ProgressEvent["kind"], payload: Record<string, unknown> = {}, ts = "2026-10-12 14:00:00"): ProgressEvent {
+  return { kind, payload, ts_local: ts };
+}
+
+describe("toLiveFeedItem — 事件转活动流条目", () => {
+  it("job_processing → live 态条目（正在筛选）", () => {
+    const item = toLiveFeedItem(ev("job_processing", { title: "AI 实习", company: "字节" }), 0);
+    expect(item?.tone).toBe("live");
+    expect(item?.title).toContain("AI 实习");
+    expect(item?.detail).toContain("正在比对");
+  });
+
+  it("job_skipped 按原因翻译成人话（duplicate=过去已投递过）", () => {
+    const item = toLiveFeedItem(ev("job_skipped", { title: "剪辑实习", reason: "duplicate" }), 1);
+    expect(item?.tone).toBe("skip");
+    expect(item?.detail).toBe("过去已投递过，自动跳过");
+    const filtered = toLiveFeedItem(ev("job_skipped", { title: "销售", reason: "filtered_out" }), 2);
+    expect(filtered?.detail).toBe("与画像规则不匹配");
+  });
+
+  it("job_sent → success 条目（已投递第 N 份）", () => {
+    const item = toLiveFeedItem(ev("job_sent", { title: "大模型实习", company: "腾讯", sent: 3 }), 3);
+    expect(item?.tone).toBe("success");
+    expect(item?.detail).toContain("第 3 份");
+  });
+
+  it("api_flow_finished → 汇总 message 直通", () => {
+    const item = toLiveFeedItem(ev("api_flow_finished", { message: "本轮扫描 150 个岗位…" }), 4);
+    expect(item?.title).toBe("本轮巡航汇总");
+    expect(item?.detail).toContain("150");
+  });
+
+  it("噪音事件不进时间轴（page_filter 成功 / dry_run / review_cleared）", () => {
+    expect(toLiveFeedItem(ev("page_filter", { group: "city", status: "success" }), 5)).toBeNull();
+    expect(toLiveFeedItem(ev("letter_sent", { status: "dry_run" }), 6)).toBeNull();
+    expect(toLiveFeedItem(ev("review_cleared", {}), 7)).toBeNull();
+  });
+
+  it("page_filter 失败进时间轴（warning）", () => {
+    const item = toLiveFeedItem(ev("page_filter", { group: "city", status: "failed", message: "页面筛选失败：城市=郑州上海" }), 8);
+    expect(item?.tone).toBe("warning");
+    expect(item?.detail).toContain("郑州上海");
+  });
+});
+
+describe("buildLiveFeed — 时间轴组装", () => {
+  it("最新在前 + 上限截断", () => {
+    const events = [
+      ev("browser_started", {}, "2026-10-12 14:00:00"),
+      ev("job_processing", { title: "A" }, "2026-10-12 14:00:01"),
+      ev("job_skipped", { title: "A", reason: "duplicate" }, "2026-10-12 14:00:02"),
+    ];
+    const feed = buildLiveFeed(events);
+    expect(feed.length).toBe(3);
+    expect(feed[0].kind).toBe("job_skipped"); // 最新在前
+    expect(feed[2].kind).toBe("browser_started");
+  });
+});
+
+describe("currentProcessingJob — 当前岗位聚光", () => {
+  it("返回最后一个 job_processing（脚本正在看的岗位）", () => {
+    const events = [
+      ev("job_processing", { title: "旧岗位", company: "旧公司" }),
+      ev("job_skipped", { title: "旧岗位", reason: "duplicate" }),
+      ev("job_processing", { title: "新岗位", company: "新公司", salary: "200/天", location: "深圳" }),
+    ];
+    const job = currentProcessingJob(events);
+    expect(job?.title).toBe("新岗位");
+    expect(job?.company).toBe("新公司");
+  });
+
+  it("没有岗位事件时返回 null（不崩）", () => {
+    expect(currentProcessingJob([])).toBeNull();
+    expect(currentProcessingJob([ev("browser_started")])).toBeNull();
+  });
+});

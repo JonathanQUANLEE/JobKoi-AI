@@ -7,6 +7,8 @@ const MAX_LOGS = 1000;
 
 export type RunSlice = {
   running: boolean;
+  /** 最近一次巡航的开始时刻（实时巡航页的运行时长计时器用；停止后保留供回看） */
+  cruiseStartedAt: number | null;
   events: ProgressEvent[];
   logs: string[];
   currentIndex: number | null;  // 当前 job_index（从 job_found 提取）
@@ -39,6 +41,7 @@ export type RunSlice = {
 
 export const createRunSlice: StateCreator<RunStore, [], [], RunSlice> = (set) => ({
   running: false,
+  cruiseStartedAt: null,
   events: [],
   logs: [],
   currentIndex: null,
@@ -52,7 +55,12 @@ export const createRunSlice: StateCreator<RunStore, [], [], RunSlice> = (set) =>
   limitNotice: null,
   setLimitNotice: (limitNotice) => set({ limitNotice }),
 
-  setRunning: (running) => set({ running }),
+  setRunning: (running) =>
+    set((s) => ({
+      running,
+      // 启动时记录开始时刻（实时巡航页计时器）；停止时保留旧值供"上次巡航"回看
+      cruiseStartedAt: running ? Date.now() : s.cruiseStartedAt,
+    })),
   pushEvent: (ev) =>
     set((s) => {
       const events = [...s.events, ev].slice(-MAX_EVENTS);

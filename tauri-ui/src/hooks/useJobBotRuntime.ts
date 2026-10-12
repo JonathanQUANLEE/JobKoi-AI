@@ -38,6 +38,8 @@ interface UseJobBotRuntimeOptions {
   greetingPath: string;
   currentProfileData: () => ProfileData;
   validateBeforeRun: () => string | null;
+  /** 巡航成功启动后的回调（Dashboard 用它跳转到「实时巡航」监控页）。 */
+  onCruiseStarted?: () => void;
 }
 
 export interface UseJobBotRuntimeReturn {
@@ -83,6 +85,7 @@ export function useJobBotRuntime({
   greetingPath,
   currentProfileData,
   validateBeforeRun,
+  onCruiseStarted,
 }: UseJobBotRuntimeOptions): UseJobBotRuntimeReturn {
   const running = useRunStore((s) => s.running);
   const events = useRunStore((s) => s.events);
@@ -265,6 +268,7 @@ export function useJobBotRuntime({
         platforms: loadEnabledPlatforms(),
       };
       await ipc.startRun(config, progressChannel, logChannel);
+      onCruiseStarted?.();
     } catch (err) {
       setRunning(false);
       pushLog(`${formatLocalTime()} ${t("message.startFailed", { error: String(err) })}`);
@@ -293,6 +297,7 @@ export function useJobBotRuntime({
     t,
     setBusy,
     setMessage,
+    onCruiseStarted,
   ]);
 
   const stopRun = useCallback(async () => {

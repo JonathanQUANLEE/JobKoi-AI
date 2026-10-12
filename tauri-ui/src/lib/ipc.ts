@@ -11,6 +11,7 @@ export type EventKind =
   | "login_ok"
   | "login_required"
   | "job_found"
+  | "job_processing"
   | "job_matched"
   | "job_skipped"
   | "review_requested"

@@ -4,6 +4,7 @@ import ResumePanel from "../components/ResumePanel";
 import ProfilePanel from "../components/ProfilePanel";
 import AgentPanel from "../components/AgentPanel";
 import DeliveryAnalyticsView from "../components/analytics/DeliveryAnalyticsView";
+import LiveCruiseView from "../components/live/LiveCruiseView";
 import DashboardHeader from "../components/DashboardHeader";
 import WorkbenchView from "../views/WorkbenchView";
 import { type DrawerTab } from "../components/SettingsDrawer";
@@ -74,6 +75,9 @@ export default function Dashboard() {
     greetingPath: profileForm.greetingPath,
     currentProfileData: profileForm.currentProfileData,
     validateBeforeRun: profileForm.validateBeforeRun,
+    // 巡航成功启动 → 自动跳转「实时巡航」监控页（2026-10-12 用户需求：
+    // 用户不看浏览器也能实时看到脚本正在筛选/投递哪个岗位）
+    onCruiseStarted: () => setActiveNav("live"),
   });
 
   // 3. AI 顾问意向对话流 Hook
@@ -191,6 +195,8 @@ export default function Dashboard() {
               : activeNav === "resumes"
               ? "px-3 sm:px-5 py-3 space-y-4 overflow-y-auto"
               : activeNav === "copilot"
+              ? "px-3 sm:px-5 py-3 flex flex-col overflow-y-auto"
+              : activeNav === "live"
               ? "px-3 sm:px-5 py-3 flex flex-col overflow-y-auto"
               : "px-6 py-5 space-y-6 overflow-y-auto"
           }`}
@@ -365,6 +371,18 @@ export default function Dashboard() {
               onStartCruise={() => {
                 botRuntime.startRun();
               }}
+            />
+          )}
+
+          {/* TAB 6: 实时巡航监控（启动巡航后自动跳转到这里） */}
+          {activeNav === "live" && (
+            <LiveCruiseView
+              onStartRun={() => {
+                botRuntime.startRun();
+              }}
+              onStopRun={botRuntime.stopRun}
+              busy={busy}
+              dailyLimit={profileForm.dailyLimit}
             />
           )}
         </main>

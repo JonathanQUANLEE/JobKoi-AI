@@ -129,6 +129,7 @@ export default function DashboardHeader({
           {activeNav === "resumes" && t("header.nav.resumes")}
           {activeNav === "copilot" && t("header.nav.copilot")}
           {activeNav === "analytics" && t("header.nav.analytics")}
+          {activeNav === "live" && t("header.nav.live")}
         </span>
       </div>
 

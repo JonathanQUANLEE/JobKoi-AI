@@ -149,6 +149,15 @@ async def _process_single_api_job(
     from boss_zhipin.website_oper import finding_jobs, job_api
 
     job = job_api.to_job_posting(api_job)
+    # 实时巡航监控（2026-10-12 用户需求）：每个岗位开始处理时上报一次，
+    # 前端「实时巡航」页的"当前岗位聚光卡"靠它展示正在看哪个岗位、到哪一步。
+    events.emit(
+        "job_processing",
+        title=job.title,
+        company=job.company,
+        salary=job.salary,
+        location=job.location,
+    )
     dedupe_key = finding_jobs.job_key(job)
     if dedupe_key in seen_job_keys:
         # 已投过/扫过的岗位：跳过也要让用户看见（否则浏览器静止像卡死）
