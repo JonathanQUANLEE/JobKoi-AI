@@ -204,3 +204,35 @@ export function currentProcessingJob(events: ProgressEvent[]): {
   }
   return null;
 }
+
+/**
+ * 巡航结束后的醒目摘要（结束横幅数据源，2026-10-12 用户实测：结束原因只
+ * 埋在时间轴里一闪而过，用户"莫名其妙就结束了"）。从事件流提取最后的
+ * loop_ended（结束原因）与 api_flow_finished（人话汇总），未结束返回 null。
+ */
+export function lastCruiseSummary(events: ProgressEvent[]): {
+  reason: string;
+  message: string;
+  time: string;
+} | null {
+  let ended: ProgressEvent | null = null;
+  let summary: ProgressEvent | null = null;
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const ev = events[i];
+    if (!ended && ev.kind === "loop_ended") ended = ev;
+    if (!summary && ev.kind === "api_flow_finished") summary = ev;
+    if (ended && summary) break;
+  }
+  if (!ended) return null;
+  const reasonMap: Record<string, string> = {
+    completed: "本轮巡航已结束",
+    cancelled: "巡航已手动停止",
+    error: "巡航异常终止",
+  };
+  const reason = reasonMap[text(ended.payload.reason)] || "巡航已结束";
+  return {
+    reason,
+    message: text(summary?.payload?.message) || "",
+    time: ended.ts_local || "",
+  };
+}

@@ -47,13 +47,16 @@ interface LiveActivityFeedProps {
  * 最新在顶部自动置顶，条目 zoom-in 淡入；live 事件带呼吸脉冲点（"脚本活着"信号）。
  */
 export default function LiveActivityFeed({ items, running, isMonochrome }: LiveActivityFeedProps) {
-  const topRef = useRef<HTMLDivElement>(null);
+  // 滚动容器 ref：新条目到达时回到顶部。
+  // 注意不能用 scrollIntoView——它会沿祖先链滚动整个页面（2026-10-12 实测：
+  // 90 条事件 4 秒涌入时高频触发，把 Dashboard 主区滚得到处跑，用户以为页面死掉）。
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // 新条目到达时把视口带回顶部（用户手动往下翻阅时暂停跟随）
+  // 用户手动往下翻阅时暂停跟随
   const stickRef = useRef(true);
   useEffect(() => {
-    if (stickRef.current && topRef.current) {
-      topRef.current.scrollIntoView({ block: "start", behavior: "smooth" });
+    if (stickRef.current && scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
     }
   }, [items]);
 
@@ -80,15 +83,17 @@ export default function LiveActivityFeed({ items, running, isMonochrome }: LiveA
 
   return (
     <div
+      ref={scrollRef}
       className="flex-1 overflow-y-auto min-h-0 pr-1"
-      onWheel={() => {
-        stickRef.current = false;
+      onWheel={(e) => {
+        // 往下翻=暂停跟随；滚回顶部附近（<40px）=恢复自动跟随
+        if (e.deltaY > 0) stickRef.current = false;
+        else if (e.currentTarget.scrollTop <= 40) stickRef.current = true;
       }}
-      onTouchMove={() => {
-        stickRef.current = false;
+      onTouchMove={(e) => {
+        stickRef.current = e.currentTarget.scrollTop <= 40;
       }}
     >
-      <div ref={topRef} />
       {/* 时间轴主体：左侧节点连线 + 右侧条目卡 */}
       <div className="relative pl-1">
         <div className="absolute left-[15px] top-2 bottom-2 w-px bg-white/8" aria-hidden />

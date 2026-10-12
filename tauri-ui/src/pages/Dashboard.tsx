@@ -197,7 +197,7 @@ export default function Dashboard() {
               : activeNav === "copilot"
               ? "px-3 sm:px-5 py-3 flex flex-col overflow-y-auto"
               : activeNav === "live"
-              ? "px-3 sm:px-5 py-3 flex flex-col overflow-y-auto"
+              ? "px-3 sm:px-5 py-3 flex flex-col overflow-hidden"
               : "px-6 py-5 space-y-6 overflow-y-auto"
           }`}
         >
