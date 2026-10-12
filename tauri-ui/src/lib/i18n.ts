@@ -196,6 +196,8 @@ const zh: Record<string, string> = {
   "sidebar.nav.copilot": "简历精修",
   "sidebar.nav.copilotBadge": "AI 诊断",
   "sidebar.nav.analytics": "数据统计与早报",
+  "sidebar.nav.live": "实时巡航",
+  "sidebar.nav.liveBadge": "LIVE",
   "sidebar.usagi": "乌萨奇特助",
   "sidebar.usagiDock": "可全屏拖拽",
   "sidebar.scheduleTitle": "快捷定时设置",
@@ -246,6 +248,7 @@ const zh: Record<string, string> = {
   "header.nav.resumes": "简历资料库",
   "header.nav.copilot": "简历精修",
   "header.nav.analytics": "数据统计与早报",
+  "header.nav.live": "实时巡航监控",
   "header.settings": "系统设置",
   // ---- WorkbenchView ----
   "wb.hint.stage0": "向下滚动进入招聘平台中心",
@@ -555,6 +558,8 @@ const en: Record<string, string> = {
   "sidebar.nav.copilot": "Resume Polish",
   "sidebar.nav.copilotBadge": "Skills",
   "sidebar.nav.analytics": "Analytics & Brief",
+  "sidebar.nav.live": "Live Cruise",
+  "sidebar.nav.liveBadge": "LIVE",
   "sidebar.usagi": "Usagi Assistant",
   "sidebar.usagiDock": "Free Docking",
   "sidebar.scheduleTitle": "Schedule Timer",
@@ -605,6 +610,7 @@ const en: Record<string, string> = {
   "header.nav.resumes": "Resume Vault",
   "header.nav.copilot": "Resume Polish",
   "header.nav.analytics": "Delivery Analytics & Morning Brief",
+  "header.nav.live": "Live Cruise Monitor",
   "header.settings": "Settings",
   // ---- WorkbenchView ----
   "wb.hint.stage0": "Scroll down to Platform Hub",

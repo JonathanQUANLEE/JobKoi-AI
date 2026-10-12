@@ -10,6 +10,7 @@ import {
   Sparkles,
   Clock,
   MoreVertical,
+  Radio,
 } from "lucide-react";
 import { translate, type Lang } from "../lib/i18n";
 import { useRunStore } from "../store";
@@ -20,7 +21,7 @@ import NavItemButton from "./sidebar/NavItemButton";
 import SidebarTimeWidget from "./sidebar/SidebarTimeWidget";
 import SidebarUserMenu from "./sidebar/SidebarUserMenu";
 
-export type NavItem = "workbench" | "profile" | "resumes" | "copilot" | "analytics";
+export type NavItem = "workbench" | "profile" | "resumes" | "copilot" | "analytics" | "live";
 
 interface SidebarProps {
   activeNav: NavItem;
@@ -251,6 +252,19 @@ export default function Sidebar({
               />
             }
             label={t("sidebar.nav.analytics")}
+          />
+
+          <NavItemButton
+            active={activeNav === "live"}
+            onClick={() => onSelectNav("live")}
+            icon={
+              <Radio
+                className={`h-4 w-4 shrink-0 ${running ? "text-emerald-300" : isMonochrome ? "text-zinc-300" : "text-amber-400"}`}
+              />
+            }
+            label={t("sidebar.nav.live")}
+            badge={running ? t("sidebar.nav.liveBadge") : undefined}
+            badgeColor="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
           />
         </nav>
 

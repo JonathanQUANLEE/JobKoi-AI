@@ -26,6 +26,7 @@ EventKind = Literal[
     "login_ok",  # 登录态确认
     "login_required",  # 登录已失效 / 未登录，payload: {message}
     "job_found",  # 抓到一个 JD，payload: {index, jd_preview}
+    "job_processing",  # API 流正在处理某个岗位（实时巡航监控），payload: {title, company, salary, location}
     "job_matched",  # 扫描模式命中岗位，payload: {index, status, jd_preview}
     "job_skipped",  # 跳过当前岗位，payload: {index, reason, detail, score?, threshold?, matched?}
     "review_requested",  # GUI 审核模式等待用户决策，payload: {index, job, details, greeting}
