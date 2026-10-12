@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, MapPin, Banknote, Rocket, Square, Radio, Compass, Clock3, Search } from "lucide-react";
+import { Activity, MapPin, Banknote, Rocket, Square, Radio, Compass, Clock3, Search, FlagTriangleRight } from "lucide-react";
 import { useRunStore } from "../../store";
 import { summarizeEvents } from "../../lib/dashboardHelpers";
-import { buildLiveFeed, currentProcessingJob } from "../../lib/liveFeed";
+import { buildLiveFeed, currentProcessingJob, lastCruiseSummary } from "../../lib/liveFeed";
 import { AnimatedNumber } from "../core/animated-number";
 import LiveActivityFeed from "./LiveActivityFeed";
 
@@ -49,13 +49,14 @@ export default function LiveCruiseView({ onStartRun, onStopRun, busy = false, da
 
   const feed = useMemo(() => buildLiveFeed(events), [events]);
   const spotlight = useMemo(() => currentProcessingJob(events), [events]);
+  const cruiseSummary = useMemo(() => lastCruiseSummary(events), [events]);
   const stats = useMemo(() => summarizeEvents(events), [events]);
   const limitNum = Number(dailyLimit) || 80;
   const elapsed = cruiseStartedAt ? Date.now() - cruiseStartedAt : null;
   const activeChannel = PLATFORM_CHANNELS.find((c) => c.id === channel)!;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-4 pb-10 animate-in fade-in duration-200">
+    <div className="w-full flex-1 min-h-0 flex flex-col gap-3.5 animate-in fade-in duration-200">
       {/* ===== 顶部状态带：LIVE 徽章（呼吸脉冲）+ 开始时间 + 运行时长 + 停止按钮 ===== */}
       <div
         className={`flex flex-wrap items-center justify-between gap-3 px-5 py-4 rounded-2xl border backdrop-blur-xl ${
@@ -136,8 +137,35 @@ export default function LiveCruiseView({ onStartRun, onStopRun, busy = false, da
         </div>
       </div>
 
+      {/* ===== 巡航结束横幅：结束原因醒目呈现（不埋在时间轴里一闪而过） ===== */}
+      {!running && cruiseSummary && (
+        <div className="flex items-start gap-3 px-5 py-3.5 rounded-2xl border border-amber-500/35 bg-amber-500/[0.07]">
+          <span className="grid place-items-center size-8 rounded-xl border border-amber-500/30 bg-amber-500/10 shrink-0 mt-0.5">
+            <FlagTriangleRight className="size-4 text-amber-300" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-amber-200">
+              {cruiseSummary.reason}
+              <span className="ml-2 text-[10px] font-mono font-normal text-stone-500">{cruiseSummary.time}</span>
+            </p>
+            {cruiseSummary.message && (
+              <p className="text-xs text-stone-300 leading-relaxed mt-1">{cruiseSummary.message}</p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onStartRun}
+            disabled={busy}
+            className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 disabled:opacity-50"
+          >
+            <Rocket className="size-3.5" />
+            <span>再来一轮</span>
+          </button>
+        </div>
+      )}
+
       {/* ===== 跳动计数带：扫描 / 已投递 / 跳过（数字实时跳动） ===== */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-3 shrink-0">
         <div
           className={`p-4 rounded-2xl border backdrop-blur-xl ${
             isMonochrome ? "bg-zinc-950/70 border-white/10" : "bg-stone-900/40 border-white/10"
@@ -180,11 +208,11 @@ export default function LiveCruiseView({ onStartRun, onStopRun, busy = false, da
         </div>
       </div>
 
-      {/* ===== 主体：左活动流时间轴 + 右聚光卡与平台通道 ===== */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
+      {/* ===== 主体：左活动流时间轴 + 右聚光卡与平台通道（撑满剩余高度） ===== */}
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4">
         {/* 左：实时活动流（feed 通道即 BOSS——当前唯一打通的平台） */}
         <div
-          className={`flex flex-col rounded-2xl border backdrop-blur-xl p-4 min-h-[420px] max-h-[62vh] ${
+          className={`flex flex-col rounded-2xl border backdrop-blur-xl p-4 min-h-0 ${
             isMonochrome ? "bg-zinc-950/70 border-white/10" : "bg-stone-900/40 border-white/10"
           }`}
         >
@@ -203,8 +231,8 @@ export default function LiveCruiseView({ onStartRun, onStopRun, busy = false, da
           <LiveActivityFeed items={feed} running={running} isMonochrome={isMonochrome} />
         </div>
 
-        {/* 右：当前岗位聚光卡 + 平台通道选择 */}
-        <div className="space-y-4">
+        {/* 右：当前岗位聚光卡 + 平台通道选择（撑满高度） */}
+        <div className="flex flex-col gap-4 min-h-0">
           {/* 当前岗位聚光卡 */}
           <div
             className={`rounded-2xl border backdrop-blur-xl p-4 ${
@@ -243,9 +271,9 @@ export default function LiveCruiseView({ onStartRun, onStopRun, busy = false, da
             )}
           </div>
 
-          {/* 平台通道（四平台 Tab：BOSS 实时 + 三平台预留） */}
+          {/* 平台通道（四平台 Tab：BOSS 实时 + 三平台预留），撑满右栏剩余高度 */}
           <div
-            className={`rounded-2xl border backdrop-blur-xl p-4 ${
+            className={`flex-1 min-h-0 flex flex-col rounded-2xl border backdrop-blur-xl p-4 ${
               isMonochrome ? "bg-zinc-950/70 border-white/10" : "bg-stone-900/40 border-white/10"
             }`}
           >

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProgressEvent } from "./ipc";
-import { buildLiveFeed, currentProcessingJob, toLiveFeedItem } from "./liveFeed";
+import { buildLiveFeed, currentProcessingJob, lastCruiseSummary, toLiveFeedItem } from "./liveFeed";
 
 function ev(kind: ProgressEvent["kind"], payload: Record<string, unknown> = {}, ts = "2026-10-12 14:00:00"): ProgressEvent {
   return { kind, payload, ts_local: ts };
@@ -76,5 +76,34 @@ describe("currentProcessingJob — 当前岗位聚光", () => {
   it("没有岗位事件时返回 null（不崩）", () => {
     expect(currentProcessingJob([])).toBeNull();
     expect(currentProcessingJob([ev("browser_started")])).toBeNull();
+  });
+});
+
+describe("lastCruiseSummary — 结束横幅", () => {
+  it("巡航结束后提取结束原因 + api_flow 汇总人话", () => {
+    const events = [
+      ev("api_flow_started", { daily_sent: 9 }),
+      ev("job_processing", { title: "A" }),
+      ev(
+        "api_flow_finished",
+        { message: "本轮扫描 90 个岗位：新投递 0、已投过跳过 31…（搜索接口风控限流，稍后再试）" },
+        "2026-10-12 14:15:50",
+      ),
+      ev("loop_ended", { reason: "completed" }, "2026-10-12 14:15:50"),
+    ];
+    const s = lastCruiseSummary(events);
+    expect(s?.reason).toBe("本轮巡航已结束");
+    expect(s?.message).toContain("90 个岗位");
+    expect(s?.time).toContain("14:15:50");
+  });
+
+  it("运行中（无 loop_ended）返回 null", () => {
+    expect(lastCruiseSummary([ev("job_processing", { title: "A" })])).toBeNull();
+    expect(lastCruiseSummary([])).toBeNull();
+  });
+
+  it("异常终止 / 手动停止的原因翻译", () => {
+    expect(lastCruiseSummary([ev("loop_ended", { reason: "error" })])?.reason).toBe("巡航异常终止");
+    expect(lastCruiseSummary([ev("loop_ended", { reason: "cancelled" })])?.reason).toBe("巡航已手动停止");
   });
 });
