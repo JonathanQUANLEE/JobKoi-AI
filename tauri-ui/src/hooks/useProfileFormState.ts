@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type Dispatch, type SetStateAction } from "react";
+import { useState, useEffect, useCallback, useRef, type Dispatch, type SetStateAction } from "react";
 import { ipc, type LoadedProfile, type ProfileSummary, type ProfileData } from "../lib/ipc";
 import {
   buildProfileData,
@@ -183,6 +183,40 @@ export function useProfileFormState({
     [loadProfile, setMessage, t],
   );
 
+  // 所有表单字段的 ref 镜像：绕开「保存回调闭包读旧值」的时序坑。
+  // 背景（2026-10-12 两轮实测）：设置弹窗的保存按钮在事件处理器里 setState 后
+  // 用 setTimeout(0) 调 saveConfig——回调捕获的仍是点击那一刻的旧闭包，旧值
+  // 被写盘 → refreshProfiles 重读磁盘 → hydrate 把表单盖回旧档（"保存后跳回
+  // 旧档位"）。ref 每次渲染后同步最新值，setTimeout 回调执行时 ref 已是新值。
+  const formValuesRef = useRef<{
+    greeting: string;
+    values: Parameters<typeof buildProfileData>[0];
+  } | null>(null);
+  useEffect(() => {
+    formValuesRef.current = {
+      greeting,
+      values: {
+        label,
+        startUrl,
+        rule,
+        cityValues,
+        educationValues,
+        bossActiveValues,
+        filterPolicy,
+        mode,
+        greetingPath,
+        delayMin,
+        delayMax,
+        maxSent,
+        dailyLimit,
+        stopOnCaptcha,
+        sendResumeAfterGreeting,
+        autoResumeOnReply,
+        aiGreeting,
+      },
+    };
+  });
+
   const currentProfileData = useCallback((): ProfileData => {
     return buildProfileData({
       label,
@@ -227,9 +261,17 @@ export function useProfileFormState({
     setBusy(true);
     setMessage(null);
     try {
-      await ipc.saveGreeting(greeting.trim(), greetingPath.trim() || "./greetings/default.txt");
+      // 从 ref 读最新表单值（闭包里的 greeting/values 可能是旧值，见 formValuesRef 注释）
+      const latest = formValuesRef.current;
+      const latestGreeting = (latest?.greeting ?? greeting).trim();
+      const latestGreetingPath = (latest?.values.greetingPath ?? greetingPath).trim();
+      await ipc.saveGreeting(
+        latestGreeting,
+        latestGreetingPath || "./greetings/default.txt",
+      );
       const savedName = profileName.trim() || DEFAULT_PROFILE_NAME;
-      await ipc.saveProfile(savedName, currentProfileData());
+      const data = latest ? buildProfileData(latest.values) : currentProfileData();
+      await ipc.saveProfile(savedName, data);
       await refreshProfiles(savedName);
       setMessage(t("message.saved"));
     } catch (err) {

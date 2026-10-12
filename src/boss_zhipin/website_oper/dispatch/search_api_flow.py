@@ -386,18 +386,62 @@ async def _run_search_api_flow(
     )
 
     page = 1
+    # 跳过分类计数（2026-10-12 用户实测：150 岗全部秒跳、0 投递且无任何
+    # 解释，用户以为巡航卡死——结束时必须把"为什么没投"说清楚）。
+    skipped_duplicates = 0
+    skipped_filtered = 0
+    skipped_already = 0
+    failed_count = 0
+    scanned_count = 0
+    stop_reason = "completed"
+
+    def _emit_flow_summary(stop: str) -> None:
+        scanned = scanned_count
+        message = (
+            f"本轮扫描 {scanned} 个岗位：新投递 {sent_count}、"
+            f"已投过跳过 {skipped_duplicates}、规则不匹配 {skipped_filtered}、"
+            f"此前已沟通 {skipped_already}、打开失败 {failed_count}。"
+        )
+        if sent_count == 0:
+            if skipped_duplicates >= scanned > 0 and scanned_count > 0:
+                message += "该搜索词的岗位近期已全部投递过，建议换个搜索词或明天再来。"
+            elif skipped_filtered >= scanned > 0 and scanned_count > 0:
+                message += "岗位与你的画像规则（关键词/城市/排除项）均不匹配，可在「求职画像」调整规则。"
+            else:
+                message += "本轮没有可投递的新岗位。"
+        if stop == "captcha":
+            message += "（触发验证码已安全停止）"
+        elif stop == "platform_limit":
+            message += "（平台提示今日上限已安全停止）"
+        elif stop == "api_error":
+            message += "（搜索接口风控限流，稍后再试）"
+        events.emit(
+            "api_flow_finished",
+            total=sent_count,
+            page=page,
+            scanned=scanned,
+            skipped_duplicates=skipped_duplicates,
+            skipped_filtered=skipped_filtered,
+            skipped_already_contacted=skipped_already,
+            failed=failed_count,
+            stop_reason=stop,
+            message=message,
+        )
+        log.info("[api-flow] 结束（%s）：%s", stop, message)
+
     while page <= 100:
         if max_sent is not None and sent_count >= max_sent:
-            log.info("本轮已发送 %d 条，达到单次上限，结束", sent_count)
+            stop_reason = "max_sent"
             break
         if daily_limit is not None and daily_sent_count >= daily_limit:
-            log.info("今日已发送 %d 条，达到每日上限，结束", daily_sent_count)
+            stop_reason = "daily_limit"
             break
         try:
             api_jobs = await job_api.fetch_search_page(tab, query, page)
         except RuntimeError as e:
             log.warning("第 %d 页搜索接口失败，结束：%s", page, e)
             events.emit("api_flow_error", page=page, message=str(e))
+            stop_reason = "api_error"
             break
         if not api_jobs:
             log.info("第 %d 页没有岗位，搜索结果已全部取完，结束", page)
@@ -425,7 +469,17 @@ async def _run_search_api_flow(
                 delay_min=delay_min,
                 delay_max=delay_max,
             )
+            scanned_count += 1
+            if status == "seen":
+                skipped_duplicates += 1
+            elif status == "filtered":
+                skipped_filtered += 1
+            elif status == "already_contacted":
+                skipped_already += 1
+            elif status == "failed":
+                failed_count += 1
             if status == "captcha":
+                _emit_flow_summary("captcha")
                 return
             if status == "platform_limit":
                 events.emit(
@@ -435,6 +489,7 @@ async def _run_search_api_flow(
                     message="平台提示已达今日投递上限，已安全停止。"
                     "今天的实际投递数量可在「投递明细记录」中查看。",
                 )
+                _emit_flow_summary("platform_limit")
                 return
 
         log.info(
@@ -448,5 +503,5 @@ async def _run_search_api_flow(
         # 拟人化页间停顿再翻下一页。
         await asyncio.sleep(2.5)
 
-    events.emit("api_flow_finished", total=sent_count, page=page)
+    _emit_flow_summary(stop_reason)
     log.info("[api-flow] 结束：本轮发送 %d 条，翻到第 %d 页", sent_count, page)

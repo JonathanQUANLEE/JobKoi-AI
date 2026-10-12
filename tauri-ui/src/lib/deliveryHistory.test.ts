@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { buildRealMorningBrief, deliveryHistoryDb } from "./deliveryHistory";
+import { buildDemoBriefForDate, buildRealMorningBrief, deliveryHistoryDb } from "./deliveryHistory";
 
 describe("deliveryHistoryDb", () => {
   beforeEach(() => {
@@ -71,5 +71,37 @@ describe("buildRealMorningBrief — 真实数据模式早报", () => {
     ]);
     expect(brief.totalSent).toBe(1);
     expect(brief.yesterdayDate).toBe(dayStr(3));
+  });
+
+  it("指定历史日期（折线图点选回看）：显示那天的真实战报", () => {
+    const brief = buildRealMorningBrief(
+      [
+        { date: dayStr(1), bossSent: 10, liepinSent: 5, job51Sent: 2, totalSent: 17 },
+        { date: dayStr(5), bossSent: 3, liepinSent: 0, job51Sent: 1, totalSent: 4 },
+      ],
+      dayStr(5),
+    );
+    expect(brief.totalSent).toBe(4);
+    expect(brief.yesterdayDate).toBe(dayStr(5));
+    expect(brief.insight).toContain("4");
+    expect(brief.insight).toContain(dayStr(5)); // 历史日期显式标注
+  });
+
+  it("指定日期无记录：不空引用，文案说明该日无投递", () => {
+    const brief = buildRealMorningBrief([], "2026-10-01");
+    expect(brief.totalSent).toBe(0);
+    expect(brief.insight).toContain("没有投递记录");
+  });
+});
+
+describe("buildDemoBriefForDate — 演示模式历史回看", () => {
+  it("按点选日期从演示记录构造战报（含回复数据）", () => {
+    const records = deliveryHistoryDb.getRecords();
+    const target = records[3]; // 任取一天
+    const brief = buildDemoBriefForDate(records, target.date);
+    expect(brief.totalSent).toBe(target.totalSent);
+    expect(brief.repliedCount).toBe(target.totalReplies);
+    expect(brief.hasReplyData).toBe(true);
+    expect(brief.yesterdayDate).toBe(target.date);
   });
 });

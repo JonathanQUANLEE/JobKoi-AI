@@ -9,6 +9,8 @@ import "./PlatformTrendChart.css";
 interface PlatformTrendChartProps {
   records: DayDeliveryRecord[];
   isMonochrome: boolean;
+  /** 点击某天（早报历史回看联动）。 */
+  onDayClick?: (date: string) => void;
 }
 
 export type PlatformFilter = "all" | "boss" | "liepin" | "job51";
@@ -21,7 +23,7 @@ export const SERIES_CONFIG: readonly SeriesItem[] = [
   { key: "job51Sent", color: "#ff5000", id: "job51", name: "前程无忧", delay: 0.24 },
 ] as const;
 
-export default function PlatformTrendChart({ records, isMonochrome }: PlatformTrendChartProps) {
+export default function PlatformTrendChart({ records, isMonochrome, onDayClick }: PlatformTrendChartProps) {
   const [filter, setFilter] = useState<PlatformFilter>("all");
   const [range, setRange] = useState<TimeRange>("14d");
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -73,6 +75,7 @@ export default function PlatformTrendChart({ records, isMonochrome }: PlatformTr
           setHoverIndex={setHoverIndex}
           maxY={maxY}
           shouldReduceMotion={shouldReduceMotion}
+          onDayClick={onDayClick}
         />
 
         <ChartTooltip record={activeRecord} series={SERIES_CONFIG} />

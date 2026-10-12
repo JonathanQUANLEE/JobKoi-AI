@@ -45,6 +45,20 @@ describe("parseCityList — 用户输入全形态防御矩阵", () => {
     expect(parseCityList("乌鲁木齐市")).toEqual(["乌鲁木齐"]);
   });
 
+  it("无分隔粘连拆分（2026-10-12 实测事故：连空格都不打）", () => {
+    expect(parseCityList("郑州上海")).toEqual(["郑州", "上海"]);
+    expect(parseCityList("深圳北京")).toEqual(["深圳", "北京"]);
+    expect(parseCityList("郑州上海深圳北京")).toEqual(["郑州", "上海", "深圳", "北京"]); // 超长粘连豁免
+    expect(parseCityList("郑州市上海")).toEqual(["郑州", "上海"]); // 城市间残留行政字
+    expect(parseCityList("郑州上海,东莞")).toEqual(["郑州", "上海", "东莞"]); // 粘连+分隔混用
+  });
+
+  it("粘连拆分不误拆：拆不完全的保留原样/丢弃", () => {
+    expect(parseCityList("昆山")).toEqual(["昆山"]); // 非白名单单城，保留
+    expect(parseCityList("郑州or上海")).toEqual(["郑州or上海"]); // 中间残留非行政字，拆不动保留
+    expect(parseCityList("我想在深圳广州找工作")).toEqual([]); // 拆不动 + 超长 → 垃圾
+  });
+
   it("垃圾拦截：emoji / 纯符号 / 整句话粘贴 / 超长段全部丢弃", () => {
     expect(parseCityList("🔥🔥🔥")).toEqual([]);
     expect(parseCityList("！！！,,,")).toEqual([]);

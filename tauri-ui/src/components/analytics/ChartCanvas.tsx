@@ -17,6 +17,8 @@ interface ChartCanvasProps {
   setHoverIndex: (idx: number | null) => void;
   maxY: number;
   shouldReduceMotion: boolean | null;
+  /** 点击某天的热区（早报历史回看联动）。 */
+  onDayClick?: (date: string) => void;
 }
 
 const WIDTH = 800;
@@ -37,6 +39,7 @@ export default function ChartCanvas({
   setHoverIndex,
   maxY,
   shouldReduceMotion,
+  onDayClick,
 }: ChartCanvasProps) {
   const pointsFor = (key: "bossSent" | "liepinSent" | "job51Sent" | "totalSent") => {
     if (!filteredData.length) return [];
@@ -215,7 +218,7 @@ export default function ChartCanvas({
         </g>
       )}
 
-      {/* 交互命中热区 */}
+      {/* 交互命中热区：悬停看 tooltip，点击回看那天的早报 */}
       {filteredData.map((d, i) => {
         const step = CHART_W / Math.max(1, filteredData.length - 1);
         const x = PAD_L + i * step;
@@ -229,6 +232,7 @@ export default function ChartCanvas({
             fill="transparent"
             className="cursor-pointer"
             onMouseEnter={() => setHoverIndex(i)}
+            onClick={() => onDayClick?.(d.date)}
           />
         );
       })}
