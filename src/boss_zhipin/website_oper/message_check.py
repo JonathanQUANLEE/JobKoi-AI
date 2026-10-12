@@ -40,15 +40,12 @@ JSON.stringify((() => {
 _last_unread: int | None = None
 
 
-async def check_new_replies() -> dict[str, Any]:
-    """读当前受控页面导航的未读数，与上次比较。
+async def snapshot() -> dict[str, Any]:
+    """读一次导航未读数（**纯快照，不碰基线**）。
 
-    Returns::
-
-        {"status": "ok", "unread": 21, "new_replies": bool, "chat_url": "..."}
-        {"status": "error", "code": "no_browser"|"no_nav", "message": str}
+    统计页/早报的「当前未读」用这个——用 check_new_replies 会被它
+    消费掉 new_replies 状态，干扰 GUI 运行时 60s 轮询的新回复检测。
     """
-    global _last_unread
     tab = finding_jobs.get_tab()
     if tab is None:
         return {
@@ -63,15 +60,30 @@ async def check_new_replies() -> dict[str, Any]:
             "code": "no_nav",
             "message": "当前页面读不到导航未读数（请停留在 BOSS 页面）。",
         }
-    unread = int(result.get("unread") or 0)
-    new_replies = _last_unread is not None and unread > _last_unread
-    _last_unread = unread
     return {
         "status": "ok",
-        "unread": unread,
-        "new_replies": new_replies,
+        "unread": int(result.get("unread") or 0),
         "chat_url": str(result.get("chatUrl") or CHAT_URL),
     }
+
+
+async def check_new_replies() -> dict[str, Any]:
+    """读当前受控页面导航的未读数，与上次比较。
+
+    Returns::
+
+        {"status": "ok", "unread": 21, "new_replies": bool, "chat_url": "..."}
+        {"status": "error", "code": "no_browser"|"no_nav", "message": str}
+    """
+    global _last_unread
+    result = await snapshot()
+    if result["status"] != "ok":
+        return result
+    unread = result["unread"]
+    new_replies = _last_unread is not None and unread > _last_unread
+    _last_unread = unread
+    result["new_replies"] = new_replies
+    return result
 
 
 def reset() -> None:

@@ -30,6 +30,7 @@ width = 1240
 height = 820
 minWidth = 900
 minHeight = 600
+devtools = true
 
 [bundle]
 icon = [

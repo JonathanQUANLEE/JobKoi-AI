@@ -27,3 +27,22 @@ DEFAULT_DAILY_LIMITS: dict[str, int] = {
 # - 无论 GUI 还是手改 YAML 越界，运行时一律收敛进此区间（env_config 钳制）。
 #   红线：本工具不做提速——历史上限曾是 0s（裸奔），收紧只会更慢更安全。
 BOSS_DELAY_RANGE_SECONDS: tuple[float, float] = (15.0, 45.0)
+
+# 猎聘 / 51job 同款安全区间（2026-10-13 用户拍板分平台三档后统一标准）：
+# - 这两个平台没有公开的官方最低间隔数字（调研结论：只有 BOSS 有影刀
+#   RPA「至少 15s」的公开建议；八爪鱼 RPA 建议 10-30s）。三平台共用同一
+#   安全区间 [15,45]：下限取公开资料的最保守值 15s，不冒进；
+# - 旧实现硬编码 40~80s 是拍脑袋值、无任何实测/资料依据，且完全无视
+#   用户在 GUI 里的节奏档位选择（用户实测怒吼"我设了效率档为什么还 40s"）；
+# - 三档预设与 BOSS 一致：效率 15-30 / 标准 20-40 / 稳健 30-45；运行时
+#   钳制进 [15,45]，越界配置一律收敛。
+LIEPIN_DELAY_RANGE_SECONDS: tuple[float, float] = (15.0, 45.0)
+JOB51_DELAY_RANGE_SECONDS: tuple[float, float] = (15.0, 45.0)
+
+
+def clamp_delay_range(value_min: float, value_max: float, bounds: tuple[float, float]) -> tuple[float, float]:
+    """把 (min, max) 节流区间钳制进平台安全区间（min/max 乱序时自动理顺）。"""
+    low, high = bounds
+    a = min(float(value_min), float(value_max))
+    b = max(float(value_min), float(value_max))
+    return (max(low, a), min(high, b))

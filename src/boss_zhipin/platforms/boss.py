@@ -12,6 +12,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from boss_zhipin.paths import get_platform_profile_dir
 from boss_zhipin.platforms.base import BasePlatform, PlatformInfo
 from boss_zhipin.platforms.cookies_probe import read_cookie_state
 
@@ -27,7 +28,10 @@ class BossPlatform(BasePlatform):
         return "boss"
 
     def _get_profile_dir(self) -> Path:
-        return self.root_dir / "chrome_profile"
+        # 打包加固（2026-10-13）：standalone 下安装目录 UAC 只读，profile
+        # 一律去 %APPDATA%；dev 模式仍是仓库根 chrome_profile（与
+        # browser_session.CHROME_PROFILE_DIR 同一真相源，两边永远同源）。
+        return get_platform_profile_dir("boss", dev_root=self.root_dir)
 
     def _cookie_login_state(self) -> bool | None:
         """True=有 bst 登录凭证 / False=明确未登录 / None=读不出（待验证）。

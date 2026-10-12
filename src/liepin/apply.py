@@ -26,6 +26,7 @@ if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
 from liepin import driver  # noqa: E402
+from boss_zhipin.gui import events  # noqa: E402
 from boss_zhipin.platforms.ledger import (  # noqa: E402
     append_jsonl,
     normalize_company,
@@ -83,11 +84,35 @@ def _log(msg: str) -> None:
     print(msg, flush=True)
 
 
+def _delay_range() -> tuple[float, float]:
+    """拟人化投递间隔（秒）：读用户设置 LIEPIN_DELAY_MIN/MAX（profile 分
+    平台三档桥接而来），缺省标准档 20-40；运行时钳制进安全区间 [15,45]
+    （platforms/limits.py——15s 是公开资料最保守建议，见该文件注释）。
+
+    2026-10-13 修复：旧实现硬编码 40~80s 完全无视用户在 GUI 设置的节奏
+    档位（用户实测怒吼"我设了效率档为什么还 40s"）。
+    """
+    from boss_zhipin.platforms.limits import (
+        LIEPIN_DELAY_RANGE_SECONDS,
+        clamp_delay_range,
+    )
+
+    try:
+        value_min = float(os.environ.get("LIEPIN_DELAY_MIN", "20"))
+        value_max = float(os.environ.get("LIEPIN_DELAY_MAX", "40"))
+    except ValueError:
+        value_min, value_max = 20.0, 40.0
+    return clamp_delay_range(value_min, value_max, LIEPIN_DELAY_RANGE_SECONDS)
+
+
 async def run(keywords: list[str], daily_limit: int, greeting: str) -> int:
     """跑一轮投递，返回本轮新发送条数。"""
     sent_ids = sent_job_ids(SENT_LOG)
-    sent_companies = sent_companies(SENT_LOG)
-    _log(f"[liepin] 已打招呼 {len(sent_ids)} 个岗位 / {len(sent_companies)} 家公司（将跳过）")
+    # 局部集合必须改名：曾用 sent_companies 同名遮蔽导入的 ledger 函数，
+    # Python 把整个函数作用域内的 sent_companies 当局部变量 → 首行
+    # UnboundLocalError，猎聘链 2026-10-12 GUI 巡航当场崩（实测日志）。
+    contacted_companies = sent_companies(SENT_LOG)
+    _log(f"[liepin] 已打招呼 {len(sent_ids)} 个岗位 / {len(contacted_companies)} 家公司（将跳过）")
 
     tab = await driver.open_browser(driver.SEARCH_TMPL.format(kw="AI Agent"))
     if not await driver.is_logged_in(tab):
@@ -109,56 +134,92 @@ async def run(keywords: list[str], daily_limit: int, greeting: str) -> int:
             if sent_today >= daily_limit:
                 break
             job_id = card.get("jobId") or ""
-            href = card.get("href") or ""
+            href = card.get("href") or (f"https://www.liepin.com/job/{job_id}.shtml" if job_id else "")
             title = card.get("title") or ""
             company = card.get("company") or ""
+            salary = card.get("salary") or ""
+            location = card.get("location") or ""
 
             if not job_id or not href:
                 continue
             if job_id in sent_ids:
+                events.emit("job_skipped", platform="liepin", title=title, reason="duplicate", detail="该岗位此前已打过招呼，自动跳过")
                 continue
             if not _is_ai_title(title):
-                append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "not_ai_title"})
+                events.emit("job_skipped", platform="liepin", title=title, reason="filtered_out", detail="标题未命中 AI 方向关键词")
+                append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "salary": salary, "location": location, "reason": "not_ai_title"})
                 continue
-            if normalize_company(company) in sent_companies and company:
-                append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "company_dedup"})
+            if normalize_company(company) in contacted_companies and company:
+                events.emit("job_skipped", platform="liepin", title=title, reason="duplicate", detail="这家公司此前已打过招呼，自动跳过")
+                append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "salary": salary, "location": location, "reason": "company_dedup"})
                 continue
 
+            # 实时巡航监控（三平台并列需求）：正在处理该岗位
+            events.emit(
+                "job_processing",
+                platform="liepin",
+                title=title,
+                company=company,
+                salary=salary,
+                location=location,
+                url=href,
+            )
             # 打开详情页，抓公司名（更准），再点聊一聊
             await driver.open_detail(tab, href)
             detail_company = await driver.detail_company(tab)
             company = detail_company or company
-            if company and normalize_company(company) in sent_companies:
-                append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "company_dedup"})
+            if company and normalize_company(company) in contacted_companies:
+                events.emit("job_skipped", platform="liepin", title=title, reason="duplicate", detail="这家公司此前已打过招呼，自动跳过")
+                append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "salary": salary, "location": location, "reason": "company_dedup"})
                 sent_ids.add(job_id)
                 continue
 
             result = await driver.click_chat_and_send(tab, greeting)
             if result == "captcha":
                 _log("[liepin] 🛑 触发风控验证码，立即停止本轮（避免封号）")
-                append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "captcha"})
+                events.emit("captcha_stopped", platform="liepin", title=title)
+                append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "salary": salary, "location": location, "reason": "captcha"})
                 return sent_this_run
             if result == "limit":
                 _log("[liepin] 🛑 平台提示今日打招呼次数已达上限，安全停止本轮（已投 %s 个）", sent_today)
-                append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "platform_limit"})
+                events.emit(
+                    "platform_limit_reached",
+                    platform="liepin",
+                    matched_text="(详情页动作后检出)",
+                    message=f"猎聘提示今日打招呼次数已达上限，已安全停止。本轮已打招呼 {sent_today} 个。",
+                )
+                append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "salary": salary, "location": location, "reason": "platform_limit"})
                 return sent_this_run
             if result == "sent":
                 sent_ids.add(job_id)
                 if company:
-                    sent_companies.add(normalize_company(company))
+                    contacted_companies.add(normalize_company(company))
                 sent_today += 1
                 sent_this_run += 1
                 append_jsonl(SENT_LOG, {
                     "ts": datetime.now().isoformat(),
                     "job_id": job_id, "title": title, "company": company,
+                    "salary": salary, "location": location, "url": href,
                     "sent": True, "keyword": kw,
                 })
-                _log(f"[liepin] ✅ 已打招呼 #{sent_today}：{title} @ {company}")
-                # 拟人化节奏：真实用户投一个岗位至少 1 分钟（看JD、犹豫、打字），
-                # 3 秒一个必触发风控。随机 40~80 秒。
-                await asyncio.sleep(random.uniform(40, 80))
+                events.emit(
+                    "job_sent",
+                    platform="liepin",
+                    title=title,
+                    company=company,
+                    salary=salary,
+                    location=location,
+                    url=href,
+                    sent=sent_today,
+                )
+                _log(f"[liepin] ✅ 已打招呼 #{sent_today}：{title} @ {company} [{salary} | {location}]")
+                # 拟人化节奏：用户在 GUI 设置的分平台档位（钳制进安全区间），
+                # 不再硬编码 40~80s 无视配置
+                delay_min, delay_max = _delay_range()
+                await asyncio.sleep(random.uniform(delay_min, delay_max))
             else:
-                append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": result})
+                events.emit("job_skipped", platform="liepin", title=title, reason="send_failed", detail=result)
+                append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "salary": salary, "location": location, "reason": result})
                 _log(f"[liepin] ⚠️ 跳过（{result}）：{title}")
                 await asyncio.sleep(random.uniform(5, 12))
 
@@ -166,6 +227,13 @@ async def run(keywords: list[str], daily_limit: int, greeting: str) -> int:
         await asyncio.sleep(random.uniform(15, 30))
 
     _log(f"[liepin] 本轮结束：新打招呼 {sent_this_run}，今日累计 {sent_today}")
+    events.emit(
+        "api_flow_finished",
+        platform="liepin",
+        total=sent_this_run,
+        scanned=0,
+        message=f"猎聘本轮结束：新打招呼 {sent_this_run} 个，今日累计 {sent_today} 个。",
+    )
     return sent_this_run
 
 

@@ -57,6 +57,14 @@ export interface UseProfileFormStateReturn {
   setDelayMin: Dispatch<SetStateAction<string>>;
   delayMax: string;
   setDelayMax: Dispatch<SetStateAction<string>>;
+  liepinDelayMin: string;
+  setLiepinDelayMin: Dispatch<SetStateAction<string>>;
+  liepinDelayMax: string;
+  setLiepinDelayMax: Dispatch<SetStateAction<string>>;
+  job51DelayMin: string;
+  setJob51DelayMin: Dispatch<SetStateAction<string>>;
+  job51DelayMax: string;
+  setJob51DelayMax: Dispatch<SetStateAction<string>>;
   maxSent: string;
   setMaxSent: Dispatch<SetStateAction<string>>;
   dailyLimit: string;
@@ -98,6 +106,11 @@ export function useProfileFormState({
   const [filterPolicy, setFilterPolicy] = useState<FilterPolicy>("warning");
   const [delayMin, setDelayMin] = useState("20");
   const [delayMax, setDelayMax] = useState("40");
+  // 分平台拟人化节奏（2026-10-13）：空串 = 未单设，保存时不落盘、运行时回退 delayMin/Max
+  const [liepinDelayMin, setLiepinDelayMin] = useState("");
+  const [liepinDelayMax, setLiepinDelayMax] = useState("");
+  const [job51DelayMin, setJob51DelayMin] = useState("");
+  const [job51DelayMax, setJob51DelayMax] = useState("");
   const [maxSent, setMaxSent] = useState("50");
   const [dailyLimit, setDailyLimit] = useState("80");
   const [stopOnCaptcha, setStopOnCaptcha] = useState(true);
@@ -121,6 +134,11 @@ export function useProfileFormState({
     setGreetingPath((prev) => asString(send.greeting_file, prev));
     setDelayMin((prev) => asString(send.delay_min, prev));
     setDelayMax((prev) => asString(send.delay_max, prev));
+    // 分平台节奏：profile 未单设时显示空串（= 回退 BOSS 通用档）
+    setLiepinDelayMin(send.liepin_delay_min != null ? String(send.liepin_delay_min) : "");
+    setLiepinDelayMax(send.liepin_delay_max != null ? String(send.liepin_delay_max) : "");
+    setJob51DelayMin(send.job51_delay_min != null ? String(send.job51_delay_min) : "");
+    setJob51DelayMax(send.job51_delay_max != null ? String(send.job51_delay_max) : "");
     setMaxSent((prev) => asString(send.max_sent, prev));
     setDailyLimit((prev) => asString(send.daily_sent_limit, prev));
     setStopOnCaptcha((prev) => asBool(send.stop_on_captcha, prev));
@@ -207,6 +225,10 @@ export function useProfileFormState({
         greetingPath,
         delayMin,
         delayMax,
+        liepinDelayMin,
+        liepinDelayMax,
+        job51DelayMin,
+        job51DelayMax,
         maxSent,
         dailyLimit,
         stopOnCaptcha,
@@ -230,6 +252,10 @@ export function useProfileFormState({
       greetingPath,
       delayMin,
       delayMax,
+      liepinDelayMin,
+      liepinDelayMax,
+      job51DelayMin,
+      job51DelayMax,
       maxSent,
       dailyLimit,
       stopOnCaptcha,
@@ -249,6 +275,10 @@ export function useProfileFormState({
     greetingPath,
     delayMin,
     delayMax,
+    liepinDelayMin,
+    liepinDelayMax,
+    job51DelayMin,
+    job51DelayMax,
     maxSent,
     dailyLimit,
     stopOnCaptcha,
@@ -341,6 +371,14 @@ export function useProfileFormState({
     setDelayMin,
     delayMax,
     setDelayMax,
+    liepinDelayMin,
+    setLiepinDelayMin,
+    liepinDelayMax,
+    setLiepinDelayMax,
+    job51DelayMin,
+    setJob51DelayMin,
+    job51DelayMax,
+    setJob51DelayMax,
     maxSent,
     setMaxSent,
     dailyLimit,

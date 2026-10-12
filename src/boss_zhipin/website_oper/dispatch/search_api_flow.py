@@ -15,6 +15,11 @@ from boss_zhipin.website_oper.dispatch.env_config import (
     _auto_send_daily_limit,
     _auto_send_delay_range,
     _auto_send_max_sent,
+    _boss_active_filter_enabled,
+    _filter_rules_without_boss_active,
+    _merge_boss_active_filter,
+    _page_filters,
+    _page_filters_for_click,
     _profile_filters,
     _profile_name,
     _stop_on_captcha_enabled,
@@ -31,6 +36,12 @@ from boss_zhipin.website_oper.dispatch.history_logger import (
 )
 
 log = logging.getLogger(__name__)
+
+# 每城最多翻多少页（2026-10-12 实测：热门城连续翻 15 页触发 wapi 风控
+# code=37；且热门城会吃光风控额度让后续城市全部饿死——违背用户「每个
+# 城市都投到」的核心诉求）。10 页 = 单城 300 岗的投递面，主动停在风控
+# 线之前，翻完即推进下一城。收紧行为（只慢不快），不碰反爬红线。
+BOSS_MAX_PAGES_PER_CITY = 10
 
 _DETAIL_JD_SELECTORS = (
     ".job-sec-text",
@@ -131,6 +142,7 @@ async def _process_single_api_job(
     sent_log_path: Path | None,
     skipped_log_path: Path | None,
     filters: dict[str, Any],
+    boss_active_filter_enabled: bool,
     stop_on_captcha: bool,
     scan_only: bool,
     dry_run: bool,
@@ -151,8 +163,10 @@ async def _process_single_api_job(
     job = job_api.to_job_posting(api_job)
     # 实时巡航监控（2026-10-12 用户需求）：每个岗位开始处理时上报一次，
     # 前端「实时巡航」页的"当前岗位聚光卡"靠它展示正在看哪个岗位、到哪一步。
+    # platform 字段（2026-10-12 三平台并列需求）：前端按平台分通道并列显示。
     events.emit(
         "job_processing",
+        platform="boss",
         title=job.title,
         company=job.company,
         salary=job.salary,
@@ -163,6 +177,7 @@ async def _process_single_api_job(
         # 已投过/扫过的岗位：跳过也要让用户看见（否则浏览器静止像卡死）
         events.emit(
             "job_skipped",
+            platform="boss",
             title=job.title,
             reason="duplicate",
             detail="本地历史记录中已处理过该岗位",
@@ -180,7 +195,13 @@ async def _process_single_api_job(
     # 不再打开详情页（详情页只留给"卡片信息已命中、需进一步核对 JD"的岗位）。
     if _can_prescreen_by_title(filters):
         probe_posting = _to_filter_posting(job, "")
-        probe_match = match_posting(probe_posting, filters)
+        # 活跃状态缺失（wapi 卡既无 activeTimeDesc 也无 bossOnline）时
+        # 优雅降级：跳过活跃限制只按岗位规则判定，绝不因"没数据"误杀
+        # （与 DOM 流 job_evaluator 同一套语义）。
+        probe_filters = filters
+        if boss_active_filter_enabled and not probe_posting.boss_active_status:
+            probe_filters = _filter_rules_without_boss_active(filters)
+        probe_match = match_posting(probe_posting, probe_filters)
         if not probe_match.matched:
             _log_skipped(
                 skipped_log_path,
@@ -196,6 +217,7 @@ async def _process_single_api_job(
             )
             events.emit(
                 "job_skipped",
+                platform="boss",
                 title=job.title,
                 reason="filtered_out",
                 detail=probe_match.reason,
@@ -226,7 +248,12 @@ async def _process_single_api_job(
         job_api.to_job_posting(api_job, description=jd_text), jd_text
     )
     filter_posting = _to_filter_posting(job, jd_text)
-    match = match_posting(filter_posting, filters)
+    # 详情页后的完整匹配同样做缺状态降级（JD 文本里也提取不到活跃
+    # 标签时，不能让活跃规则把岗位一刀切死）。
+    full_filters = filters
+    if boss_active_filter_enabled and not filter_posting.boss_active_status:
+        full_filters = _filter_rules_without_boss_active(filters)
+    match = match_posting(filter_posting, full_filters)
     if not match.matched:
         _log_skipped(
             skipped_log_path,
@@ -242,6 +269,7 @@ async def _process_single_api_job(
         )
         events.emit(
             "job_skipped",
+            platform="boss",
             title=job.title,
             reason="filtered_out",
             detail=match.reason,
@@ -312,6 +340,7 @@ async def _process_single_api_job(
         )
         events.emit(
             "job_sent",
+            platform="boss",
             title=job.title,
             company=job.company,
             sent=sent_count,
@@ -365,7 +394,13 @@ async def _run_search_api_flow(
     seen_jobs_path = _state_path("BOSS_SEEN_JOBS_FILE")
     sent_log_path = _state_path("BOSS_SENT_LOG_FILE")
     skipped_log_path = _state_path("BOSS_SKIPPED_LOG_FILE")
-    filters = _profile_filters()
+    # 活跃窗口（三阶段引擎·机制三 2026-10-13）：把画像 page_filters 里的
+    # BOSS 活跃状态同步成本地 OR 规则（与 DOM 流 loop_config 同一套合并
+    # 逻辑——此前 api 直读流漏了这步，用户在 GUI 配了活跃筛选也不生效）。
+    # 缺状态的岗位由 _process_single_api_job 内做优雅降级（不误杀）。
+    page_filter_cfg = _page_filters()
+    filters = _merge_boss_active_filter(_profile_filters(), page_filter_cfg)
+    boss_active_filter_enabled = _boss_active_filter_enabled(page_filter_cfg)
     stop_on_captcha = _stop_on_captcha_enabled()
     delay_min, delay_max = _auto_send_delay_range()
     max_sent = _auto_send_max_sent()
@@ -406,6 +441,24 @@ async def _run_search_api_flow(
     # 搜索，郑州岗位其实扫过——必须按城市拆开汇报，才能让用户看明白）。
     city_stats: dict[str, dict[str, int]] = {}
     stop_reason = "completed"
+    # 城市随机逐城推进（2026-10-12 用户拍板 + wapi 取证 v3：wapi 只收单城 city，
+    # 多城逗号 code=19）。第 1 城由入口 apply_page_filters 洗牌后直填；这里只管
+    # 当前城自然扫完后推进下一城——每个城市都投到、一个都不饿死。
+    # （page_filter_cfg 已在 filters 构造处读取，这里复用同一份。）
+    city_cfg = page_filter_cfg.get("city") if isinstance(page_filter_cfg, dict) else None
+    # enabled 检查必须与 apply_page_filters 对齐：城市组被禁用时它一个都不会直填，
+    # 这里如果仍算出多城去推进，会在巡航中途把被禁用的城市偷偷加上。
+    all_cities = (
+        [
+            str(v).strip()
+            for v in city_cfg.get("values") or []
+            if str(v).strip()
+        ]
+        if isinstance(city_cfg, dict) and bool(city_cfg.get("enabled", True))
+        else []
+    )
+    total_cities = max(1, len(all_cities))
+    cities_done = 1 if len(all_cities) >= 1 else 0  # 第 1 城（随机）入口已应用
 
     def _record_city(city_name: str, status: str) -> None:
         bucket = city_stats.setdefault(
@@ -456,84 +509,122 @@ async def _run_search_api_flow(
             failed=failed_count,
             stop_reason=stop,
             per_city=per_city,
+            cities_done=cities_done,
+            total_cities=total_cities,
             message=message,
         )
         log.info("[api-flow] 结束（%s）：%s", stop, message)
 
-    while page <= 100:
-        if max_sent is not None and sent_count >= max_sent:
-            stop_reason = "max_sent"
-            break
-        if daily_limit is not None and daily_sent_count >= daily_limit:
-            stop_reason = "daily_limit"
-            break
-        try:
-            api_jobs = await job_api.fetch_search_page(tab, query, page)
-        except RuntimeError as e:
-            log.warning("第 %d 页搜索接口失败，结束：%s", page, e)
-            events.emit("api_flow_error", page=page, message=str(e))
-            stop_reason = "api_error"
-            break
-        if not api_jobs:
-            log.info("第 %d 页没有岗位，搜索结果已全部取完，结束", page)
-            break
-
-        for api_job in api_jobs:
+    # 城市逐城推进外层循环：当前城**自然扫完**→ 推进到洗牌序列的下一城继续投
+    # （每个城市都要投到，用户 2026-10-12 拍板）；风控/限额/验证码/手动停止等
+    # 全局停止条件一律不换城。
+    while True:
+        halt_flow: str | None = None  # "captcha" | "platform_limit"（全局停机）
+        while page <= BOSS_MAX_PAGES_PER_CITY:
             if max_sent is not None and sent_count >= max_sent:
+                stop_reason = "max_sent"
                 break
             if daily_limit is not None and daily_sent_count >= daily_limit:
+                stop_reason = "daily_limit"
+                break
+            try:
+                api_jobs = await job_api.fetch_search_page(tab, query, page)
+            except RuntimeError as e:
+                log.warning("第 %d 页搜索接口失败，结束：%s", page, e)
+                events.emit("api_flow_error", page=page, message=str(e))
+                stop_reason = "api_error"
+                break
+            if not api_jobs:
+                log.info("第 %d 页没有岗位，搜索结果已全部取完", page)
                 break
 
-            status, sent_count, daily_sent_count = await _process_single_api_job(
-                api_job=api_job,
-                seen_job_keys=seen_job_keys,
-                seen_jobs_path=seen_jobs_path,
-                sent_log_path=sent_log_path,
-                skipped_log_path=skipped_log_path,
-                filters=filters,
-                stop_on_captcha=stop_on_captcha,
-                scan_only=scan_only,
-                dry_run=dry_run,
-                greeting=greeting,
-                sent_count=sent_count,
-                daily_sent_count=daily_sent_count,
-                delay_min=delay_min,
-                delay_max=delay_max,
-            )
-            scanned_count += 1
-            _record_city(api_job.city or "未知城市", status)
-            if status == "seen":
-                skipped_duplicates += 1
-            elif status == "filtered":
-                skipped_filtered += 1
-            elif status == "already_contacted":
-                skipped_already += 1
-            elif status == "failed":
-                failed_count += 1
-            if status == "captcha":
-                _emit_flow_summary("captcha")
-                return
-            if status == "platform_limit":
-                events.emit(
-                    "platform_limit_reached",
-                    platform="boss",
-                    matched_text="(详情页动作后检出)",
-                    message="平台提示已达今日投递上限，已安全停止。"
-                    "今天的实际投递数量可在「投递明细记录」中查看。",
-                )
-                _emit_flow_summary("platform_limit")
-                return
+            for api_job in api_jobs:
+                if max_sent is not None and sent_count >= max_sent:
+                    break
+                if daily_limit is not None and daily_sent_count >= daily_limit:
+                    break
 
-        log.info(
-            "[api-flow] 第 %d 页处理完成（本页 %d 个岗位），本轮累计发送 %d",
-            page,
-            len(api_jobs),
-            sent_count,
+                status, sent_count, daily_sent_count = await _process_single_api_job(
+                    api_job=api_job,
+                    seen_job_keys=seen_job_keys,
+                    seen_jobs_path=seen_jobs_path,
+                    sent_log_path=sent_log_path,
+                    skipped_log_path=skipped_log_path,
+                    filters=filters,
+                    boss_active_filter_enabled=boss_active_filter_enabled,
+                    stop_on_captcha=stop_on_captcha,
+                    scan_only=scan_only,
+                    dry_run=dry_run,
+                    greeting=greeting,
+                    sent_count=sent_count,
+                    daily_sent_count=daily_sent_count,
+                    delay_min=delay_min,
+                    delay_max=delay_max,
+                )
+                scanned_count += 1
+                _record_city(api_job.city or "未知城市", status)
+                if status == "seen":
+                    skipped_duplicates += 1
+                elif status == "filtered":
+                    skipped_filtered += 1
+                elif status == "already_contacted":
+                    skipped_already += 1
+                elif status == "failed":
+                    failed_count += 1
+                if status == "captcha":
+                    halt_flow = "captcha"
+                    break
+                if status == "platform_limit":
+                    events.emit(
+                        "platform_limit_reached",
+                        platform="boss",
+                        matched_text="(详情页动作后检出)",
+                        message="平台提示已达今日投递上限，已安全停止。"
+                        "今天的实际投递数量可在「投递明细记录」中查看。",
+                    )
+                    halt_flow = "platform_limit"
+                    break
+
+            if halt_flow:
+                stop_reason = halt_flow
+                break
+
+            log.info(
+                "[api-flow] 第 %d 页处理完成（本页 %d 个岗位），本轮累计发送 %d",
+                page,
+                len(api_jobs),
+                sent_count,
+            )
+            page += 1
+            # 页间节流：秒翻 6 页会触发 BOSS 搜索接口风控（实测 code=37），
+            # 拟人化页间停顿再翻下一页。
+            await asyncio.sleep(2.5)
+
+        # 城市推进判定：只有"自然扫完"才推进下一城
+        if halt_flow:
+            break
+        if stop_reason != "completed" or cities_done >= total_cities:
+            break
+        rotated = await finding_jobs.rotate_next_city_batch(
+            _page_filters_for_click(page_filter_cfg),
+            emit_event=lambda payload: events.emit("page_filter", **payload),
         )
-        page += 1
-        # 页间节流：秒翻 6 页会触发 BOSS 搜索接口风控（实测 code=37），
-        # 拟人化页间停顿再翻下一页。
-        await asyncio.sleep(2.5)
+        if not rotated:
+            log.info("城市推进失败（无下一城或 URL 直填失败），结束")
+            break
+        cities_done += 1
+        page = 1
+        # 城间节流（拟人化，红线：只慢不快）
+        await asyncio.sleep(3)
+        actual_url = finding_jobs.get_current_url()
+        query = job_api.search_query_from_url(actual_url)
+        tab = finding_jobs.get_tab()
+        if tab is None:
+            stop_reason = "api_error"
+            break
+        log.info(
+            "[api-flow] 城市推进 %d/%d 启动，URL=%s", cities_done, total_cities, actual_url
+        )
 
     _emit_flow_summary(stop_reason)
     log.info("[api-flow] 结束：本轮发送 %d 条，翻到第 %d 页", sent_count, page)

@@ -113,14 +113,19 @@ export function useJobBotRuntime({
     prevRunningRef.current = running;
     if (!wasRunning || running) return;
     let ended: ProgressEvent | null = null;
-    let summary: ProgressEvent | null = null;
+    // 收集全部平台的结束汇总（BOSS/猎聘/51job 并发巡航时各发一份），
+    // 统计跨平台聚合；城市明细与人话解释优先用 BOSS 的（只有它带 per_city）。
+    const summaries: ProgressEvent[] = [];
     for (let i = events.length - 1; i >= 0; i -= 1) {
       const ev = events[i];
       if (!ended && ev.kind === "loop_ended") ended = ev;
-      if (!summary && ev.kind === "api_flow_finished") summary = ev;
-      if (ended && summary) break;
+      if (ev.kind === "api_flow_finished") summaries.push(ev);
+      if (ended && summaries.length > 0 && ev.kind === "api_flow_started") break;
     }
     if (!ended) return;
+    const bossSummary =
+      summaries.find((s) => s.payload.platform === "boss") ?? summaries[summaries.length - 1];
+    const summary = summaries.length > 0 ? bossSummary : null;
     const reasonMap: Record<string, string> = {
       completed: "本轮巡航已结束",
       cancelled: "巡航已手动停止",
@@ -134,12 +139,32 @@ export function useJobBotRuntime({
           skipped: number;
         }[])
       : [];
+    // 统计口径：后端权威汇总优先（事件流超 500 条会被截断、前端重数会失真
+    // ——2026-10-12 实测"扫描 0/跳过 249"对不上"扫描 330"），多平台并发时
+    // 把各平台的汇总加总；没有任何汇总的 DOM 流才用前端事件流统计兜底。
+    const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+    const stats =
+      summaries.length > 0
+        ? summaries.reduce(
+            (acc, s) => ({
+              scanned: acc.scanned + num(s.payload.scanned),
+              sent: acc.sent + num(s.payload.total),
+              skipped:
+                acc.skipped +
+                num(s.payload.skipped_duplicates) +
+                num(s.payload.skipped_filtered) +
+                num(s.payload.skipped_already_contacted) +
+                num(s.payload.failed),
+            }),
+            { scanned: 0, sent: 0, skipped: 0 },
+          )
+        : summarizeEvents(events);
     const startedAt = useRunStore.getState().cruiseStartedAt;
     useRunStore.getState().showCruiseEndNotice({
       reason: reasonMap[String(ended.payload.reason || "")] || "巡航已结束",
       message: String(summary?.payload?.message || ""),
       perCity,
-      stats: summarizeEvents(events),
+      stats,
       durationMs: startedAt ? Date.now() - startedAt : null,
       time: ended.ts_local || "",
     });

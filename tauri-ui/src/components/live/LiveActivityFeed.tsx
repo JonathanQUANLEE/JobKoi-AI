@@ -12,6 +12,7 @@ import {
   Filter,
 } from "lucide-react";
 import type { LiveFeedItem, LiveFeedTone } from "../../lib/liveFeed";
+import { PLATFORM_META } from "../../lib/liveFeed";
 
 /** tone → 图标/颜色的映射（黑白玻璃主调，live=绿脉冲信号色，success=琥珀） */
 const TONE_STYLE: Record<LiveFeedTone, { icon: typeof Search; color: string; dot: string }> = {
@@ -101,6 +102,7 @@ export default function LiveActivityFeed({ items, running, isMonochrome }: LiveA
           const style = TONE_STYLE[item.tone];
           const Icon = itemIcon(item);
           const isLive = item.tone === "live" && running;
+          const meta = PLATFORM_META[item.platform];
           return (
             <div key={item.id} className="relative flex items-start gap-3 py-1.5 animate-in fade-in slide-in-from-top-1 zoom-in-95 duration-200">
               {/* 节点圆点（live 态呼吸脉冲） */}
@@ -116,7 +118,18 @@ export default function LiveActivityFeed({ items, running, isMonochrome }: LiveA
                   <div className="min-w-0 flex items-start gap-2">
                     <Icon className={`size-3.5 mt-0.5 shrink-0 ${style.color}`} />
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold text-stone-100 truncate leading-5">{item.title}</p>
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className="text-[8px] font-mono font-bold px-1 py-px rounded"
+                          style={{
+                            color: meta?.color ?? "#00bebd",
+                            backgroundColor: `${meta?.color ?? "#00bebd"}1a`,
+                          }}
+                        >
+                          {meta?.name ?? item.platform}
+                        </span>
+                        <p className="text-xs font-semibold text-stone-100 truncate leading-5">{item.title}</p>
+                      </div>
                       {item.detail && (
                         <p className="text-[11px] text-stone-400 leading-4 mt-0.5 break-words">{item.detail}</p>
                       )}

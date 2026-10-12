@@ -165,8 +165,15 @@ def main() -> int:
         # Tauri.toml 所在目录传给 context_factory 让它在运行时读。
         from pytauri_wheel.lib import builder_factory, context_factory
 
+        # 生产模式必须 tauri_config=None：让 Tauri 读 Tauri.toml 的
+        # frontendDist="./frontend"（相对本目录解析）。2026-10-13 白屏事故：
+        # 曾在此处运行时覆盖 frontendDist 为绝对路径（B:\...\frontend）——
+        # Tauri 2 的 frontendDist 只接受相对路径或 URL，绝对路径导致 WebView
+        # 资源协议解析失败、窗口纯白（前端 bundle 本身经浏览器实测完好）。
         tauri_config: Optional[dict] = (
-            {"build": {"frontendDist": "http://localhost:1420"}} if BOSS_DEV else None
+            {"build": {"frontendDist": "http://localhost:1420"}}
+            if BOSS_DEV
+            else None
         )
         ctx = context_factory(SRC_TAURI_DIR, tauri_config=tauri_config)
 

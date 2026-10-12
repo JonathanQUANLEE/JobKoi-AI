@@ -12,11 +12,16 @@ import sys
 import nodriver as uc
 from nodriver import Config
 
+from boss_zhipin.paths import get_platform_profile_dir
+from boss_zhipin.platforms.browser_lookup import apply_browser_fallback
+
 log = logging.getLogger(__name__)
 
-CHROME_PROFILE_DIR = os.path.abspath(
-    os.environ.get("BOSS_CHROME_PROFILE", "./chrome_profile")
-)
+# Profile 目录单一真相（2026-10-13 打包加固）：env 覆盖 > standalone
+# %APPDATA%（安装目录 UAC 只读，Program Files 装机会炸）> dev 仓库根
+# chrome_profile（历史位置一分不动，红线）。cookie 登录探测
+# （platforms/boss.py）走同一函数，两边永远指向同一个目录。
+CHROME_PROFILE_DIR = str(get_platform_profile_dir("boss"))
 
 RECOMMEND_URL = "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend"
 url = RECOMMEND_URL
@@ -64,6 +69,10 @@ async def shutdown() -> None:
         try:
             from nodriver import cdp
 
+            # 关前刷盘缓冲（2026-10-13 打包加固）：扫码刚成功时 cookie
+            # 可能还在 Chrome 内存里没落盘——先给 1.5s 让内存中的写入
+            # 追上磁盘，再发优雅关闭（关闭后下面另有 2s 余量）。
+            await asyncio.sleep(1.5)
             # 优雅退出：Chrome 收到 Browser.close 会保存所有会话数据再退出。
             # 常见误报：close 已送达、Chrome 正在退出时连接先断 → send 抛
             # ConnectionRefused(1225)——这不代表失败，走下面的兜底判断。
@@ -146,6 +155,8 @@ async def open_browser_with_options(url_target: str, browser: str) -> None:
     config = Config()
     config.user_data_dir = CHROME_PROFILE_DIR
     config.headless = False
+    # 无 Chrome 电脑自愈：自动降级 Edge（Chromium 兼容内核）
+    apply_browser_fallback(config)
     finding_jobs._browser = await _start_browser_with_retry(config)
 
     # 直接在 Chrome 启动自带的初始窗口里导航（不开新窗口）——

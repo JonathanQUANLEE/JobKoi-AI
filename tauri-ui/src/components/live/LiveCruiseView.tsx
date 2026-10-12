@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, MapPin, Banknote, Rocket, Square, Radio, Compass, Clock3, Search, FlagTriangleRight } from "lucide-react";
+import { Activity, MapPin, Banknote, Rocket, Square, Radio, Compass, Clock3, Search, FlagTriangleRight, Check } from "lucide-react";
 import { useRunStore } from "../../store";
-import { summarizeEvents } from "../../lib/dashboardHelpers";
-import { buildLiveFeed, currentProcessingJob, lastCruiseSummary } from "../../lib/liveFeed";
+import { summarizeEvents, summarizeEventsByPlatform } from "../../lib/dashboardHelpers";
+import { buildLiveFeed, currentProcessingJob, lastCruiseSummary, PLATFORM_META } from "../../lib/liveFeed";
+import { ipc } from "../../lib/ipc";
 import { AnimatedNumber } from "../core/animated-number";
 import LiveActivityFeed from "./LiveActivityFeed";
 
@@ -10,17 +11,40 @@ interface LiveCruiseViewProps {
   onStartRun: () => void;
   onStopRun: () => Promise<void>;
   busy?: boolean;
-  /** 每日投递上限（进度条口径，来自画像表单） */
-  dailyLimit: string;
 }
 
-/** 四平台实时通道：BOSS 已打通，其余三个预留（用户 2026-10-12 拍板：必须留位）。 */
+/** 四平台实时通道：BOSS/猎聘/51job 已接入事件流，智联留位（2026-10-12 打通三平台）。 */
 const PLATFORM_CHANNELS = [
-  { id: "boss", name: "BOSS 直聘", live: true, desc: "点击「立即沟通」链路已打通，实时动态如下" },
-  { id: "liepin", name: "猎聘", live: false, desc: "「聊一聊 + 固定招呼语」链路即将接入——接入后这里将实时展示每个岗位的沟通动态" },
-  { id: "job51", name: "前程无忧", live: false, desc: "「一键投递简历」链路即将接入——接入后这里将实时展示每个岗位的投递动态" },
+  { id: "boss", name: "BOSS 直聘", live: true, desc: "点击「立即沟通」链路，动态实时直播" },
+  { id: "liepin", name: "猎聘", live: true, desc: "「聊一聊 + 固定招呼语」链路，动态实时直播" },
+  { id: "job51", name: "前程无忧", live: true, desc: "「一键投递简历」链路，动态实时直播" },
   { id: "zhaopin", name: "智联招聘", live: false, desc: "平台适配筹备中——上线后与其他平台共享同一块实时动态时间轴" },
 ] as const;
+
+/** 平台日限额兜底（list_platforms 拉取失败时用；与后端 DEFAULT_DAILY_LIMITS 一致）。 */
+const FALLBACK_DAILY_LIMITS: Record<string, number> = {
+  boss: 150,
+  liepin: 100,
+  job51: 40,
+};
+
+/** 实时通道勾选持久化 key（勾选的平台在时间轴里并列直播）。 */
+const LIVE_CHANNELS_KEY = "jobhunter_live_channels";
+const DEFAULT_CHANNELS = ["boss", "liepin", "job51"];
+
+function loadChannels(): string[] {
+  try {
+    const raw = localStorage.getItem(LIVE_CHANNELS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const valid = parsed.filter((c) => typeof c === "string" && DEFAULT_CHANNELS.includes(c));
+        if (valid.length > 0) return valid;
+      }
+    }
+  } catch {}
+  return [...DEFAULT_CHANNELS];
+}
 
 /** 运行时长格式化：秒级跳动（mm:ss / hh:mm:ss）。 */
 function formatElapsed(ms: number): string {
@@ -32,13 +56,32 @@ function formatElapsed(ms: number): string {
   return h > 0 ? `${pad(h)}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
 }
 
-export default function LiveCruiseView({ onStartRun, onStopRun, busy = false, dailyLimit }: LiveCruiseViewProps) {
+export default function LiveCruiseView({ onStartRun, onStopRun, busy = false }: LiveCruiseViewProps) {
   const running = useRunStore((s) => s.running);
   const events = useRunStore((s) => s.events);
   const isMonochrome = useRunStore((s) => s.theme === "monochrome");
   const cruiseStartedAt = useRunStore((s) => s.cruiseStartedAt);
-  const [channel, setChannel] = useState<(typeof PLATFORM_CHANNELS)[number]["id"]>("boss");
+  // 勾选的平台通道（并列直播）：localStorage 持久化，默认三平台全开
+  const [channels, setChannels] = useState<string[]>(loadChannels);
+  // 平台日限额（后端 list_platforms 的 daily_limit；失败用兜底常量）。
+  // 2026-10-13 修正：旧版顶部写死画像表单的 dailyLimit（BOSS 的 150）当
+  // 全局上限——跑猎聘/51job 时口径错误；限额是平台属性，分平台显示。
+  const [platformLimits, setPlatformLimits] = useState<Record<string, number>>({});
   const [, forceTick] = useState(0);
+
+  // 拉一次各平台日限额（BOSS 150 / 猎聘 100 / 51job 40 的单一来源在后端）
+  useEffect(() => {
+    ipc
+      .listPlatforms()
+      .then((res) => {
+        const m: Record<string, number> = {};
+        for (const p of res.platforms ?? []) {
+          if (p.daily_limit) m[p.id] = p.daily_limit;
+        }
+        setPlatformLimits(m);
+      })
+      .catch(() => {});
+  }, []);
 
   // 运行中每秒跳动（时长计时器）
   useEffect(() => {
@@ -47,13 +90,26 @@ export default function LiveCruiseView({ onStartRun, onStopRun, busy = false, da
     return () => clearInterval(timer);
   }, [running]);
 
-  const feed = useMemo(() => buildLiveFeed(events), [events]);
+  const toggleChannel = (id: string) => {
+    // 至少保留一个通道（全取消会把时间轴清空）
+    const next = channels.includes(id)
+      ? channels.filter((c) => c !== id)
+      : [...channels, id];
+    if (next.length === 0) return;
+    setChannels(next);
+    try {
+      localStorage.setItem(LIVE_CHANNELS_KEY, JSON.stringify(next));
+    } catch {}
+  };
+
+  const feed = useMemo(() => buildLiveFeed(events, 200, channels), [events, channels]);
   const spotlight = useMemo(() => currentProcessingJob(events), [events]);
   const cruiseSummary = useMemo(() => lastCruiseSummary(events), [events]);
   const stats = useMemo(() => summarizeEvents(events), [events]);
-  const limitNum = Number(dailyLimit) || 80;
+  const perPlatform = useMemo(() => summarizeEventsByPlatform(events), [events]);
   const elapsed = cruiseStartedAt ? Date.now() - cruiseStartedAt : null;
-  const activeChannel = PLATFORM_CHANNELS.find((c) => c.id === channel)!;
+  /** 平台日限额（分平台显示在通道卡上；list_platforms 失败时用兜底常量） */
+  const limitOf = (id: string) => platformLimits[id] ?? FALLBACK_DAILY_LIMITS[id] ?? 0;
 
   return (
     <div className="w-full flex-1 min-h-0 flex flex-col gap-3.5 animate-in fade-in duration-200">
@@ -101,14 +157,6 @@ export default function LiveCruiseView({ onStartRun, onStopRun, busy = false, da
         </div>
 
         <div className="flex items-center gap-2.5">
-          {/* 本轮进度：已投 X / 上限 */}
-          <div className="hidden md:flex flex-col items-end mr-1">
-            <span className="text-[10px] text-stone-500">本轮已投 / 上限</span>
-            <span className="font-mono text-sm font-bold text-white">
-              {stats.sent}
-              <span className="text-stone-500 font-normal"> / {limitNum}</span>
-            </span>
-          </div>
           {running ? (
             <button
               type="button"
@@ -250,6 +298,16 @@ export default function LiveCruiseView({ onStartRun, onStopRun, busy = false, da
             </div>
             {spotlight ? (
               <div className="pt-3 space-y-2">
+                <span
+                  className="inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded-full border font-bold"
+                  style={{
+                    color: PLATFORM_META[spotlight.platform]?.color ?? "#00bebd",
+                    borderColor: `${PLATFORM_META[spotlight.platform]?.color ?? "#00bebd"}55`,
+                    backgroundColor: `${PLATFORM_META[spotlight.platform]?.color ?? "#00bebd"}14`,
+                  }}
+                >
+                  {PLATFORM_META[spotlight.platform]?.name ?? spotlight.platform} 正在处理
+                </span>
                 <p className="text-sm font-bold text-white leading-5 line-clamp-2">{spotlight.title || "（岗位名解析中）"}</p>
                 <div className="space-y-1.5 text-[11px] text-stone-400">
                   {spotlight.company && (
@@ -271,7 +329,7 @@ export default function LiveCruiseView({ onStartRun, onStopRun, busy = false, da
             )}
           </div>
 
-          {/* 平台通道（四平台 Tab：BOSS 实时 + 三平台预留），撑满右栏剩余高度 */}
+          {/* 平台实时通道（多选勾选：勾上的平台在左侧时间轴并列直播），撑满右栏 */}
           <div
             className={`flex-1 min-h-0 flex flex-col rounded-2xl border backdrop-blur-xl p-4 ${
               isMonochrome ? "bg-zinc-950/70 border-white/10" : "bg-stone-900/40 border-white/10"
@@ -280,32 +338,69 @@ export default function LiveCruiseView({ onStartRun, onStopRun, busy = false, da
             <div className="flex items-center gap-2 pb-2.5 border-b border-white/8">
               <Radio className="size-3.5 text-amber-300" />
               <h4 className="text-xs font-bold text-white">平台实时通道</h4>
+              <span className="ml-auto text-[9px] text-stone-500">点击卡片勾选/取消，勾选平台并列直播</span>
             </div>
             <div className="grid grid-cols-2 gap-2 pt-3">
-              {PLATFORM_CHANNELS.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setChannel(c.id)}
-                  className={`px-3 py-2 rounded-xl border text-left transition-all cursor-pointer ${
-                    channel === c.id
-                      ? "border-amber-500/50 bg-amber-500/10"
-                      : "border-white/8 bg-white/[0.02] hover:bg-white/[0.05]"
-                  } ${c.live ? "" : "opacity-70"}`}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={`size-1.5 rounded-full ${
-                        c.live ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]" : "bg-stone-600"
-                      }`}
-                    />
-                    <span className="text-[11px] font-bold text-stone-100">{c.name}</span>
-                    {!c.live && <span className="text-[8px] text-stone-500">预留</span>}
-                  </div>
-                </button>
-              ))}
+              {PLATFORM_CHANNELS.map((c) => {
+                const meta = PLATFORM_META[c.id];
+                const checked = channels.includes(c.id) && c.live;
+                const p = perPlatform[c.id] ?? { scanned: 0, sent: 0, skipped: 0 };
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => c.live && toggleChannel(c.id)}
+                    className={`relative px-3 py-2 rounded-xl border text-left transition-all ${
+                      c.live ? "cursor-pointer" : "cursor-default opacity-60"
+                    } ${
+                      checked
+                        ? "bg-white/[0.06]"
+                        : "bg-white/[0.02] hover:bg-white/[0.04] border-white/8"
+                    }`}
+                    style={checked && meta ? { borderColor: `${meta.color}88`, boxShadow: `0 0 14px ${meta.color}22` } : undefined}
+                    title={c.desc}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      {c.live && (
+                        <span
+                          className={`grid place-items-center size-3.5 rounded border shrink-0 transition-colors ${
+                            checked ? "border-transparent" : "border-white/25"
+                          }`}
+                          style={checked && meta ? { backgroundColor: meta.color } : undefined}
+                        >
+                          {checked && <Check className="size-2.5 text-stone-950" strokeWidth={4} />}
+                        </span>
+                      )}
+                      <span
+                        className={`size-1.5 rounded-full shrink-0 ${
+                          c.live && running && p.scanned > 0
+                            ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse"
+                            : c.live
+                              ? "bg-emerald-400/70"
+                              : "bg-stone-600"
+                        }`}
+                      />
+                      <span className="text-[11px] font-bold text-stone-100 truncate">{c.name}</span>
+                      {!c.live && <span className="text-[8px] text-stone-500">预留</span>}
+                    </div>
+                    {c.live && (
+                      <div className="mt-1 text-[9px] font-mono text-stone-500">
+                        已投{" "}
+                        <span style={{ color: meta?.color ?? "#00bebd" }} className="font-bold">
+                          {p.sent}
+                        </span>{" "}
+                        / 限额 {limitOf(c.id)} · 扫{" "}
+                        <span className="text-stone-300">{p.scanned}</span> · 跳 {p.skipped}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
-            <p className="pt-3 text-[10px] text-stone-500 leading-relaxed">{activeChannel.desc}</p>
+            <p className="pt-3 text-[10px] text-stone-500 leading-relaxed">
+              三平台链路已打通：启动巡航时在「招聘平台中心」勾选要跑的平台（可多选），
+              各平台的每个动作都会并列出现在左侧实时动态里。
+            </p>
           </div>
         </div>
       </div>

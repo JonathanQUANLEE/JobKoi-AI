@@ -48,6 +48,22 @@ def apply_profile_to_env(
     )
     set_env_if_present("BOSS_AUTO_RESUME_ON_REPLY", send_config, "auto_send_resume_on_reply")
     set_env_if_present("BOSS_AI_GREETING", send_config, "ai_greeting")
+    # 分平台拟人化节奏（2026-10-13 用户拍板：每平台独立三档）：profile 可为
+    # 猎聘/51job 单独设 liepin_delay_min/max、job51_delay_min/max；未单设时
+    # 回退到 delay_min/max（与 BOSS 同值）——三个平台全部尊重用户设置，
+    # 不再有硬编码 40~80s 无视配置的旧实现。
+    set_env_if_present(
+        "LIEPIN_DELAY_MIN", send_config, "liepin_delay_min", fallback_key="delay_min"
+    )
+    set_env_if_present(
+        "LIEPIN_DELAY_MAX", send_config, "liepin_delay_max", fallback_key="delay_max"
+    )
+    set_env_if_present(
+        "JOB51_DELAY_MIN", send_config, "job51_delay_min", fallback_key="delay_min"
+    )
+    set_env_if_present(
+        "JOB51_DELAY_MAX", send_config, "job51_delay_max", fallback_key="delay_max"
+    )
     if isinstance(profile_data.get("filters"), dict):
         os.environ["BOSS_PROFILE_FILTERS_JSON"] = json.dumps(
             profile_data["filters"],
@@ -104,9 +120,18 @@ def clear_profile_mode_env() -> None:
         os.environ.pop(name, None)
 
 
-def set_env_if_present(env_name: str, config: dict[str, Any], key: str) -> None:
+def set_env_if_present(
+    env_name: str,
+    config: dict[str, Any],
+    key: str,
+    fallback_key: str | None = None,
+) -> None:
+    """config[key] 有值则写入 env；否则尝试 fallback_key（分平台字段缺省时
+    回退到通用字段，如 liepin_delay_min → delay_min）。"""
     if key in config and config[key] is not None:
         os.environ[env_name] = str(config[key])
+    elif fallback_key and fallback_key in config and config[fallback_key] is not None:
+        os.environ[env_name] = str(config[fallback_key])
 
 
 def set_path_env_if_present(

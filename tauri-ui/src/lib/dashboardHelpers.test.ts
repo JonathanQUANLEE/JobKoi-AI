@@ -8,7 +8,18 @@ vi.mock("./ipc", () => ({
 }));
 
 import { ipc } from "./ipc";
-import { stableStringify, hasUnsavedProfileChanges, FALLBACK_GREETING_TEXT } from "./dashboardHelpers";
+import {
+  stableStringify,
+  hasUnsavedProfileChanges,
+  FALLBACK_GREETING_TEXT,
+  summarizeEvents,
+  summarizeEventsByPlatform,
+} from "./dashboardHelpers";
+import type { ProgressEvent } from "./ipc";
+
+function ev(kind: ProgressEvent["kind"], payload: Record<string, unknown> = {}): ProgressEvent {
+  return { kind, payload, ts_local: "2026-10-12 14:00:00" };
+}
 
 const mockedGetProfile = vi.mocked(ipc.getProfile);
 const mockedGetGreeting = vi.mocked(ipc.getGreeting);
@@ -35,6 +46,37 @@ beforeEach(() => {
   mockedGetGreeting.mockReset();
   mockedGetProfile.mockResolvedValue({ name: "gui-default", path: "", data: DISK_PROFILE });
   mockedGetGreeting.mockResolvedValue({ path: "./greetings/default.txt", text: "" });
+});
+
+describe("summarizeEvents / summarizeEventsByPlatform — 事件统计", () => {
+  it("API 直读流的 job_processing 计入 scanned、job_sent 计入 sent（修『扫描 0』事故）", () => {
+    const events = [
+      ev("job_processing", { platform: "boss", title: "A" }),
+      ev("job_skipped", { platform: "boss", title: "A", reason: "duplicate" }),
+      ev("job_sent", { platform: "boss", title: "B", sent: 1 }),
+      // DOM 流事件同样兼容
+      ev("job_found", { platform: "boss", title: "C" }),
+      ev("letter_sent", { platform: "boss", status: "sent" }),
+    ];
+    const stats = summarizeEvents(events);
+    expect(stats).toEqual({ scanned: 2, sent: 2, skipped: 1 });
+  });
+
+  it("按平台拆分计数（三平台并列通道卡数据源）；缺省 platform 归 boss", () => {
+    const events = [
+      ev("job_processing", { platform: "boss", title: "A" }),
+      ev("job_sent", { platform: "boss", title: "A", sent: 1 }),
+      ev("job_skipped", { platform: "liepin", title: "L", reason: "duplicate" }),
+      ev("job_sent", { platform: "liepin", title: "L2", sent: 1 }),
+      ev("job_sent", { platform: "job51", title: "J", sent: 1 }),
+      ev("job_processing", { title: "旧事件无平台字段" }), // 兼容历史事件 → boss
+    ];
+    const byPlatform = summarizeEventsByPlatform(events);
+    expect(byPlatform.boss).toEqual({ scanned: 2, sent: 1, skipped: 0 });
+    expect(byPlatform.liepin).toEqual({ scanned: 0, sent: 1, skipped: 1 });
+    expect(byPlatform.job51).toEqual({ scanned: 0, sent: 1, skipped: 0 });
+    expect(summarizeEventsByPlatform([])).toEqual({});
+  });
 });
 
 describe("stableStringify", () => {

@@ -21,6 +21,7 @@ if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
 from job51 import driver  # noqa: E402
+from boss_zhipin.gui import events  # noqa: E402
 from boss_zhipin.platforms.ledger import (  # noqa: E402
     append_jsonl,
     normalize_company,
@@ -87,24 +88,34 @@ def _log(msg: str) -> None:
     print(msg, flush=True)
 
 
-async def _dismiss_confirm_dialog(tab) -> bool:
-    """点投递后可能弹"确认投递/选择简历"弹窗，尝试点确认。"""
-    for text in ("确认", "确定", "立即投递", "投递", "提交"):
-        try:
-            el = await tab.find(text, best_match=True, timeout=3)
-            if el:
-                await el.click()
-                await asyncio.sleep(1)
-                return True
-        except Exception:  # noqa: BLE001
-            continue
-    return False
+def _delay_range() -> tuple[float, float]:
+    """拟人化投递间隔（秒）：读用户设置 JOB51_DELAY_MIN/MAX（profile 分
+    平台三档桥接而来），缺省标准档 20-40；运行时钳制进安全区间 [15,45]
+    （platforms/limits.py）。
+
+    2026-10-13 修复：旧实现硬编码 40~80s 完全无视用户在 GUI 设置的节奏
+    档位（与猎聘同款事故）。
+    """
+    from boss_zhipin.platforms.limits import (
+        JOB51_DELAY_RANGE_SECONDS,
+        clamp_delay_range,
+    )
+
+    try:
+        value_min = float(os.environ.get("JOB51_DELAY_MIN", "20"))
+        value_max = float(os.environ.get("JOB51_DELAY_MAX", "40"))
+    except ValueError:
+        value_min, value_max = 20.0, 40.0
+    return clamp_delay_range(value_min, value_max, JOB51_DELAY_RANGE_SECONDS)
 
 
 async def run(keywords: list[str], daily_limit: int, tab=None) -> int:
     sent_ids = sent_job_ids(SENT_LOG)
-    sent_companies = sent_companies(SENT_LOG)
-    _log(f"[job51] 已投 {len(sent_ids)} 个岗位 / {len(sent_companies)} 家公司（将跳过）")
+    # 局部集合必须改名：曾用 sent_companies 同名遮蔽导入的 ledger 函数，
+    # Python 把整个函数作用域内的 sent_companies 当局部变量 → 首行
+    # UnboundLocalError，51job 链会当场崩（与猎聘 2026-10-12 同款事故）。
+    contacted_companies = sent_companies(SENT_LOG)
+    _log(f"[job51] 已投 {len(sent_ids)} 个岗位 / {len(contacted_companies)} 家公司（将跳过）")
 
     if tab is None:
         tab = await driver.open_browser(driver.SEARCH_TMPL.format(kw="AI Agent"))
@@ -132,53 +143,97 @@ async def run(keywords: list[str], daily_limit: int, tab=None) -> int:
                 job_id = card.get("jobId") or ""
                 title = card.get("title") or ""
                 company = card.get("company") or ""
+                salary = card.get("salary") or ""
+                location = card.get("location") or ""
+                url = card.get("href") or (f"https://jobs.51job.com/{job_id}.html" if job_id else "")
                 job_label = card.get("jobLabel") or ""
                 applied = card.get("applied") or False
 
                 if not job_id:
                     continue
                 if job_id in sent_ids or applied:
+                    events.emit("job_skipped", platform="job51", title=title, reason="duplicate", detail="该岗位此前已投递过，自动跳过")
                     continue
                 # 校招岗（jobLabel="校招"）会跳转应届生求职网，跳过
                 if job_label == "校招":
-                    append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "campus_skip"})
+                    events.emit("job_skipped", platform="job51", title=title, reason="filtered_out", detail="校招岗会跳转应届生求职网，无法投递")
+                    append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "salary": salary, "location": location, "reason": "campus_skip"})
                     continue
                 # 放宽：不再限定"实习"，只要计算机相关岗位即投
                 if not _is_computer_title(title):
-                    append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "not_computer"})
+                    events.emit("job_skipped", platform="job51", title=title, reason="filtered_out", detail="非计算机相关岗位，自动跳过")
+                    append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "salary": salary, "location": location, "reason": "not_computer"})
                     continue
-                if company and normalize_company(company) in sent_companies:
-                    append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "reason": "company_dedup"})
+                if company and normalize_company(company) in contacted_companies:
+                    events.emit("job_skipped", platform="job51", title=title, reason="duplicate", detail="这家公司此前已投递过，自动跳过")
+                    append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "salary": salary, "location": location, "reason": "company_dedup"})
                     continue
 
+                # 实时巡航监控（三平台并列需求）：正在处理该岗位
+                events.emit(
+                    "job_processing",
+                    platform="job51",
+                    title=title,
+                    company=company,
+                    salary=salary,
+                    location=location,
+                    url=url,
+                )
                 result = await driver.apply_by_jobid(tab, job_id)
                 if result.get("captcha"):
                     _log("[job51] 🛑 触发风控验证码，立即停止本轮（避免封号）")
+                    events.emit("captcha_stopped", platform="job51", title=title)
                     return sent_this_run
                 if not result.get("clicked"):
                     continue
 
-                # 点投递后可能弹确认框；同时检查平台今日限额提示（动作点检测）
+                # 点投递后可能弹：确认弹窗（选择简历）或"投递成功"大弹窗。
+                # 2026-10-13 用户实测：成功弹窗（带微信二维码）不关掉就投不了
+                # 下一个——两个都处理，且都在弹层内精确匹配（旧的全页文本
+                # find 会误点其他岗位卡的"投递"按钮，且最坏等 15s）。
                 await asyncio.sleep(2)
+                await driver.dismiss_confirm_dialog(tab)
                 if await driver.check_limit_alert(tab):
                     _log(f"[job51] 🛑 平台提示今日投递次数已达上限，安全停止本轮（已投 {sent_today} 个）")
+                    events.emit(
+                        "platform_limit_reached",
+                        platform="job51",
+                        matched_text="(投递按钮点击后检出)",
+                        message=f"前程无忧提示今日投递次数已达上限，已安全停止。本轮已投递 {sent_today} 个。",
+                    )
                     return sent_this_run
-                await _dismiss_confirm_dialog(tab)
+                # 成功弹窗可能还在渲染，没关掉就等 1s 再试一次
+                if await driver.dismiss_success_dialog(tab) == "none":
+                    await asyncio.sleep(1)
+                    await driver.dismiss_success_dialog(tab)
                 await asyncio.sleep(1)
 
                 sent_ids.add(job_id)
                 if company:
-                    sent_companies.add(normalize_company(company))
+                    contacted_companies.add(normalize_company(company))
                 sent_today += 1
                 sent_this_run += 1
                 append_jsonl(SENT_LOG, {
                     "ts": datetime.now().isoformat(),
                     "job_id": job_id, "title": title, "company": company,
+                    "salary": salary, "location": location, "url": url,
                     "sent": True, "keyword": kw,
                 })
-                _log(f"[job51] ✅ 已投递 #{sent_today}：{title} @ {company}")
-                # 拟人化节奏（51job 风控敏感，跟猎聘一样 40~80 秒）
-                await asyncio.sleep(random.uniform(40, 80))
+                events.emit(
+                    "job_sent",
+                    platform="job51",
+                    title=title,
+                    company=company,
+                    salary=salary,
+                    location=location,
+                    url=url,
+                    sent=sent_today,
+                )
+                _log(f"[job51] ✅ 已投递 #{sent_today}：{title} @ {company} [{salary} | {location}]")
+                # 拟人化节奏：用户在 GUI 设置的分平台档位（钳制进安全区间），
+                # 不再硬编码 40~80s 无视配置
+                delay_min, delay_max = _delay_range()
+                await asyncio.sleep(random.uniform(delay_min, delay_max))
 
             if sent_today >= daily_limit:
                 break
@@ -190,6 +245,13 @@ async def run(keywords: list[str], daily_limit: int, tab=None) -> int:
         await asyncio.sleep(random.uniform(15, 30))
 
     _log(f"[job51] 本轮结束：新投递 {sent_this_run}，今日累计 {sent_today}")
+    events.emit(
+        "api_flow_finished",
+        platform="job51",
+        total=sent_this_run,
+        scanned=0,
+        message=f"前程无忧本轮结束：新投递 {sent_this_run} 个，今日累计 {sent_today} 个。",
+    )
     return sent_this_run
 
 

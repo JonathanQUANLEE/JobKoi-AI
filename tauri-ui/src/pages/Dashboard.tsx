@@ -382,7 +382,6 @@ export default function Dashboard() {
               }}
               onStopRun={botRuntime.stopRun}
               busy={busy}
-              dailyLimit={profileForm.dailyLimit}
             />
           )}
         </main>

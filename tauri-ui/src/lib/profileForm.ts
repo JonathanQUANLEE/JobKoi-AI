@@ -1,5 +1,5 @@
 export type Mode = "scan" | "review" | "auto";
-export type MatchMode = "contains" | "regex" | "exact";
+export type MatchMode = "contains" | "regex" | "exact" | "smart";
 export type Scope = "title" | "description" | "title_description" | "location" | "all";
 export type FilterPolicy = "warning" | "strict";
 
@@ -27,6 +27,11 @@ export type ProfileFormValues = {
   greetingPath: string;
   delayMin: string;
   delayMax: string;
+  /** 分平台拟人化节奏（2026-10-13 用户拍板：每平台独立三档）。空串 = 未单设，运行时回退 delayMin/Max。 */
+  liepinDelayMin: string;
+  liepinDelayMax: string;
+  job51DelayMin: string;
+  job51DelayMax: string;
   maxSent: string;
   dailyLimit: string;
   stopOnCaptcha: boolean;
@@ -69,6 +74,10 @@ export type BuiltProfileData = {
     greeting_file: string;
     delay_min: number;
     delay_max: number;
+    liepin_delay_min?: number;
+    liepin_delay_max?: number;
+    job51_delay_min?: number;
+    job51_delay_max?: number;
     max_sent: number;
     daily_sent_limit: number;
     stop_on_captcha: boolean;
@@ -122,6 +131,11 @@ export function buildProfileData(values: ProfileFormValues): BuiltProfileData {
       greeting_file: values.greetingPath.trim() || "./greetings/default.txt",
       delay_min: clampDelayOrDefault(values.delayMin, 20),
       delay_max: clampDelayOrDefault(values.delayMax, 40),
+      // 分平台节奏（可选字段：空串不落盘 → 后端回退 delay_min/max）
+      ...(values.liepinDelayMin.trim() ? { liepin_delay_min: clampDelayOrDefault(values.liepinDelayMin, 20) } : {}),
+      ...(values.liepinDelayMax.trim() ? { liepin_delay_max: clampDelayOrDefault(values.liepinDelayMax, 40) } : {}),
+      ...(values.job51DelayMin.trim() ? { job51_delay_min: clampDelayOrDefault(values.job51DelayMin, 20) } : {}),
+      ...(values.job51DelayMax.trim() ? { job51_delay_max: clampDelayOrDefault(values.job51DelayMax, 40) } : {}),
       max_sent: numberOrDefault(values.maxSent, 50),
       daily_sent_limit: numberOrDefault(values.dailyLimit, 80),
       stop_on_captcha: values.stopOnCaptcha,

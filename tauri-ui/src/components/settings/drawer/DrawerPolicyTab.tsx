@@ -1,10 +1,20 @@
 import { useT } from "../../../store";
+import { DELAY_PRESETS, isPresetActive, isFollowGeneric } from "../../../lib/platformDelays";
 
 interface DrawerPolicyTabProps {
   delayMin: string;
   setDelayMin: (v: string) => void;
   delayMax: string;
   setDelayMax: (v: string) => void;
+  /** 分平台拟人化节奏（2026-10-13）：空串 = 跟随通用档（delayMin/Max）。 */
+  liepinDelayMin: string;
+  setLiepinDelayMin: (v: string) => void;
+  liepinDelayMax: string;
+  setLiepinDelayMax: (v: string) => void;
+  job51DelayMin: string;
+  setJob51DelayMin: (v: string) => void;
+  job51DelayMax: string;
+  setJob51DelayMax: (v: string) => void;
   maxSent: string;
   setMaxSent: (v: string) => void;
   dailyLimit: string;
@@ -17,19 +27,56 @@ interface DrawerPolicyTabProps {
   setAutoResumeOnReply: (v: boolean) => void;
 }
 
-/** 拟人化节流三档预设（2026-10-12 用户拍板；区间 [15,45]s 依据风控调研，
- *  与后端 platforms/limits.py 的 BOSS_DELAY_RANGE_SECONDS 单一来源一致）。 */
-const DELAY_PRESETS: { key: string; descKey: string; min: string; max: string }[] = [
-  { key: "policy.preset.fast", descKey: "policy.preset.fastDesc", min: "15", max: "30" },
-  { key: "policy.preset.standard", descKey: "policy.preset.standardDesc", min: "20", max: "40" },
-  { key: "policy.preset.safe", descKey: "policy.preset.safeDesc", min: "30", max: "45" },
-];
+/** 单个平台的预设按钮（抽屉琥珀主题）。 */
+function PresetButton({
+  label,
+  desc,
+  range,
+  active,
+  onClick,
+}: {
+  label: string;
+  desc: string;
+  range: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl border p-3 text-left transition-colors cursor-pointer ${
+        active
+          ? "border-amber-500/60 bg-amber-500/10"
+          : "border-[var(--grid)] bg-[var(--paper)] hover:border-amber-500/40"
+      }`}
+    >
+      <div
+        className={`flex items-baseline justify-between ${
+          active ? "text-amber-300" : "text-stone-200"
+        }`}
+      >
+        <span className="text-sm font-bold">{label}</span>
+        <span className="text-sm font-semibold tabular-nums">{range}</span>
+      </div>
+      <p className="mt-1 text-[11px] leading-snug text-stone-400">{desc}</p>
+    </button>
+  );
+}
 
 export default function DrawerPolicyTab({
   delayMin,
   setDelayMin,
   delayMax,
   setDelayMax,
+  liepinDelayMin,
+  setLiepinDelayMin,
+  liepinDelayMax,
+  setLiepinDelayMax,
+  job51DelayMin,
+  setJob51DelayMin,
+  job51DelayMax,
+  setJob51DelayMax,
   maxSent,
   setMaxSent,
   dailyLimit,
@@ -46,42 +93,122 @@ export default function DrawerPolicyTab({
   return (
     <div className="space-y-5">
       <div className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-4 space-y-4">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400">防封禁拟人延时设定</h3>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {DELAY_PRESETS.map((preset) => {
-            const active = delayMin === preset.min && delayMax === preset.max;
-            return (
-              <button
+        <div>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400">
+            防封禁拟人延时设定 · 分平台独立三档
+          </h3>
+          <p className="mt-1 text-[11px] text-stone-500">
+            {t("policy.delayCurrent", { min: delayMin, max: delayMax })}
+          </p>
+        </div>
+
+        {/* BOSS 直聘（通用档：猎聘/前程无忧未单设时也回退到这里） */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-[#00bebd] flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-[#00bebd]" />
+              {t("policy.delay.boss")}
+            </span>
+            <span className="text-[11px] text-stone-400 font-mono tabular-nums">
+              {delayMin}~{delayMax}s
+            </span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {DELAY_PRESETS.map((preset) => (
+              <PresetButton
                 key={preset.key}
-                type="button"
+                label={t(preset.key)}
+                desc={t(preset.descKey)}
+                range={`${preset.min}–${preset.max}s`}
+                active={isPresetActive(delayMin, delayMax, preset)}
                 onClick={() => {
                   setDelayMin(preset.min);
                   setDelayMax(preset.max);
                 }}
-                className={`rounded-xl border p-3 text-left transition-colors cursor-pointer ${
-                  active
-                    ? "border-amber-500/60 bg-amber-500/10"
-                    : "border-[var(--grid)] bg-[var(--paper)] hover:border-amber-500/40"
-                }`}
-              >
-                <div
-                  className={`flex items-baseline justify-between ${
-                    active ? "text-amber-300" : "text-stone-200"
-                  }`}
-                >
-                  <span className="text-sm font-bold">{t(preset.key)}</span>
-                  <span className="text-sm font-semibold tabular-nums">
-                    {preset.min}–{preset.max}s
-                  </span>
-                </div>
-                <p className="mt-1 text-[11px] leading-snug text-stone-400">{t(preset.descKey)}</p>
-              </button>
-            );
-          })}
+              />
+            ))}
+          </div>
         </div>
-        <p className="text-[11px] text-stone-500">
-          {t("policy.delayCurrent", { min: delayMin, max: delayMax })}
-        </p>
+
+        {/* 猎聘：跟随通用 + 三档 */}
+        <div className="space-y-2 pt-3 border-t border-[var(--grid)]">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-[#ff7033] flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-[#ff7033]" />
+              {t("policy.delay.liepin")}
+            </span>
+            <span className="text-[11px] text-stone-400 font-mono tabular-nums">
+              {isFollowGeneric(liepinDelayMin, liepinDelayMax)
+                ? `${delayMin}~${delayMax}s（跟随通用）`
+                : `${liepinDelayMin}~${liepinDelayMax}s`}
+            </span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-4">
+            <PresetButton
+              label={t("policy.followGeneric")}
+              desc={t("policy.followGenericDesc")}
+              range={`${delayMin}–${delayMax}s`}
+              active={isFollowGeneric(liepinDelayMin, liepinDelayMax)}
+              onClick={() => {
+                setLiepinDelayMin("");
+                setLiepinDelayMax("");
+              }}
+            />
+            {DELAY_PRESETS.map((preset) => (
+              <PresetButton
+                key={preset.key}
+                label={t(preset.key)}
+                desc={t(preset.descKey)}
+                range={`${preset.min}–${preset.max}s`}
+                active={isPresetActive(liepinDelayMin, liepinDelayMax, preset)}
+                onClick={() => {
+                  setLiepinDelayMin(preset.min);
+                  setLiepinDelayMax(preset.max);
+                }}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* 前程无忧：跟随通用 + 三档 */}
+        <div className="space-y-2 pt-3 border-t border-[var(--grid)]">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-[#ff5000] flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-[#ff5000]" />
+              {t("policy.delay.job51")}
+            </span>
+            <span className="text-[11px] text-stone-400 font-mono tabular-nums">
+              {isFollowGeneric(job51DelayMin, job51DelayMax)
+                ? `${delayMin}~${delayMax}s（跟随通用）`
+                : `${job51DelayMin}~${job51DelayMax}s`}
+            </span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-4">
+            <PresetButton
+              label={t("policy.followGeneric")}
+              desc={t("policy.followGenericDesc")}
+              range={`${delayMin}–${delayMax}s`}
+              active={isFollowGeneric(job51DelayMin, job51DelayMax)}
+              onClick={() => {
+                setJob51DelayMin("");
+                setJob51DelayMax("");
+              }}
+            />
+            {DELAY_PRESETS.map((preset) => (
+              <PresetButton
+                key={preset.key}
+                label={t(preset.key)}
+                desc={t(preset.descKey)}
+                range={`${preset.min}–${preset.max}s`}
+                active={isPresetActive(job51DelayMin, job51DelayMax, preset)}
+                onClick={() => {
+                  setJob51DelayMin(preset.min);
+                  setJob51DelayMax(preset.max);
+                }}
+              />
+            ))}
+          </div>
+        </div>
 
         <div className="grid gap-3 sm:grid-cols-2 pt-2 border-t border-[var(--grid)]">
           <div>

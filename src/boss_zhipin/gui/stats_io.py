@@ -141,12 +141,22 @@ def get_delivery_records(
             company = str(raw.get("company") or job.get("company") or "")
             location = str(raw.get("location") or job.get("location") or "")
             salary = str(raw.get("salary") or job.get("salary") or "")
-            url = str(
-                raw.get("job_key")
-                or job.get("detail_url")
+            raw_url = str(
+                raw.get("url")
                 or raw.get("detail_url")
+                or job.get("detail_url")
+                or job.get("url")
                 or ""
             )
+            if not raw_url:
+                job_key_cand = str(raw.get("job_key") or "")
+                if job_key_cand.startswith("http"):
+                    raw_url = job_key_cand
+                elif p_id == "liepin" and raw.get("job_id"):
+                    raw_url = f"https://www.liepin.com/job/{raw.get('job_id')}.shtml"
+                elif p_id == "job51" and raw.get("job_id"):
+                    raw_url = f"https://jobs.51job.com/{raw.get('job_id')}.html"
+            url = raw_url
             records.append(
                 {
                     "platform": p_id,

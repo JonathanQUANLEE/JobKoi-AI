@@ -133,7 +133,7 @@ export default function TargetRolesCard({
               );
             })}
           </div>
-          {count > 4 && (
+          {count >= 2 && (
             <div className="mt-2.5 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-300">
               <span className="font-bold">⚡</span>
               <span>

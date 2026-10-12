@@ -28,9 +28,20 @@ export type LiveFeedIcon =
 
 export type LiveFeedTone = "live" | "success" | "skip" | "info" | "warning" | "error";
 
+/** 平台标识（事件带 platform 字段；旧事件缺省归 boss）。 */
+export type FeedPlatform = "boss" | "liepin" | "job51" | "zhaopin";
+
+export const PLATFORM_META: Record<string, { name: string; color: string }> = {
+  boss: { name: "BOSS", color: "#00bebd" },
+  liepin: { name: "猎聘", color: "#ff7033" },
+  job51: { name: "51job", color: "#ff5000" },
+  zhaopin: { name: "智联", color: "#1976d2" },
+};
+
 export type LiveFeedItem = {
   id: string;
   kind: EventKind;
+  platform: FeedPlatform;
   icon: LiveFeedIcon;
   tone: LiveFeedTone;
   title: string;
@@ -55,9 +66,16 @@ function text(value: unknown): string {
 /** 单个事件 → 活动流条目；返回 null 表示该事件不进时间轴（噪音过滤）。 */
 export function toLiveFeedItem(ev: ProgressEvent, seq: number): LiveFeedItem | null {
   const p = ev.payload;
+  // 平台维度（三平台并列需求）：BOSS/猎聘/51job 的事件都带 platform；
+  // DOM 流等历史事件缺省归 BOSS。
+  const platformRaw = typeof p.platform === "string" && p.platform ? p.platform : "boss";
+  const platform = (["boss", "liepin", "job51", "zhaopin"].includes(platformRaw)
+    ? platformRaw
+    : "boss") as FeedPlatform;
   const base = {
     id: `${ev.ts_local || seq}-${seq}-${ev.kind}`,
     kind: ev.kind,
+    platform,
     time: ev.ts_local || "",
   };
   const title = text(p.title);
@@ -91,14 +109,21 @@ export function toLiveFeedItem(ev: ProgressEvent, seq: number): LiveFeedItem | n
         detail: SKIP_REASON_LABELS[reason] || text(p.detail) || reason || "已跳过",
       };
     }
-    case "job_sent":
+    case "job_sent": {
+      const actionText =
+        platform === "liepin"
+          ? "已发送招呼语"
+          : platform === "job51"
+          ? "已投递简历"
+          : "已点击「立即沟通」";
       return {
         ...base,
         icon: "sent",
         tone: "success",
         title: jobLabel || "已投递岗位",
-        detail: `本轮第 ${text(p.sent) || "-"} 份，已点击「立即沟通」`,
+        detail: `本轮第 ${text(p.sent) || "-"} 份，${actionText}`,
       };
+    }
     case "letter_sent": {
       const status = text(p.status);
       if (status === "sent") {
@@ -170,12 +195,19 @@ export function toLiveFeedItem(ev: ProgressEvent, seq: number): LiveFeedItem | n
   }
 }
 
-/** 事件流 → 活动流（最新在前，限制条数）。 */
-export function buildLiveFeed(events: ProgressEvent[], maxItems = 200): LiveFeedItem[] {
+/** 事件流 → 活动流（最新在前，限制条数；channels 传空 = 不过滤全部显示）。 */
+export function buildLiveFeed(
+  events: ProgressEvent[],
+  maxItems = 200,
+  channels?: string[],
+): LiveFeedItem[] {
+  const enabled = channels && channels.length > 0 ? new Set(channels) : null;
   const items: LiveFeedItem[] = [];
   for (let i = events.length - 1; i >= 0 && items.length < maxItems; i -= 1) {
     const item = toLiveFeedItem(events[i], i);
-    if (item) items.push(item);
+    if (!item) continue;
+    if (enabled && !enabled.has(item.platform)) continue;
+    items.push(item);
   }
   return items;
 }
@@ -186,6 +218,7 @@ export function buildLiveFeed(events: ProgressEvent[], maxItems = 200): LiveFeed
  * 所以只要从最新往回找第一个即可——它就是脚本正在（或最后）处理的岗位。
  */
 export function currentProcessingJob(events: ProgressEvent[]): {
+  platform: string;
   title: string;
   company: string;
   salary: string;
@@ -194,7 +227,10 @@ export function currentProcessingJob(events: ProgressEvent[]): {
   for (let i = events.length - 1; i >= 0; i -= 1) {
     const ev = events[i];
     if (ev.kind === "job_processing" || ev.kind === "job_found") {
+      const platformRaw =
+        typeof ev.payload.platform === "string" && ev.payload.platform ? ev.payload.platform : "boss";
       return {
+        platform: platformRaw,
         title: text(ev.payload.title),
         company: text(ev.payload.company),
         salary: text(ev.payload.salary),

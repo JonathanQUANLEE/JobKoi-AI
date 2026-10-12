@@ -1,15 +1,8 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ShieldCheckIcon } from "@hugeicons/core-free-icons";
 import { useT } from "../../../store";
-
-/** 拟人化节流三档预设（2026-10-12 用户拍板；区间 [15,45]s 依据风控调研，
- *  与后端 platforms/limits.py 的 BOSS_DELAY_RANGE_SECONDS 单一来源一致）。 */
-const DELAY_PRESETS: { key: string; descKey: string; min: string; max: string }[] = [
-  { key: "policy.preset.fast", descKey: "policy.preset.fastDesc", min: "15", max: "30" },
-  { key: "policy.preset.standard", descKey: "policy.preset.standardDesc", min: "20", max: "40" },
-  { key: "policy.preset.safe", descKey: "policy.preset.safeDesc", min: "30", max: "45" },
-];
+import { DELAY_PRESETS, isPresetActive, isFollowGeneric } from "../../../lib/platformDelays";
 
 interface PolicySettingsViewProps {
   localDailyLimit: string;
@@ -18,8 +11,85 @@ interface PolicySettingsViewProps {
   setLocalDelayMin: (val: string) => void;
   localDelayMax: string;
   setLocalDelayMax: (val: string) => void;
+  /** 分平台拟人化节奏（2026-10-13）：空串 = 跟随通用档。 */
+  localLiepinDelayMin: string;
+  setLocalLiepinDelayMin: (val: string) => void;
+  localLiepinDelayMax: string;
+  setLocalLiepinDelayMax: (val: string) => void;
+  localJob51DelayMin: string;
+  setLocalJob51DelayMin: (val: string) => void;
+  localJob51DelayMax: string;
+  setLocalJob51DelayMax: (val: string) => void;
   onSave: () => void;
   onClose: () => void;
+}
+
+/** 单个平台的预设按钮（雾化弹窗蓝色主题）。 */
+function PresetButton({
+  label,
+  desc,
+  range,
+  active,
+  onClick,
+}: {
+  label: string;
+  desc: string;
+  range: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`p-3 rounded-xl text-left transition-all cursor-pointer border ${
+        active
+          ? "border-blue-500/60 bg-blue-500/10"
+          : "bg-white/[0.03] border-white/10 hover:border-blue-500/40"
+      }`}
+    >
+      <div
+        className={`flex items-baseline justify-between ${
+          active ? "text-blue-300" : "text-stone-200"
+        }`}
+      >
+        <span className="text-xs font-bold">{label}</span>
+        <span className="text-xs font-semibold font-mono tabular-nums">{range}</span>
+      </div>
+      <p className="mt-1 text-[10px] leading-snug text-stone-400">{desc}</p>
+    </button>
+  );
+}
+
+/** 一个平台分组：标题 + 当前生效值 + 预设按钮组。 */
+function PlatformDelayGroup({
+  title,
+  dotColor,
+  currentValue,
+  followGeneric,
+  children,
+}: {
+  title: string;
+  dotColor: string;
+  currentValue: string;
+  followGeneric?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span className={`text-xs font-bold flex items-center gap-1.5 ${dotColor}`}>
+          <span className={`size-2 rounded-full ${dotColor.replace("text-", "bg-")}`} />
+          {title}
+        </span>
+        <span className="text-[11px] text-stone-400 font-mono tabular-nums">
+          {currentValue}
+          {followGeneric ? "（跟随通用）" : ""}
+        </span>
+      </div>
+      {children}
+    </div>
+  );
 }
 
 export default function PolicySettingsView({
@@ -29,6 +99,14 @@ export default function PolicySettingsView({
   setLocalDelayMin,
   localDelayMax,
   setLocalDelayMax,
+  localLiepinDelayMin,
+  setLocalLiepinDelayMin,
+  localLiepinDelayMax,
+  setLocalLiepinDelayMax,
+  localJob51DelayMin,
+  setLocalJob51DelayMin,
+  localJob51DelayMax,
+  setLocalJob51DelayMax,
   onSave,
   onClose,
 }: PolicySettingsViewProps) {
@@ -194,56 +272,119 @@ export default function PolicySettingsView({
         </div>
       </div>
 
-      {/* 拟人化等待时间区间 - 三档可选（2026-10-12 用户拍板）。
+      {/* 拟人化等待时间区间 - 分平台三档可选（2026-10-13 用户拍板）。
+          BOSS 档同时是通用档：猎聘/前程无忧未单设时回退到这里。
           替换旧版"🔒 系统算法托管 · 已锁定 3~6s"假 UI：那个区块显示的
           3-6s 与真实生效值毫无关系（真实值来自画像 delay_min/max），
           既误导用户又堵死了调节入口。 */}
-      <div className="mist-setting-row bg-white/[0.02] border border-white/5 p-3.5 rounded-xl">
-        <div className="flex items-center justify-between">
+      <div className="mist-setting-row bg-white/[0.02] border border-white/5 p-3.5 rounded-xl space-y-4">
+        <div>
           <label className="text-xs font-semibold text-stone-200">
-            拟人化等待时间区间 (秒)
+            拟人化等待时间区间 · 分平台独立设定 (秒)
           </label>
-          <span className="text-[11px] text-stone-400 font-mono">
-            {localDelayMin} ~ {localDelayMax} 秒
-          </span>
+          <p className="text-[11px] text-stone-400 leading-relaxed mt-1">
+            {t("policy.delayCurrent", { min: localDelayMin, max: localDelayMax })}
+          </p>
         </div>
-        <p className="text-[11px] text-stone-400 leading-relaxed mt-1">
-          {t("policy.delayCurrent", { min: localDelayMin, max: localDelayMax })}
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2.5">
-          {DELAY_PRESETS.map((preset) => {
-            const active = localDelayMin === preset.min && localDelayMax === preset.max;
-            return (
-              <button
+
+        {/* BOSS 直聘（通用档） */}
+        <PlatformDelayGroup
+          title={t("policy.delay.boss")}
+          dotColor="text-[#00bebd]"
+          currentValue={`${localDelayMin}~${localDelayMax}s`}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {DELAY_PRESETS.map((preset) => (
+              <PresetButton
                 key={preset.key}
-                type="button"
+                label={t(preset.key)}
+                desc={t(preset.descKey)}
+                range={`${preset.min}–${preset.max}s`}
+                active={isPresetActive(localDelayMin, localDelayMax, preset)}
                 onClick={() => {
                   setLocalDelayMin(preset.min);
                   setLocalDelayMax(preset.max);
                 }}
-                className={`p-3 rounded-xl text-left transition-all cursor-pointer border ${
-                  active
-                    ? "border-blue-500/60 bg-blue-500/10"
-                    : "bg-white/[0.03] border-white/10 hover:border-blue-500/40"
-                }`}
-              >
-                <div
-                  className={`flex items-baseline justify-between ${
-                    active ? "text-blue-300" : "text-stone-200"
-                  }`}
-                >
-                  <span className="text-xs font-bold">{t(preset.key)}</span>
-                  <span className="text-xs font-semibold font-mono tabular-nums">
-                    {preset.min}–{preset.max}s
-                  </span>
-                </div>
-                <p className="mt-1 text-[10px] leading-snug text-stone-400">
-                  {t(preset.descKey)}
-                </p>
-              </button>
-            );
-          })}
-        </div>
+              />
+            ))}
+          </div>
+        </PlatformDelayGroup>
+
+        {/* 猎聘：跟随通用 + 三档 */}
+        <PlatformDelayGroup
+          title={t("policy.delay.liepin")}
+          dotColor="text-[#ff7033]"
+          currentValue={
+            isFollowGeneric(localLiepinDelayMin, localLiepinDelayMax)
+              ? `${localDelayMin}~${localDelayMax}s`
+              : `${localLiepinDelayMin}~${localLiepinDelayMax}s`
+          }
+          followGeneric={isFollowGeneric(localLiepinDelayMin, localLiepinDelayMax)}
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <PresetButton
+              label={t("policy.followGeneric")}
+              desc={t("policy.followGenericDesc")}
+              range={`${localDelayMin}–${localDelayMax}s`}
+              active={isFollowGeneric(localLiepinDelayMin, localLiepinDelayMax)}
+              onClick={() => {
+                setLocalLiepinDelayMin("");
+                setLocalLiepinDelayMax("");
+              }}
+            />
+            {DELAY_PRESETS.map((preset) => (
+              <PresetButton
+                key={preset.key}
+                label={t(preset.key)}
+                desc={t(preset.descKey)}
+                range={`${preset.min}–${preset.max}s`}
+                active={isPresetActive(localLiepinDelayMin, localLiepinDelayMax, preset)}
+                onClick={() => {
+                  setLocalLiepinDelayMin(preset.min);
+                  setLocalLiepinDelayMax(preset.max);
+                }}
+              />
+            ))}
+          </div>
+        </PlatformDelayGroup>
+
+        {/* 前程无忧：跟随通用 + 三档 */}
+        <PlatformDelayGroup
+          title={t("policy.delay.job51")}
+          dotColor="text-[#ff5000]"
+          currentValue={
+            isFollowGeneric(localJob51DelayMin, localJob51DelayMax)
+              ? `${localDelayMin}~${localDelayMax}s`
+              : `${localJob51DelayMin}~${localJob51DelayMax}s`
+          }
+          followGeneric={isFollowGeneric(localJob51DelayMin, localJob51DelayMax)}
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <PresetButton
+              label={t("policy.followGeneric")}
+              desc={t("policy.followGenericDesc")}
+              range={`${localDelayMin}–${localDelayMax}s`}
+              active={isFollowGeneric(localJob51DelayMin, localJob51DelayMax)}
+              onClick={() => {
+                setLocalJob51DelayMin("");
+                setLocalJob51DelayMax("");
+              }}
+            />
+            {DELAY_PRESETS.map((preset) => (
+              <PresetButton
+                key={preset.key}
+                label={t(preset.key)}
+                desc={t(preset.descKey)}
+                range={`${preset.min}–${preset.max}s`}
+                active={isPresetActive(localJob51DelayMin, localJob51DelayMax, preset)}
+                onClick={() => {
+                  setLocalJob51DelayMin(preset.min);
+                  setLocalJob51DelayMax(preset.max);
+                }}
+              />
+            ))}
+          </div>
+        </PlatformDelayGroup>
       </div>
 
       <div className="pt-2 flex justify-end gap-3">
