@@ -17,12 +17,12 @@ from boss_zhipin.website_oper.dispatch import search_api_flow
 GREETING = "您好！我对贵公司的岗位非常感兴趣，希望能与您进一步沟通交流，期待您的回复！"
 
 
-def _api_job(eid: str, name: str = "AI Agent 实习") -> dict:
+def _api_job(eid: str, name: str = "AI Agent 实习", city: str = "深圳") -> dict:
     return {
         "encryptJobId": eid,
         "jobName": name,
         "brandName": "某公司",
-        "cityName": "深圳",
+        "cityName": city,
         "salaryDesc": "200-300/天",
         "jobDegree": "本科",
     }
@@ -66,8 +66,12 @@ def _run_flow():
 
 
 def test_api_flow_summary_all_duplicates(monkeypatch):
-    """全部岗位已投过：汇总必须说清「0 投递因为全部投过」。"""
-    jobs = [job_api.parse_api_job(_api_job("e1")), job_api.parse_api_job(_api_job("e2"))]
+    """全部岗位已投过：汇总必须说清「0 投递因为全部投过」+ 按城市拆开（多城混合搜索）。"""
+    jobs = [
+        job_api.parse_api_job(_api_job("e1", city="郑州")),
+        job_api.parse_api_job(_api_job("e2", city="上海")),
+        job_api.parse_api_job(_api_job("e3", city="上海")),
+    ]
     collected = _install_common_stubs(monkeypatch, pages={1: jobs})
 
     seen_keys = {finding_jobs.job_key(job_api.to_job_posting(j)) for j in jobs}
@@ -78,11 +82,17 @@ def test_api_flow_summary_all_duplicates(monkeypatch):
     finished = [p for kind, p in collected if kind == "api_flow_finished"]
     assert len(finished) == 1
     payload = finished[0]
-    assert payload["scanned"] == 2
-    assert payload["skipped_duplicates"] == 2
+    assert payload["scanned"] == 3
+    assert payload["skipped_duplicates"] == 3
     assert payload["total"] == 0
     assert payload["stop_reason"] == "completed"
     assert "已全部投递过" in payload["message"]
+    # 按城市维度：上海 2 / 郑州 1，用户能看明白每个城市都扫过了
+    per_city = {item["city"]: item for item in payload["per_city"]}
+    assert per_city["上海"]["scanned"] == 2
+    assert per_city["上海"]["skipped"] == 2
+    assert per_city["郑州"]["scanned"] == 1
+    assert per_city["郑州"]["skipped"] == 1
 
 
 def test_api_flow_summary_all_filtered(monkeypatch):

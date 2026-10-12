@@ -402,7 +402,20 @@ async def _run_search_api_flow(
     skipped_already = 0
     failed_count = 0
     scanned_count = 0
+    # 按城市维度统计（2026-10-12 用户追问"郑州为什么不去投"：多城市是混合
+    # 搜索，郑州岗位其实扫过——必须按城市拆开汇报，才能让用户看明白）。
+    city_stats: dict[str, dict[str, int]] = {}
     stop_reason = "completed"
+
+    def _record_city(city_name: str, status: str) -> None:
+        bucket = city_stats.setdefault(
+            city_name, {"scanned": 0, "sent": 0, "skipped": 0}
+        )
+        bucket["scanned"] += 1
+        if status == "sent":
+            bucket["sent"] += 1
+        elif status in ("seen", "filtered", "already_contacted", "failed"):
+            bucket["skipped"] += 1
 
     def _emit_flow_summary(stop: str) -> None:
         scanned = scanned_count
@@ -424,6 +437,14 @@ async def _run_search_api_flow(
             message += "（平台提示今日上限已安全停止）"
         elif stop == "api_error":
             message += "（搜索接口风控限流，稍后再试）"
+        per_city = sorted(
+            (
+                {"city": city, **counts}
+                for city, counts in city_stats.items()
+            ),
+            key=lambda item: item["scanned"],
+            reverse=True,
+        )
         events.emit(
             "api_flow_finished",
             total=sent_count,
@@ -434,6 +455,7 @@ async def _run_search_api_flow(
             skipped_already_contacted=skipped_already,
             failed=failed_count,
             stop_reason=stop,
+            per_city=per_city,
             message=message,
         )
         log.info("[api-flow] 结束（%s）：%s", stop, message)
@@ -479,6 +501,7 @@ async def _run_search_api_flow(
                 delay_max=delay_max,
             )
             scanned_count += 1
+            _record_city(api_job.city or "未知城市", status)
             if status == "seen":
                 skipped_duplicates += 1
             elif status == "filtered":

@@ -51,6 +51,19 @@ export type NoticeSlice = {
   startConfirm: { resolve: (ok: boolean) => void } | null;
   requestStartConfirm: (resolve: (ok: boolean) => void) => void;
   resolveStartConfirm: (ok: boolean) => void;
+
+  // 巡航结束说明弹窗（2026-10-12 用户拍板：无论什么原因结束都要如实解释，
+  // 用户点叉关闭后自行去调画像再投）。数据由 useJobBotRuntime 在巡航结束时组装。
+  cruiseEndNotice: {
+    reason: string;
+    message: string;
+    perCity: { city: string; scanned: number; sent: number; skipped: number }[];
+    stats: { scanned: number; sent: number; skipped: number };
+    durationMs: number | null;
+    time: string;
+  } | null;
+  showCruiseEndNotice: (notice: NonNullable<NoticeSlice["cruiseEndNotice"]>) => void;
+  dismissCruiseEndNotice: () => void;
 };
 
 export const createNoticeSlice: StateCreator<RunStore, [], [], NoticeSlice> = (set, get) => ({
@@ -145,4 +158,8 @@ export const createNoticeSlice: StateCreator<RunStore, [], [], NoticeSlice> = (s
     set({ startConfirm: null });
     pending?.resolve(ok);
   },
+
+  cruiseEndNotice: null,
+  showCruiseEndNotice: (notice) => set({ cruiseEndNotice: notice }),
+  dismissCruiseEndNotice: () => set({ cruiseEndNotice: null }),
 });
