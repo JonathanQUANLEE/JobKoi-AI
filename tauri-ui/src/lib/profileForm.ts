@@ -3,6 +3,9 @@ export type MatchMode = "contains" | "regex" | "exact";
 export type Scope = "title" | "description" | "title_description" | "location" | "all";
 export type FilterPolicy = "warning" | "strict";
 
+// 城市输入宽容解析（防"深圳 广州"粘连静默失效），见 lib/cityInput.ts
+import { parseCityList } from "./cityInput";
+
 export type RuleForm = {
   requiredKeywords: string;
   anyKeywords: string;
@@ -84,7 +87,9 @@ export function buildProfileData(values: ProfileFormValues): BuiltProfileData {
   const requiredKeywords = splitKeywords(values.rule.requiredKeywords);
   const anyKeywords = splitKeywords(values.rule.anyKeywords);
   const excludeKeywords = splitKeywords(values.rule.excludeKeywords);
-  const city = splitKeywords(values.cityValues);
+  // 城市走宽容解析（多分隔符 + 白名单归一 + 垃圾拦截）——无论上游 UI 漏了
+  // 哪种输入形态，落盘的 city.values 一定是干净数组（防静默失效兜底线）。
+  const city = parseCityList(values.cityValues);
   const education = splitKeywords(values.educationValues);
   const bossActive = splitKeywords(values.bossActiveValues);
 

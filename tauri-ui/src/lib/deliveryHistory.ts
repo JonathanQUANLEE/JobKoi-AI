@@ -35,6 +35,8 @@ export interface MorningBrief {
   }[];
   insight: string;
   actionAdvice: string;
+  /** false = 回复数据不可得（真实模式：三平台无回复检测），前端回复相关区域显示「建设中」 */
+  hasReplyData?: boolean;
 }
 
 const STORAGE_KEY = "jobhunter_delivery_history_v1";
@@ -275,6 +277,64 @@ export const deliveryHistoryDb = {
       platformBreakdown,
       insight,
       actionAdvice,
+      hasReplyData: true, // 演示数据自带编造的回复字段
     };
   },
 };
+
+/**
+ * 真实数据模式早报：从后端按天聚合的真实投递数据构造。
+ *
+ * 诚实性红线（2026-10-12 用户拍板"不能骗用户"）：三平台没有回复检测能力，
+ * 回复相关字段一律 0 + hasReplyData=false，前端展示层显示「回复统计建设中」，
+ * 绝不用编造数字冒充真实回复。
+ */
+export function buildRealMorningBrief(
+  days: { date: string; bossSent: number; liepinSent: number; job51Sent: number; totalSent: number }[],
+): MorningBrief {
+  const now = new Date();
+  const todayStr = formatDateKey(now);
+  const yesterday = new Date(now.getTime() - 86400000);
+  const yesterdayStr = formatDateKey(yesterday);
+  // 满窗口末位兜底：昨天数据缺失（如刚部署当天）时取最后一天，避免早报空引用
+  const yesterdayRecord = days.find((r) => r.date === yesterdayStr) || days[days.length - 1];
+
+  const totalSent = yesterdayRecord?.totalSent || 0;
+  const bossSent = yesterdayRecord?.bossSent || 0;
+  const liepinSent = yesterdayRecord?.liepinSent || 0;
+  const job51Sent = yesterdayRecord?.job51Sent || 0;
+
+  let insight: string;
+  if (totalSent <= 0) {
+    insight =
+      "昨日没有投递记录。HR 通常在上午集中筛选简历，建议今早启动一轮巡航抢占先机。";
+  } else {
+    const platformParts = [
+      bossSent > 0 ? `BOSS ${bossSent}` : "",
+      liepinSent > 0 ? `猎聘 ${liepinSent}` : "",
+      job51Sent > 0 ? `51job ${job51Sent}` : "",
+    ]
+      .filter(Boolean)
+      .join(" / ");
+    insight = `昨日真实投递 ${totalSent} 份（${platformParts}）。回复率统计暂未开放（平台未提供回复数据），可在「招聘平台中心」查看 BOSS 未读消息。`;
+  }
+
+  return {
+    todayDate: todayStr,
+    yesterdayDate: yesterdayRecord ? yesterdayRecord.date : yesterdayStr,
+    generatedAt: "09:00",
+    totalSent,
+    repliedCount: 0,
+    unrepliedCount: 0,
+    replyRate: 0,
+    platformBreakdown: [
+      { id: "boss", name: "BOSS 直聘", sent: bossSent, replied: 0, rate: 0, color: "#00bebd" },
+      { id: "liepin", name: "猎聘 Liepin", sent: liepinSent, replied: 0, rate: 0, color: "#ff7033" },
+      { id: "job51", name: "前程无忧 51job", sent: job51Sent, replied: 0, rate: 0, color: "#ff5000" },
+    ],
+    insight,
+    actionAdvice:
+      "今日早晨 09:00 前后是招聘者集中上线筛选简历的时段，建议启动巡航优先拉满早间批次。",
+    hasReplyData: false,
+  };
+}

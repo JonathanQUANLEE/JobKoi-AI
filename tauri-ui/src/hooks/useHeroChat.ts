@@ -2,6 +2,7 @@ import { useCallback, useEffect, type Dispatch, type SetStateAction } from "reac
 import { ipc, type AgentChatMessage, type ProfileData } from "../lib/ipc";
 import { summarizeAgentProfile } from "../lib/agentPreview";
 import { extractFallbackProfile } from "../lib/dashboardHelpers";
+import { normalizeCityInput } from "../lib/cityInput";
 import type { RuleForm } from "../lib/profileForm";
 import { useRunStore } from "../store";
 
@@ -120,7 +121,7 @@ export function useHeroChat({
             setHeroProfileResult(res.profile);
             const preview = summarizeAgentProfile(res.profile);
             if (preview?.query && preview.query !== "-") setLabel(preview.query);
-            if (preview?.cities) setCityValues(preview.cities);
+            if (preview?.cities) setCityValues(normalizeCityInput(preview.cities));
             if (preview?.anyKeywords) setRule((prev) => ({ ...prev, anyKeywords: preview.anyKeywords }));
             if (preview?.excludeKeywords) setRule((prev) => ({ ...prev, excludeKeywords: preview.excludeKeywords }));
           }
@@ -133,7 +134,7 @@ export function useHeroChat({
           pushAgentMessage(assistantMsg);
 
           setLabel(extracted.query);
-          if (extracted.cities) setCityValues(extracted.cities);
+          if (extracted.cities) setCityValues(normalizeCityInput(extracted.cities));
           if (extracted.anyKeywords) setRule((prev) => ({ ...prev, anyKeywords: extracted.anyKeywords }));
           if (extracted.excludeKeywords) setRule((prev) => ({ ...prev, excludeKeywords: extracted.excludeKeywords }));
 
@@ -158,7 +159,7 @@ export function useHeroChat({
           pushAgentMessage(assistantMsg);
 
           setLabel(extracted.query);
-          if (extracted.cities) setCityValues(extracted.cities);
+          if (extracted.cities) setCityValues(normalizeCityInput(extracted.cities));
           if (extracted.anyKeywords) setRule((prev) => ({ ...prev, anyKeywords: extracted.anyKeywords }));
           if (extracted.excludeKeywords) setRule((prev) => ({ ...prev, excludeKeywords: extracted.excludeKeywords }));
 

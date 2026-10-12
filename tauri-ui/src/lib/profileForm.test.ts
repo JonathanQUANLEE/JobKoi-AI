@@ -1,5 +1,56 @@
 import { describe, expect, it } from "vitest";
-import { buildProfileData, toggleCsvValue } from "./profileForm";
+import { buildProfileData, toggleCsvValue, type ProfileFormValues } from "./profileForm";
+
+const baseValues: ProfileFormValues = {
+  label: "后端开发实习",
+  startUrl: "",
+  rule: {
+    requiredKeywords: "",
+    anyKeywords: "后端开发",
+    excludeKeywords: "销售",
+    scope: "title",
+    match: "contains",
+    caseSensitive: false,
+  },
+  cityValues: "",
+  educationValues: "",
+  bossActiveValues: "",
+  filterPolicy: "warning",
+  mode: "auto",
+  greetingPath: "./greetings/default.txt",
+  delayMin: "20",
+  delayMax: "40",
+  maxSent: "50",
+  dailyLimit: "80",
+  stopOnCaptcha: true,
+  sendResumeAfterGreeting: false,
+  autoResumeOnReply: false,
+  aiGreeting: false,
+};
+
+describe("buildProfileData 城市宽容解析（落盘兜底线）", () => {
+  it("空格/顿号/分号等任意分隔 → 干净数组", () => {
+    const data = buildProfileData({ ...baseValues, cityValues: "深圳 广州、东莞;上海" });
+    expect(data.page_filters.city.values).toEqual(["深圳", "广州", "东莞", "上海"]);
+    expect(data.page_filters.city.enabled).toBe(true);
+  });
+
+  it("去「市」后缀归一", () => {
+    const data = buildProfileData({ ...baseValues, cityValues: "深圳市,杭州市" });
+    expect(data.page_filters.city.values).toEqual(["深圳", "杭州"]);
+  });
+
+  it("垃圾输入全过滤 → 城市筛选关闭（enabled=false），不崩", () => {
+    const data = buildProfileData({ ...baseValues, cityValues: "🔥 我想在城市找工作" });
+    expect(data.page_filters.city.values).toEqual([]);
+    expect(data.page_filters.city.enabled).toBe(false);
+  });
+
+  it("标准逗号输入行为不变（回归保护）", () => {
+    const data = buildProfileData({ ...baseValues, cityValues: "广州,深圳" });
+    expect(data.page_filters.city.values).toEqual(["广州", "深圳"]);
+  });
+});
 
 describe("buildProfileData", () => {
   it("converts GUI form values to profile YAML data", () => {

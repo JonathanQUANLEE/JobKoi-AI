@@ -1,6 +1,7 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
 import { UserCheck, ArrowLeft, Save, Check, Sparkles, ShieldCheck } from "lucide-react";
 import type { RuleForm } from "../lib/profileForm";
+import { toggleCityInList } from "../lib/cityInput";
 import { translate, type Lang } from "../lib/i18n";
 import { useRunStore } from "../store";
 import TargetRolesCard from "./profile/TargetRolesCard";
@@ -86,16 +87,8 @@ export default function ProfilePanel({
   };
 
   const toggleCity = (city: string) => {
-    if (city === "全国") {
-      setCityValues("");
-      return;
-    }
-    const list = cityValues ? cityValues.split(",").map((c) => c.trim()).filter(Boolean) : [];
-    if (list.includes(city)) {
-      setCityValues(list.filter((c) => c !== city).join(","));
-    } else {
-      setCityValues([...list, city].join(","));
-    }
+    // 宽容解析版城市切换：兼容用户手输的任意分隔格式，去"市"后缀归一
+    setCityValues(toggleCityInList(cityValues, city));
   };
 
   const toggleExclude = (word: string) => {

@@ -85,6 +85,22 @@ async def get_delivery_history(body: _GetDeliveryHistoryBody) -> dict[str, Any]:
     return {"records": records}
 
 
+class _GetDailyStatsBody(_CamelModel):
+    days: int = 30
+
+
+@commands.command()
+async def get_delivery_daily_stats(body: _GetDailyStatsBody) -> dict[str, Any]:
+    """按天聚合三平台真实投递账本（统计页「真实数据」模式）。
+
+    只读 sent=true 的真实投递（dry_run / scan_only / archived_test 不算）；
+    days 收敛到 [1, 90]，无投递的天补 0，前端拿到连续满窗口。
+    """
+    from boss_zhipin.gui.stats_io import get_daily_delivery_stats
+
+    return get_daily_delivery_stats(days=body.days)
+
+
 class _ResetTodayDeliveryBody(_CamelModel):
     platform: str = "boss"
 

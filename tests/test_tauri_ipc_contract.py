@@ -65,6 +65,7 @@ def test_tauri_ipc_commands_match_gui_v02_contract():
         "window_close",
         # 投递历史与记录
         "get_delivery_history",
+        "get_delivery_daily_stats",
         "reset_today_delivery",
         # 定时巡航闹钟（系统级计划任务）
         "get_schedule_status",

@@ -168,6 +168,105 @@ def get_delivery_records(
     return records[:limit]
 
 
+def get_daily_delivery_stats(
+    days: int = 30, logs_dir: Path | None = None
+) -> dict[str, Any]:
+    """按天聚合三平台**真实**投递账本（统计页「真实数据」模式的数据源）。
+
+    与前端演示数据（deliveryHistory.ts 本地假库）的区别：这里从
+    ``logs/*_sent.jsonl`` 逐条实读，只认 ``sent=true`` 的真实投递
+    （dry_run / scan_only / archived_test 归档一概不算）。
+
+    Args:
+        days: 返回最近多少天的按天序列（1~90，越界收敛）；无投递的天补 0，
+            前端折线图拿到的是连续满窗口。
+        logs_dir: 账本目录（测试注入用）。
+
+    Returns::
+
+        {"days": [{"date": "2026-10-12", "label": "10-12", "weekday": "周日",
+                    "bossSent": 10, "liepinSent": 5, "job51Sent": 2,
+                    "totalSent": 17}, ...],   # 旧→新，含今天，共 days 个
+         "totals": {"sentSum": 290, "activeDays": 12,
+                     "bossSent": 150, "liepinSent": 100, "job51Sent": 40,
+                     "firstDate": "2026-09-01", "lastDate": "2026-10-12"}}
+    """
+    base = logs_dir or DEFAULT_LOGS_DIR
+    window = max(1, min(90, int(days)))
+    today = datetime.now().date()
+
+    # 平台 -> 按天计数；totals 全量累计（不受窗口限制，回答"自使用以来"）
+    per_day: dict[str, dict[str, int]] = {}
+    totals = {"boss": 0, "liepin": 0, "job51": 0}
+    first_date: str | None = None
+    last_date: str | None = None
+
+    for platform_id, (_, filename, _) in PLATFORMS.items():
+        path = base / filename
+        if not path.exists():
+            continue
+        with path.open(encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                if not record.get("sent") or record.get("archived_test"):
+                    continue
+                day = _local_ts(record)[:10]
+                if len(day) != 10 or not day.startswith("2"):
+                    continue  # 没有可用本地时间戳的记录不进任何桶
+                bucket = per_day.setdefault(day, {"boss": 0, "liepin": 0, "job51": 0})
+                bucket[platform_id] += 1
+                totals[platform_id] += 1
+                if first_date is None or day < first_date:
+                    first_date = day
+                if last_date is None or day > last_date:
+                    last_date = day
+
+    # 补零生成满窗口（旧→新，含今天）
+    weekdays = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+    day_rows: list[dict[str, Any]] = []
+    for offset in range(window - 1, -1, -1):
+        d = today.fromordinal(today.toordinal() - offset)
+        date_str = d.strftime("%Y-%m-%d")
+        bucket = per_day.get(date_str, {"boss": 0, "liepin": 0, "job51": 0})
+        boss_sent = bucket["boss"]
+        liepin_sent = bucket["liepin"]
+        job51_sent = bucket["job51"]
+        day_rows.append(
+            {
+                "date": date_str,
+                "label": date_str[5:],
+                "weekday": weekdays[d.weekday()],
+                "bossSent": boss_sent,
+                "liepinSent": liepin_sent,
+                "job51Sent": job51_sent,
+                "totalSent": boss_sent + liepin_sent + job51_sent,
+            }
+        )
+
+    sent_sum = totals["boss"] + totals["liepin"] + totals["job51"]
+    active_days = len(per_day)
+    return {
+        "days": day_rows,
+        "totals": {
+            "sentSum": sent_sum,
+            "activeDays": active_days,
+            "bossSent": totals["boss"],
+            "liepinSent": totals["liepin"],
+            "job51Sent": totals["job51"],
+            "firstDate": first_date or "",
+            "lastDate": last_date or "",
+        },
+    }
+
+
 def reset_today_delivery(
     platform: str = "boss", logs_dir: Path | None = None
 ) -> dict[str, Any]:
