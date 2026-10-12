@@ -154,9 +154,9 @@ async def check_platform_replies() -> dict[str, Any]:
 
     各平台能力（probe 实证）：
     - BOSS：任意页面导航 ``a[ka="header-message"] .nav-chat-num``（已登录且
-      浏览器没开时，自动开一个到 zhipin.com 读完即关）；
-    - 猎聘：c.liepin.com 聊天挂件 ``.im-ui-basic-entry-unread-count``（同上，
-      没开则自动开读完即关；巡航中复用当前页绝不导航）；
+      浏览器没开时，自动开一个到 zhipin.com 读完即关；巡航运行中只复用当前受控页）；
+    - 猎聘：c.liepin.com 聊天挂件 ``.im-ui-basic-entry-unread-count``（已登录且
+      浏览器没开时，无头模式读完即关；巡航运行中禁止新开浏览器，避免弹窗抢焦点或误杀进程）；
     - 51job：PC 网页端**没有消息中心**——HR 消息经微信服务号推送（页面自己
       写着「扫码关注服务号，及时收取HR消息」），无法读取，status=unsupported。
 
@@ -164,6 +164,9 @@ async def check_platform_replies() -> dict[str, Any]:
     """
     import asyncio
 
+    from boss_zhipin.gui import runner
+
+    is_cruising = runner.is_running()
     result: dict[str, Any] = {}
 
     # ---------- BOSS ----------
@@ -173,6 +176,13 @@ async def check_platform_replies() -> dict[str, Any]:
 
         if finding_jobs.get_tab() is not None:
             result["boss"] = await message_check.snapshot()
+        elif is_cruising:
+            # 巡航运行中但受控 tab 暂未就绪（如正在启动或换页）：跳过后台重新开浏览器，绝不关巡航
+            result["boss"] = {
+                "status": "busy",
+                "unread": 0,
+                "message": "巡航运行中，跳过后台探测",
+            }
         else:
             platform = get_platform_manager().get_platform("boss")
             if platform is None or not platform.check_login():
@@ -188,7 +198,7 @@ async def check_platform_replies() -> dict[str, Any]:
                     # 真机实测首页连续 no_nav）。
                     await finding_jobs.open_browser_with_options(
                         "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
-                        "chrome"
+                        "chrome",
                     )
                     # 导航是前端渲染的：页面刚开时角标不立刻在，带重试地等它
                     # 出现；会话失效会被重定向到 /web/user/ 登录页——cookie
@@ -224,6 +234,13 @@ async def check_platform_replies() -> dict[str, Any]:
 
         if getattr(liepin_driver, "_browser", None) is not None:
             result["liepin"] = await liepin_driver.check_unread()
+        elif is_cruising:
+            # 巡航运行中（可能只在巡航 BOSS）：禁止后台新开猎聘浏览器，避免弹窗抢焦点或误杀进程
+            result["liepin"] = {
+                "status": "busy",
+                "unread": 0,
+                "message": "巡航运行中，跳过后台探测",
+            }
         else:
             from boss_zhipin.platforms import get_platform_manager
 

@@ -39,29 +39,24 @@ def kill_profile_chrome_windows(profile_dir: str) -> None:
         log.debug("找不到 PowerShell，跳过 Windows Chrome 回收")
         return
     script = r"""
-param([string]$targetDir)
+param([Parameter(ValueFromRemainingArguments=$true)][string[]]$rawArgs)
+$targetDir = if ($rawArgs) { $rawArgs -join ' ' } else { $args -join ' ' }
 if (-not $targetDir) { return }
-$profile = [System.IO.Path]::GetFullPath($targetDir)
-$escaped = [Regex]::Escape($profile)
+$targetDir = $targetDir.Trim('"', "'")
+$profile = [System.IO.Path]::GetFullPath($targetDir).TrimEnd('\', '/')
+$escaped1 = [Regex]::Escape($profile)
+$escaped2 = [Regex]::Escape($profile.Replace('\', '/'))
+$pattern = "(?i)--user-data-dir=[`"']?(" + $escaped1 + "|" + $escaped2 + ")[\\/]*(?:[`"'\s]|$)"
+
 $processes = @()
 try {
   $processes = Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object {
-    $_.CommandLine -and $_.Name -like 'chrome*' -and (
-      $_.CommandLine.Contains($profile) -or
-      $_.CommandLine.Contains($targetDir) -or
-      $_.CommandLine -match "--user-data-dir=`"?$escaped`"?" -or
-      $_.CommandLine -match "--user-data-dir=$escaped"
-    )
+    $_.CommandLine -and ($_.Name -like 'chrome*' -or $_.Name -like 'msedge*') -and ($_.CommandLine -match $pattern)
   }
 } catch {
   try {
     $processes = Get-WmiObject Win32_Process -ErrorAction Stop | Where-Object {
-      $_.CommandLine -and $_.Name -like 'chrome*' -and (
-        $_.CommandLine.Contains($profile) -or
-        $_.CommandLine.Contains($targetDir) -or
-        $_.CommandLine -match "--user-data-dir=`"?$escaped`"?" -or
-        $_.CommandLine -match "--user-data-dir=$escaped"
-      )
+      $_.CommandLine -and ($_.Name -like 'chrome*' -or $_.Name -like 'msedge*') -and ($_.CommandLine -match $pattern)
     }
   } catch {}
 }
