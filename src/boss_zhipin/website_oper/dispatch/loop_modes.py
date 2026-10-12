@@ -50,6 +50,7 @@ async def handle_scan_only_match(
     )
     events.emit(
         "job_matched",
+        platform="boss",
         index=job_index,
         status="scan_only",
         detail=details.get("reason", ""),
@@ -94,6 +95,7 @@ async def handle_auto_send_job(
         )
         events.emit(
             "letter_sent",
+            platform="boss",
             index=job_index,
             status="blocked",
             score=None,
@@ -128,6 +130,7 @@ async def handle_auto_send_job(
         )
         events.emit(
             "letter_sent",
+            platform="boss",
             index=job_index,
             status="dry_run",
             score=None,
@@ -162,6 +165,7 @@ async def handle_auto_send_job(
     )
     events.emit(
         "letter_sent",
+        platform="boss",
         index=job_index,
         status="sent",
         score=None,
@@ -228,6 +232,7 @@ async def handle_review_send_job(
         )
         events.emit(
             "letter_sent",
+            platform="boss",
             index=job_index,
             status="blocked",
             score=None,
@@ -278,6 +283,7 @@ async def handle_review_send_job(
         )
         events.emit(
             "job_skipped",
+            platform="boss",
             index=job_index,
             reason="review_skip",
             detail="用户审核后跳过",
@@ -302,6 +308,7 @@ async def handle_review_send_job(
         )
         events.emit(
             "letter_sent",
+            platform="boss",
             index=job_index,
             status="dry_run",
             score=None,
@@ -333,6 +340,7 @@ async def handle_review_send_job(
         )
         events.emit(
             "letter_sent",
+            platform="boss",
             index=job_index,
             status="sent",
             score=None,

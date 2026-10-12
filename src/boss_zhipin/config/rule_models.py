@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-MatchMode = Literal["contains", "regex", "exact"]
+MatchMode = Literal["contains", "regex", "exact", "smart"]
 Scope = Literal["title", "description", "title_description", "company", "boss", "location", "all"]
 
 _SCOPE_LABELS = {

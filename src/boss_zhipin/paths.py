@@ -53,3 +53,39 @@ def ensure_app_data_cwd() -> Path:
     data_dir.mkdir(parents=True, exist_ok=True)
     os.chdir(data_dir)
     return data_dir
+
+
+def get_platform_profile_dir(platform_id: str, *, dev_root: Path | None = None) -> Path:
+    """统一解析平台 Chrome Profile 存储目录（2026-10-13 打包加固）。
+
+    优先级（三平台单一真相，浏览器实际使用与 cookie 登录探测必须同源）：
+
+    1. **env 覆盖**：``BOSS_CHROME_PROFILE`` / ``LIEPIN_CHROME_PROFILE`` /
+       ``JOB51_CHROME_PROFILE``——历史约定，绝对优先；
+    2. **standalone 打包模式**：``%APPDATA%/<identifier>/profiles/<platform>``
+       ——安装包可能释放到 ``C:\\Program Files\\`` 或任意盘的任意目录，
+       Windows UAC 对安装目录只读，Chrome 写 cookie 会 Access Denied。
+       用户数据区与安装位置解耦，装哪个盘都有 100% 写权限；
+    3. **开发/CLI 模式**：仓库根下的历史目录（chrome_profile /
+       liepin_profile / job51_profile）——用户已登录的 cookie 一分不动。
+
+    ``dev_root`` 供测试注入临时根目录（tests/test_platforms.py 的
+    ``LiepinPlatform(root_dir=tmp_path)`` 用法保持兼容）。
+    """
+    env_map = {
+        "boss": "BOSS_CHROME_PROFILE",
+        "liepin": "LIEPIN_CHROME_PROFILE",
+        "job51": "JOB51_CHROME_PROFILE",
+    }
+    env_key = env_map.get(platform_id)
+    if env_key and os.environ.get(env_key, "").strip():
+        return Path(os.environ[env_key]).resolve()
+
+    if is_standalone():
+        target = app_data_dir() / "profiles" / platform_id
+        target.mkdir(parents=True, exist_ok=True)
+        return target
+
+    root = dev_root or Path(__file__).resolve().parent.parent.parent
+    dirname = "chrome_profile" if platform_id == "boss" else f"{platform_id}_profile"
+    return (root / dirname).resolve()

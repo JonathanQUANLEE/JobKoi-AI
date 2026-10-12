@@ -176,6 +176,23 @@ export type ReplyCheckResult = {
   chat_url?: string;
 };
 
+// ---------- 三平台未读快照（统计页 KPI / 早报数据源，2026-10-13） ----------
+
+export type PlatformUnreadResult = {
+  /** ok=读到数；error=登录/浏览器不可用；unsupported=平台没有 PC 端消息中心 */
+  status: "ok" | "error" | "unsupported";
+  code?: string;
+  message?: string;
+  unread?: number;
+  chat_url?: string;
+};
+
+export type PlatformRepliesSnapshot = {
+  boss: PlatformUnreadResult;
+  liepin: PlatformUnreadResult;
+  job51: PlatformUnreadResult;
+};
+
 // ---------- 多平台适配层 ----------
 
 export type PlatformItem = {
@@ -301,6 +318,8 @@ export const ipc = {
   openManualBrowser: (url?: string) =>
     pyInvoke<BrowserPageState>("open_manual_browser", { url: url ?? "" }),
   checkBossReplies: () => pyInvoke<ReplyCheckResult>("check_boss_replies", {}),
+  checkPlatformReplies: () =>
+    pyInvoke<PlatformRepliesSnapshot>("check_platform_replies", {}),
   listProfiles: () => pyInvoke<{ profiles: ProfileSummary[] }>("list_profiles", {}),
   getProfile: (name: string) => pyInvoke<LoadedProfile>("get_profile", { name }),
   saveProfile: (name: string, data: ProfileData) =>

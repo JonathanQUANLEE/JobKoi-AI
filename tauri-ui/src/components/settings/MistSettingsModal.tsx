@@ -29,6 +29,15 @@ interface MistSettingsModalProps {
   setDelayMin?: (val: string) => void;
   delayMax?: string | number;
   setDelayMax?: (val: string) => void;
+  /** 分平台拟人化节奏（2026-10-13）：空串 = 跟随通用档。 */
+  liepinDelayMin?: string | number;
+  setLiepinDelayMin?: (val: string) => void;
+  liepinDelayMax?: string | number;
+  setLiepinDelayMax?: (val: string) => void;
+  job51DelayMin?: string | number;
+  setJob51DelayMin?: (val: string) => void;
+  job51DelayMax?: string | number;
+  setJob51DelayMax?: (val: string) => void;
   greeting?: string;
   setGreeting?: (val: string) => void;
   onSaveConfig?: () => Promise<void>;
@@ -45,6 +54,14 @@ export default function MistSettingsModal({
   setDelayMin,
   delayMax = "40",
   setDelayMax,
+  liepinDelayMin = "",
+  setLiepinDelayMin,
+  liepinDelayMax = "",
+  setLiepinDelayMax,
+  job51DelayMin = "",
+  setJob51DelayMin,
+  job51DelayMax = "",
+  setJob51DelayMax,
   greeting = "",
   setGreeting,
   onSaveConfig,
@@ -64,6 +81,10 @@ export default function MistSettingsModal({
   const [localDailyLimit, setLocalDailyLimit] = useState(String(dailyLimit));
   const [localDelayMin, setLocalDelayMin] = useState(String(delayMin));
   const [localDelayMax, setLocalDelayMax] = useState(String(delayMax));
+  const [localLiepinDelayMin, setLocalLiepinDelayMin] = useState(String(liepinDelayMin ?? ""));
+  const [localLiepinDelayMax, setLocalLiepinDelayMax] = useState(String(liepinDelayMax ?? ""));
+  const [localJob51DelayMin, setLocalJob51DelayMin] = useState(String(job51DelayMin ?? ""));
+  const [localJob51DelayMax, setLocalJob51DelayMax] = useState(String(job51DelayMax ?? ""));
   const [localGreeting, setLocalGreeting] = useState(greeting);
 
   // 大模型设置状态
@@ -88,13 +109,17 @@ export default function MistSettingsModal({
     setLocalDailyLimit(String(dailyLimit));
     setLocalDelayMin(String(delayMin));
     setLocalDelayMax(String(delayMax));
+    setLocalLiepinDelayMin(String(liepinDelayMin ?? ""));
+    setLocalLiepinDelayMax(String(liepinDelayMax ?? ""));
+    setLocalJob51DelayMin(String(job51DelayMin ?? ""));
+    setLocalJob51DelayMax(String(job51DelayMax ?? ""));
     setLocalGreeting(greeting);
     if (llmConfig) {
       setBaseUrl(llmConfig.base_url || "https://openrouter.ai/api/v1");
       setApiKey(llmConfig.api_key || "");
       setModel(llmConfig.model || "nvidia/nemotron-3.5-lightning:free");
     }
-  }, [rule, dailyLimit, delayMin, delayMax, greeting, llmConfig]);
+  }, [rule, dailyLimit, delayMin, delayMax, liepinDelayMin, liepinDelayMax, job51DelayMin, job51DelayMax, greeting, llmConfig]);
 
   if (!type) return null;
 
@@ -120,6 +145,10 @@ export default function MistSettingsModal({
     setDailyLimit?.(localDailyLimit);
     setDelayMin?.(localDelayMin);
     setDelayMax?.(localDelayMax);
+    setLiepinDelayMin?.(localLiepinDelayMin);
+    setLiepinDelayMax?.(localLiepinDelayMax);
+    setJob51DelayMin?.(localJob51DelayMin);
+    setJob51DelayMax?.(localJob51DelayMax);
     window.setTimeout(() => onSaveConfig?.().catch(() => {}), 0);
     useRunStore.getState().showCenterToast("安全设置已保存", { tone: "success" });
     notify({ type: "success", text: "投递频率与防风控保护策略已生效" });
@@ -248,6 +277,14 @@ export default function MistSettingsModal({
             setLocalDelayMin={setLocalDelayMin}
             localDelayMax={localDelayMax}
             setLocalDelayMax={setLocalDelayMax}
+            localLiepinDelayMin={localLiepinDelayMin}
+            setLocalLiepinDelayMin={setLocalLiepinDelayMin}
+            localLiepinDelayMax={localLiepinDelayMax}
+            setLocalLiepinDelayMax={setLocalLiepinDelayMax}
+            localJob51DelayMin={localJob51DelayMin}
+            setLocalJob51DelayMin={setLocalJob51DelayMin}
+            localJob51DelayMax={localJob51DelayMax}
+            setLocalJob51DelayMax={setLocalJob51DelayMax}
             onSave={handleSavePolicy}
             onClose={onClose}
           />

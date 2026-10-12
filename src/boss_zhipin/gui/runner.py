@@ -35,7 +35,7 @@ def get_task() -> Optional[asyncio.Task]:
 
 
 async def _wrap(coro: Awaitable[None]) -> None:
-    """业务 coroutine 外壳：catch 异常 + emit loop_ended + 清 callback。"""
+    """业务 coroutine 外壳：catch 异常 + emit loop_ended + 清 callback + 关浏览器。"""
     try:
         try:
             await coro
@@ -56,6 +56,28 @@ async def _wrap(coro: Awaitable[None]) -> None:
         review_control.reset()
         run_state.reset()
         set_emit_callback(None)
+        # 巡航结束自动关浏览器（2026-10-12 用户拍板：软件都结束了，浏览器还
+        # 开着像资源泄漏）。走优雅退出（CDP browser.close 保 cookie 落盘），
+        # 下一轮巡航入口会自动全新启动，免登不受影响；测试里 _browser=None
+        # 时 shutdown 是无害空操作。三平台统一：BOSS + 猎聘 + 51job。
+        try:
+            from boss_zhipin.website_oper import finding_jobs
+
+            if finding_jobs._browser is not None:
+                log.info("巡航结束，自动关闭 BOSS 受控浏览器（优雅退出保登录态）")
+                await finding_jobs.shutdown()
+        except Exception as e:  # noqa: BLE001 — 关浏览器失败不影响状态复位
+            log.warning("巡航结束自动关 BOSS 浏览器失败（不致命）: %s", e)
+        import importlib
+
+        for module_name in ("liepin.driver", "job51.driver"):
+            try:
+                module = importlib.import_module(module_name)
+                if getattr(module, "_browser", None) is not None:
+                    log.info("巡航结束，自动关闭 %s 受控浏览器（优雅退出保登录态）", module_name)
+                    await module.shutdown()
+            except Exception as e:  # noqa: BLE001 — 模块缺失/关闭失败均不致命
+                log.debug("关闭 %s 浏览器跳过：%s", module_name, e)
 
 
 def start_run(

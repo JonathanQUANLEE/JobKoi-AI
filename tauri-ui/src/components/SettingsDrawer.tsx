@@ -62,6 +62,15 @@ interface SettingsDrawerProps {
   setDelayMin: (v: string) => void;
   delayMax: string;
   setDelayMax: (v: string) => void;
+  /** 分平台拟人化节奏（2026-10-13）：空串 = 跟随通用档。 */
+  liepinDelayMin: string;
+  setLiepinDelayMin: (v: string) => void;
+  liepinDelayMax: string;
+  setLiepinDelayMax: (v: string) => void;
+  job51DelayMin: string;
+  setJob51DelayMin: (v: string) => void;
+  job51DelayMax: string;
+  setJob51DelayMax: (v: string) => void;
   maxSent: string;
   setMaxSent: (v: string) => void;
   dailyLimit: string;
@@ -172,6 +181,14 @@ export default function SettingsDrawer(props: SettingsDrawerProps) {
               setDelayMin={props.setDelayMin}
               delayMax={props.delayMax}
               setDelayMax={props.setDelayMax}
+              liepinDelayMin={props.liepinDelayMin}
+              setLiepinDelayMin={props.setLiepinDelayMin}
+              liepinDelayMax={props.liepinDelayMax}
+              setLiepinDelayMax={props.setLiepinDelayMax}
+              job51DelayMin={props.job51DelayMin}
+              setJob51DelayMin={props.setJob51DelayMin}
+              job51DelayMax={props.job51DelayMax}
+              setJob51DelayMax={props.setJob51DelayMax}
               maxSent={props.maxSent}
               setMaxSent={props.setMaxSent}
               dailyLimit={props.dailyLimit}

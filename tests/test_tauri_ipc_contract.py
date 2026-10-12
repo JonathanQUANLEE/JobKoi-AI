@@ -55,6 +55,8 @@ def test_tauri_ipc_commands_match_gui_v02_contract():
         "agent_execute_action",
         # F3 新回复检测
         "check_boss_replies",
+        # 三平台未读快照（统计页 KPI / 早报数据源）
+        "check_platform_replies",
         # 多平台适配层（多平台选择与扫码登录）
         "list_platforms",
         "open_platform_login",

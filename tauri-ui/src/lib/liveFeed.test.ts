@@ -61,6 +61,44 @@ describe("buildLiveFeed — 时间轴组装", () => {
   });
 });
 
+describe("platform 维度（三平台并列需求）", () => {
+  it("事件带 platform → 条目带平台标识；缺省归 boss", () => {
+    const liepinItem = toLiveFeedItem(ev("job_processing", { platform: "liepin", title: "AI 工程师" }), 0);
+    expect(liepinItem?.platform).toBe("liepin");
+    const bossItem = toLiveFeedItem(ev("job_processing", { title: "AI 实习" }), 1);
+    expect(bossItem?.platform).toBe("boss");
+  });
+
+  it("未知 platform 值兜底为 boss（防脏数据炸 UI）", () => {
+    const item = toLiveFeedItem(ev("job_sent", { platform: "unknown-x", title: "A", sent: 1 }), 0);
+    expect(item?.platform).toBe("boss");
+  });
+
+  it("channels 过滤：只显示勾选平台的动态（并列勾选的核心）", () => {
+    const events = [
+      ev("job_sent", { platform: "boss", title: "BOSS 岗", sent: 1 }),
+      ev("job_sent", { platform: "liepin", title: "猎聘岗", sent: 1 }),
+      ev("job_sent", { platform: "job51", title: "51job 岗", sent: 1 }),
+    ];
+    const all = buildLiveFeed(events, 200, ["boss", "liepin", "job51"]);
+    expect(all.length).toBe(3);
+    const onlyBoss = buildLiveFeed(events, 200, ["boss"]);
+    expect(onlyBoss.length).toBe(1);
+    expect(onlyBoss[0].platform).toBe("boss");
+    expect(onlyBoss[0].title).toBe("BOSS 岗");
+    // channels 传空数组/undefined = 不过滤全部显示
+    expect(buildLiveFeed(events, 200, []).length).toBe(3);
+    expect(buildLiveFeed(events).length).toBe(3);
+  });
+
+  it("currentProcessingJob 返回 platform（聚光卡平台徽章数据源）", () => {
+    const events = [
+      ev("job_processing", { platform: "job51", title: "前端实习" }),
+    ];
+    expect(currentProcessingJob(events)?.platform).toBe("job51");
+  });
+});
+
 describe("currentProcessingJob — 当前岗位聚光", () => {
   it("返回最后一个 job_processing（脚本正在看的岗位）", () => {
     const events = [

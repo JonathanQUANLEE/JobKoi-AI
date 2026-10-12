@@ -41,8 +41,12 @@ export default function DeliveryAnalyticsView({ onStartCruise }: DeliveryAnalyti
   const [realError, setRealError] = useState<string | null>(null);
   // 折线图点选的历史回看日期（null = 昨日战报）
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  // 真实模式 KPI：BOSS 当前未读消息数（实时读导航；浏览器没开 = null）
-  const [bossUnread, setBossUnread] = useState<number | null>(null);
+  // 真实模式 KPI：三平台未读消息快照（null = 读不到；loading = 正在开页面读取）
+  const [unreadSnapshot, setUnreadSnapshot] = useState<{
+    boss: number | null;
+    liepin: number | null;
+  } | null>(null);
+  const [unreadLoading, setUnreadLoading] = useState(false);
 
   const fetchRealStats = useCallback(async () => {
     setRealLoading(true);
@@ -62,13 +66,30 @@ export default function DeliveryAnalyticsView({ onStartCruise }: DeliveryAnalyti
     if (mode === "real") fetchRealStats();
   }, [mode, fetchRealStats]);
 
-  // 真实模式 KPI 的 BOSS 未读消息：读当前受控页面导航未读数（浏览器没开 = null）
+  // 真实模式 KPI 的三平台未读消息（2026-10-13）：后端会按需短暂打开平台页面
+  // 读取角标后立即关闭；未登录/不可读 → null。51job 消息走微信服务号，固定不可读。
   useEffect(() => {
     if (mode !== "real") return;
+    let cancelled = false;
+    setUnreadLoading(true);
     ipc
-      .checkBossReplies()
-      .then((res) => setBossUnread(res.status === "ok" ? (res.unread ?? 0) : null))
-      .catch(() => setBossUnread(null));
+      .checkPlatformReplies()
+      .then((res) => {
+        if (cancelled) return;
+        setUnreadSnapshot({
+          boss: res.boss?.status === "ok" ? (res.boss.unread ?? 0) : null,
+          liepin: res.liepin?.status === "ok" ? (res.liepin.unread ?? 0) : null,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setUnreadSnapshot(null);
+      })
+      .finally(() => {
+        if (!cancelled) setUnreadLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [mode, realStats]);
   const prevRunningRef = useRef(running);
   useEffect(() => {
@@ -111,8 +132,9 @@ export default function DeliveryAnalyticsView({ onStartCruise }: DeliveryAnalyti
     [realStats],
   );
   const realBrief = useMemo(
-    () => buildRealMorningBrief(realStats?.days || [], selectedDate),
-    [realStats, selectedDate],
+    () =>
+      buildRealMorningBrief(realStats?.days || [], selectedDate, unreadSnapshot ?? undefined),
+    [realStats, selectedDate, unreadSnapshot],
   );
   // 演示模式：点选日期时回看那天战报，否则显示昨日（本地假库自带回复字段）
   const demoBriefForDate = useMemo(
@@ -325,23 +347,46 @@ export default function DeliveryAnalyticsView({ onStartCruise }: DeliveryAnalyti
           }`}
         >
           <div className="flex items-center justify-between text-stone-400 text-xs mb-1">
-            <span>{isReal ? "BOSS 未读消息" : "收到 HR 回复总数"}</span>
+            <span>{isReal ? "未读消息（实时）" : "收到 HR 回复总数"}</span>
             <MessageSquare className={`size-4 ${isMonochrome ? "text-zinc-300" : "text-emerald-400"}`} />
           </div>
           <div className="flex items-baseline gap-1.5">
             {isReal ? (
-              bossUnread !== null ? (
+              unreadLoading ? (
                 <>
-                  <AnimatedNumber
-                    value={bossUnread}
-                    className="text-2xl font-black font-mono text-white"
-                  />
-                  <span className="text-xs text-stone-500">条 · 实时</span>
+                  <span className="text-2xl font-black font-mono text-stone-500">…</span>
+                  <span className="text-xs text-stone-500">读取中（会短暂打开平台页面）</span>
                 </>
+              ) : unreadSnapshot && (unreadSnapshot.boss !== null || unreadSnapshot.liepin !== null) ? (
+                <div className="flex items-baseline gap-3">
+                  {unreadSnapshot.boss !== null && (
+                    <span className="flex items-baseline gap-1">
+                      <span className="text-[10px] font-bold" style={{ color: "#00bebd" }}>
+                        BOSS
+                      </span>
+                      <AnimatedNumber
+                        value={unreadSnapshot.boss}
+                        className="text-2xl font-black font-mono text-white"
+                      />
+                    </span>
+                  )}
+                  {unreadSnapshot.liepin !== null && (
+                    <span className="flex items-baseline gap-1">
+                      <span className="text-[10px] font-bold" style={{ color: "#ff7033" }}>
+                        猎聘
+                      </span>
+                      <AnimatedNumber
+                        value={unreadSnapshot.liepin}
+                        className="text-2xl font-black font-mono text-white"
+                      />
+                    </span>
+                  )}
+                  <span className="text-xs text-stone-500">条</span>
+                </div>
               ) : (
                 <>
                   <span className="text-2xl font-black font-mono text-stone-500">—</span>
-                  <span className="text-xs text-stone-500">浏览器未打开</span>
+                  <span className="text-xs text-stone-500">未登录 / 暂不可读</span>
                 </>
               )
             ) : (
@@ -355,7 +400,9 @@ export default function DeliveryAnalyticsView({ onStartCruise }: DeliveryAnalyti
             )}
           </div>
           {isReal && (
-            <p className="text-[10px] text-stone-500 mt-0.5">HR 回复统计建设中 · 此为当前未读数</p>
+            <p className="text-[10px] text-stone-500 mt-0.5">
+              HR 回复归因建设中 · 51job 消息走微信服务号无法读取
+            </p>
           )}
         </div>
 

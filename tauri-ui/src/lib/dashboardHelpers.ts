@@ -10,7 +10,9 @@ export const DEFAULT_RULE: RuleForm = {
   anyKeywords: "后端开发,AI,RAG,大模型",
   excludeKeywords: "销售,客服,培训",
   scope: "title",
-  match: "contains",
+  // smart（2026-10-13）：意图分层匹配——关键词解析成「方向×性质」逐步降级
+  // （L1 完整意图→L2 强方向→L3 同族+性质→L4 泛方向），绝不整串死匹配。
+  match: "smart",
   caseSensitive: false,
 };
 
@@ -213,7 +215,9 @@ export function asScope(value: unknown, fallback: Scope): Scope {
 }
 
 export function asMatchMode(value: unknown, fallback: MatchMode): MatchMode {
-  return value === "contains" || value === "regex" || value === "exact" ? value : fallback;
+  return value === "contains" || value === "regex" || value === "exact" || value === "smart"
+    ? value
+    : fallback;
 }
 
 export function latestPayload(events: ProgressEvent[], kind: ProgressEvent["kind"]) {
@@ -227,13 +231,49 @@ export function latestJob(events: ProgressEvent[]) {
 export function summarizeEvents(events: ProgressEvent[]) {
   return events.reduce(
     (acc, event) => {
-      if (event.kind === "job_found") acc.scanned += 1;
+      // scanned：DOM 流发 job_found，API 直读流发 job_processing（2026-10-12
+      // 实测事故：API 流只发 job_processing，旧逻辑只认 job_found → 巡航结束
+      // 弹窗"扫描 0"但汇总 330——两条流的事件都计入）
+      if (event.kind === "job_found" || event.kind === "job_processing") acc.scanned += 1;
       if (event.kind === "job_skipped") acc.skipped += 1;
-      if (event.kind === "letter_sent" && event.payload.status === "sent") acc.sent += 1;
+      // sent：DOM 流发 letter_sent(status=sent)，API 直读流发 job_sent
+      if (
+        (event.kind === "letter_sent" && event.payload.status === "sent") ||
+        event.kind === "job_sent"
+      ) {
+        acc.sent += 1;
+      }
       return acc;
     },
     { scanned: 0, skipped: 0, sent: 0 },
   );
+}
+
+/**
+ * 按平台拆分的实时计数（实时巡航页四平台通道卡并列显示用）。
+ * 事件带 platform 字段（boss/liepin/job51）；旧事件缺省归 boss。
+ */
+export function summarizeEventsByPlatform(
+  events: ProgressEvent[],
+): Record<string, { scanned: number; sent: number; skipped: number }> {
+  const result: Record<string, { scanned: number; sent: number; skipped: number }> = {};
+  const bucket = (platform: unknown) => {
+    const key = typeof platform === "string" && platform ? platform : "boss";
+    if (!result[key]) result[key] = { scanned: 0, sent: 0, skipped: 0 };
+    return result[key];
+  };
+  for (const event of events) {
+    const b = bucket(event.payload.platform);
+    if (event.kind === "job_found" || event.kind === "job_processing") b.scanned += 1;
+    if (event.kind === "job_skipped") b.skipped += 1;
+    if (
+      (event.kind === "letter_sent" && event.payload.status === "sent") ||
+      event.kind === "job_sent"
+    ) {
+      b.sent += 1;
+    }
+  }
+  return result;
 }
 
 export function formatJobLine(payload: Record<string, unknown> | undefined): string {

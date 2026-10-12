@@ -30,7 +30,12 @@ _build_scope_explanation = build_scope_explanation
 
 
 def match_posting(posting: JobPosting, filters: dict[str, Any]) -> PostingMatch:
-    """按 exclude -> required -> any 的顺序匹配岗位。"""
+    """按 exclude -> required -> any 的顺序匹配岗位。
+
+    命中时 reason 保留 required/any 组的命中说明（smart 分层的 L1-L4
+    就从这里透传到投递日志），而不是笼统的"命中本地筛选规则"。
+    """
+    hit_reason = ""
     for scope_name, groups in (filters or {}).items():
         if not isinstance(groups, dict):
             continue
@@ -61,6 +66,8 @@ def match_posting(posting: JobPosting, filters: dict[str, Any]) -> PostingMatch:
                     matched_keywords=result.matched_keywords,
                     missing_keywords=result.missing_keywords,
                 )
+            if not hit_reason:
+                hit_reason = result.reason
 
         any_group = groups.get("any")
         if _is_enabled(any_group):
@@ -75,8 +82,14 @@ def match_posting(posting: JobPosting, filters: dict[str, Any]) -> PostingMatch:
                     matched_keywords=result.matched_keywords,
                     missing_keywords=result.missing_keywords,
                 )
+            if not hit_reason:
+                hit_reason = result.reason
 
-    return PostingMatch(matched=True, stage="matched", reason="命中本地筛选规则")
+    return PostingMatch(
+        matched=True,
+        stage="matched",
+        reason=hit_reason or "命中本地筛选规则",
+    )
 
 
 def explain_posting_match(posting: JobPosting, filters: dict[str, Any]) -> dict[str, Any]:
@@ -106,6 +119,12 @@ def match_rule_group(
     case_sensitive = bool(rule.get("case_sensitive", False))
     text = _scope_text(posting, scope)
 
+    # Smart 意图分层（2026-10-13 重做）：关键词先解析成「方向×性质」意图，
+    # 再对文本分层判定（L1 完整意图 → L2 强方向 → L3 同族+性质 → L4 泛方向），
+    # 分层原因写进 reason。业务背景与业界依据见 config/intent_lexicon.py。
+    if mode == "smart":
+        return _match_smart_group(text, keywords, require_all=require_all)
+
     matched_keywords: list[str] = []
     missing_keywords: list[str] = []
     for keyword in keywords:
@@ -128,6 +147,39 @@ def match_rule_group(
     return RuleMatch(
         matched=False,
         reason="未命中关键词: " + "/".join(missing_keywords),
+        matched_keywords=matched_keywords,
+        missing_keywords=missing_keywords,
+    )
+
+
+def _match_smart_group(text: str, keywords: list[str], *, require_all: bool) -> RuleMatch:
+    """smart 模式的组级匹配：每个关键词独立解析意图并分层判定。"""
+    from boss_zhipin.config.intent_lexicon import classify_text, parse_intent
+
+    matched_keywords: list[str] = []
+    matched_reasons: list[str] = []
+    missing_keywords: list[str] = []
+    missing_reasons: list[str] = []
+    for keyword in keywords:
+        intent = parse_intent(keyword)
+        hit, layer_reason = classify_text(text, intent)
+        if hit:
+            matched_keywords.append(keyword)
+            matched_reasons.append(f"{keyword}→{layer_reason}")
+        else:
+            missing_keywords.append(keyword)
+            missing_reasons.append(f"{keyword}→{layer_reason}")
+
+    matched = (len(missing_keywords) == 0) if require_all else bool(matched_keywords)
+    if matched:
+        return RuleMatch(
+            matched=True,
+            reason="意图分层命中: " + "；".join(matched_reasons),
+            matched_keywords=matched_keywords,
+        )
+    return RuleMatch(
+        matched=False,
+        reason="未命中意图词族: " + "；".join(missing_reasons),
         matched_keywords=matched_keywords,
         missing_keywords=missing_keywords,
     )

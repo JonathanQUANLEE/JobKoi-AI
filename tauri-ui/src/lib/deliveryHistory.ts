@@ -37,6 +37,8 @@ export interface MorningBrief {
   actionAdvice: string;
   /** false = 回复数据不可得（真实模式：三平台无回复检测），前端回复相关区域显示「建设中」 */
   hasReplyData?: boolean;
+  /** 三平台当前未读消息快照（真实模式，2026-10-13）：null=该平台读不到 */
+  unreadInfo?: { boss: number | null; liepin: number | null };
 }
 
 const STORAGE_KEY = "jobhunter_delivery_history_v1";
@@ -285,15 +287,21 @@ export const deliveryHistoryDb = {
 /**
  * 真实数据模式早报：从后端按天聚合的真实投递数据构造。
  *
- * 诚实性红线（2026-10-12 用户拍板"不能骗用户"）：三平台没有回复检测能力，
- * 回复相关字段一律 0 + hasReplyData=false，前端展示层显示「回复统计建设中」，
- * 绝不用编造数字冒充真实回复。
+ * 诚实性红线（2026-10-12 用户拍板"不能骗用户"）：回复归因（谁回了、回复率）
+ * 三平台都做不到——回复相关字段一律 0 + hasReplyData=false，前端展示层显示
+ * 「回复统计建设中」，绝不用编造数字冒充真实回复。
+ *
+ * 2026-10-13 起新增：unreadInfo（BOSS 导航角标 + 猎聘聊天挂件角标的**真实**
+ * 当前未读数，51job 消息走微信服务号读不到）写进 insight 与 unreadInfo 字段——
+ * 这是能拿到的最真实的"HR 有没有动静"信号，不与回复率混淆。
  *
  * @param targetDate 指定查看哪一天的战报（折线图点选历史回看）；缺省=昨日。
+ * @param unreadInfo 三平台当前未读快照（后端 check_platform_replies）；缺省=不展示。
  */
 export function buildRealMorningBrief(
   days: { date: string; bossSent: number; liepinSent: number; job51Sent: number; totalSent: number }[],
   targetDate?: string | null,
+  unreadInfo?: { boss: number | null; liepin: number | null },
 ): MorningBrief {
   const now = new Date();
   const todayStr = formatDateKey(now);
@@ -310,6 +318,15 @@ export function buildRealMorningBrief(
   const liepinSent = yesterdayRecord?.liepinSent || 0;
   const job51Sent = yesterdayRecord?.job51Sent || 0;
 
+  // 未读快照的人话（只描述当前，不冒充"昨日回复"）
+  let unreadLine = "";
+  if (unreadInfo && (unreadInfo.boss !== null || unreadInfo.liepin !== null)) {
+    const parts: string[] = [];
+    if (unreadInfo.boss !== null) parts.push(`BOSS ${unreadInfo.boss} 条`);
+    if (unreadInfo.liepin !== null) parts.push(`猎聘 ${unreadInfo.liepin} 条`);
+    unreadLine = `当前未读消息：${parts.join(" · ")}（51job 消息经微信服务号推送，暂无法统计）。`;
+  }
+
   let insight: string;
   if (totalSent <= 0) {
     insight = isHistorical
@@ -324,8 +341,9 @@ export function buildRealMorningBrief(
       .filter(Boolean)
       .join(" / ");
     const dayLabel = isHistorical ? targetDate! : "昨日";
-    insight = `${dayLabel}真实投递 ${totalSent} 份（${platformParts}）。回复率统计暂未开放（平台未提供回复数据），可在「招聘平台中心」查看 BOSS 未读消息。`;
+    insight = `${dayLabel}真实投递 ${totalSent} 份（${platformParts}）。回复率统计暂未开放（平台未提供回复归因数据）。${unreadLine}`;
   }
+  if (!totalSent && unreadLine) insight = `${insight}${unreadLine}`;
 
   return {
     todayDate: todayStr,
@@ -345,6 +363,7 @@ export function buildRealMorningBrief(
       ? "点击折线图的其他日期可继续回看，或点「返回昨日」回到最新战报。"
       : "今日早晨 09:00 前后是招聘者集中上线筛选简历的时段，建议启动巡航优先拉满早间批次。",
     hasReplyData: false,
+    unreadInfo,
   };
 }
 

@@ -249,6 +249,7 @@ async def send_job_descriptions_to_chat(
                     )
                     events.emit(
                         "job_skipped",
+                        platform="boss",
                         index=job_index,
                         reason="duplicate",
                         detail=duplicate_detail,
@@ -305,6 +306,7 @@ async def send_job_descriptions_to_chat(
 
                 events.emit(
                     "job_found",
+                    platform="boss",
                     index=job_index,
                     title=job_title,
                     jd_preview=job_description[:80],
@@ -338,6 +340,7 @@ async def send_job_descriptions_to_chat(
                     )
                     events.emit(
                         "job_skipped",
+                        platform="boss",
                         index=job_index,
                         reason=skip_reason,
                         detail=detail,
@@ -381,6 +384,7 @@ async def send_job_descriptions_to_chat(
                         )
                         events.emit(
                             "job_skipped",
+                            platform="boss",
                             index=job_index,
                             reason=stage_name,
                             detail=reason,

@@ -92,6 +92,7 @@ export default function DrawerRulesTab({
               value={rule.match}
               onChange={(e) => setRule({ ...rule, match: e.target.value as MatchMode })}
             >
+              <option value="smart">{optionLabel(lang, "match.smart")}</option>
               <option value="contains">{optionLabel(lang, "match.contains")}</option>
               <option value="regex">{optionLabel(lang, "match.regex")}</option>
               <option value="exact">{optionLabel(lang, "match.exact")}</option>

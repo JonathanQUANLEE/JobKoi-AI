@@ -69,11 +69,15 @@ def _build_main_loop_factory(config: RunConfig):
                 environ["BOSS_LABEL"] = config.label
 
         # 主循环全部走 cli.run_automation——CLI 和 GUI 共用一份逻辑。
+        # 严格按用户在平台中心勾选的平台跑（2026-10-13 事故修复：旧代码
+        # `if "boss" not in platforms: platforms.insert(0, "boss")` 强制把
+        # BOSS 塞进任何巡航——用户只勾猎聘时 BOSS 照跑、猎聘链反而崩了，
+        # 用户看到"投的是 BOSS 直聘"完全懵掉）。空列表兜底只跑 BOSS。
         platforms = [str(p) for p in (config.platforms or []) if str(p)]
-        if "boss" not in platforms:
-            platforms.insert(0, "boss")
+        if not platforms:
+            platforms = ["boss"]
 
-        if len(platforms) == 1:
+        if platforms == ["boss"]:
             await run_automation(
                 usr_name=config.usr_name,
                 label=config.label or environ.get("BOSS_LABEL", ""),
@@ -82,17 +86,10 @@ def _build_main_loop_factory(config: RunConfig):
             )
             return
 
-        # 多平台巡航：BOSS + 猎聘 + 51job 在同一个事件循环里并发跑。
-        # 三平台各自独立的浏览器 profile / 去重账本 / 限额，互不干扰；
+        # 多平台/非 BOSS 巡航：勾选的平台在同一个事件循环里并发跑。
+        # 各平台独立的浏览器 profile / 去重账本 / 限额，互不干扰；
         # 任一平台异常不影响其他平台，统一收敛到日志。
         import asyncio as _asyncio
-
-        boss_coro = run_automation(
-            usr_name=config.usr_name,
-            label=config.label or environ.get("BOSS_LABEL", ""),
-            dry_run=False,
-            use_current_page=config.use_current_page,
-        )
 
         async def _wrap_platform(name: str, coro) -> None:
             try:
@@ -100,15 +97,42 @@ def _build_main_loop_factory(config: RunConfig):
             except Exception as e:  # noqa: BLE001 — 单平台失败不拖垮其他链路
                 log.warning("[multi-platform] %s 链异常终止: %s", name, e)
 
-        tasks = [_asyncio.create_task(_wrap_platform("boss", boss_coro))]
+        tasks = []
+        if "boss" in platforms:
+            boss_coro = run_automation(
+                usr_name=config.usr_name,
+                label=config.label or environ.get("BOSS_LABEL", ""),
+                dry_run=False,
+                use_current_page=config.use_current_page,
+            )
+            tasks.append(_asyncio.create_task(_wrap_platform("boss", boss_coro)))
+
+        user_kw = (config.label or environ.get("BOSS_LABEL", "")).strip()
+
+        # 关键词裂变（2026-10-13 三阶段引擎·机制一）：把用户当天的搜索
+        # 意图裂变成 精准/技术栈/泛生态 三桶变体（每轮洗牌轮转），猎聘/
+        # 51job 的搜索词从"1 个用户词 + 静态默认表"升级为"意图感知的
+        # 动态列表。未收录方向安全降级为 [user_kw]，与旧行为一致。
+        fission_kws: list[str] = []
+        if user_kw:
+            from boss_zhipin.config.query_fission import generate_fission_keywords
+
+            fission_kws = generate_fission_keywords(user_kw)
+
+        def _with_fission(defaults: list[str]) -> list[str]:
+            """裂变词在前（意图优先消耗当日额度），静态默认表兜底在后。"""
+            if not fission_kws:
+                return list(defaults)
+            return fission_kws + [k for k in defaults if k not in fission_kws]
 
         if "liepin" in platforms:
             from liepin import apply as liepin_apply
             from liepin import driver as liepin_driver
 
             liepin_limit = int(environ.get("LIEPIN_DAILY_LIMIT", "100"))
+            liepin_kws = _with_fission(list(liepin_apply.DEFAULT_KEYWORDS))
             liepin_coro = liepin_apply.run(
-                list(liepin_apply.DEFAULT_KEYWORDS),
+                liepin_kws,
                 liepin_limit,
                 liepin_driver._greeting_text(),
             )
@@ -118,10 +142,11 @@ def _build_main_loop_factory(config: RunConfig):
             from job51 import apply as job51_apply
 
             job51_limit = int(environ.get("JOB51_DAILY_LIMIT", "40"))
+            job51_kws = _with_fission(list(job51_apply.DEFAULT_KEYWORDS))
             tasks.append(
                 _asyncio.create_task(
                     _wrap_platform(
-                        "job51", job51_apply.run(list(job51_apply.DEFAULT_KEYWORDS), job51_limit)
+                        "job51", job51_apply.run(job51_kws, job51_limit)
                     )
                 )
             )
@@ -199,10 +224,25 @@ async def stop_run() -> dict[str, str]:
 
 @commands.command()
 async def shutdown_browser() -> dict[str, str]:
-    """关 Chrome——给"完全重置"按钮用。stop_run 之后再调这个才能从头来。"""
+    """关受控浏览器（三平台全关，2026-10-12 升级）。
+
+    登录轮询成功后前端会自动调本命令（BOSS/猎聘/51job 登录完都要立刻关：
+    Chrome 开着会锁 cookie 库，登录状态读不出来 + 白占资源）。优雅退出
+    （CDP browser.close）保 cookie 落盘。也给"完全重置"按钮用。
+    """
     from boss_zhipin.website_oper import finding_jobs
 
     await finding_jobs.shutdown()
+    # 猎聘 / 51job 的受控浏览器一并优雅关闭（幂等，没开着就跳过）
+    import importlib
+
+    for module_name in ("liepin.driver", "job51.driver"):
+        try:
+            module = importlib.import_module(module_name)
+            if getattr(module, "_browser", None) is not None:
+                await module.shutdown()
+        except Exception as e:  # noqa: BLE001 — 模块缺失/关闭失败均不致命
+            log.debug("shutdown_browser 关闭 %s 跳过：%s", module_name, e)
     return {"status": "ok"}
 
 

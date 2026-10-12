@@ -20,6 +20,10 @@ const baseValues: ProfileFormValues = {
   greetingPath: "./greetings/default.txt",
   delayMin: "20",
   delayMax: "40",
+  liepinDelayMin: "",
+  liepinDelayMax: "",
+  job51DelayMin: "",
+  job51DelayMax: "",
   maxSent: "50",
   dailyLimit: "80",
   stopOnCaptcha: true,
@@ -55,6 +59,7 @@ describe("buildProfileData 城市宽容解析（落盘兜底线）", () => {
 describe("buildProfileData", () => {
   it("converts GUI form values to profile YAML data", () => {
     const data = buildProfileData({
+      ...baseValues,
       label: " 后端开发实习 ",
       startUrl: " https://example.test/jobs?city=101280600 ",
       rule: {
@@ -140,6 +145,7 @@ describe("buildProfileData", () => {
 
   it("uses safe defaults for blank optional form values", () => {
     const data = buildProfileData({
+      ...baseValues,
       label: "",
       startUrl: "",
       rule: {
@@ -189,6 +195,7 @@ describe("buildProfileData", () => {
   it("clamps humanized delay into the safe range [15, 45] seconds", () => {
     const mk = (delayMin: string, delayMax: string) =>
       buildProfileData({
+        ...baseValues,
         label: "AI",
         startUrl: "",
         rule: {
@@ -228,6 +235,7 @@ describe("buildProfileData", () => {
 
   it("stores title plus description as a reusable matching scope", () => {
     const data = buildProfileData({
+      ...baseValues,
       label: "AI应用实习",
       startUrl: "",
       rule: {
@@ -256,6 +264,32 @@ describe("buildProfileData", () => {
 
     expect(data.filters.title.required.scope).toBe("title_description");
     expect(data.filters.title.any.scope).toBe("title_description");
+  });
+
+  it("分平台延迟：未单设不落盘（回退通用档），单设值同样钳进安全区间", () => {
+    // 全部未单设（空串 = 跟随通用档）→ send 里不出现分平台字段
+    const follow = buildProfileData(baseValues);
+    expect(follow.send).not.toHaveProperty("liepin_delay_min");
+    expect(follow.send).not.toHaveProperty("liepin_delay_max");
+    expect(follow.send).not.toHaveProperty("job51_delay_min");
+    expect(follow.send).not.toHaveProperty("job51_delay_max");
+
+    // 猎聘单设效率档 15-30；51job 单设越界值 10-90 → 钳到 15-45
+    const separated = buildProfileData({
+      ...baseValues,
+      liepinDelayMin: "15",
+      liepinDelayMax: "30",
+      job51DelayMin: "10",
+      job51DelayMax: "90",
+    });
+    expect(separated.send).toMatchObject({
+      liepin_delay_min: 15,
+      liepin_delay_max: 30,
+      job51_delay_min: 15,
+      job51_delay_max: 45,
+    });
+    // 通用档不受分平台单设影响
+    expect(separated.send).toMatchObject({ delay_min: 20, delay_max: 40 });
   });
 });
 

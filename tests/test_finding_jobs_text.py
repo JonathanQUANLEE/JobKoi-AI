@@ -435,17 +435,26 @@ def test_job_key_falls_back_to_stable_fields():
     assert job_key(posting) == "后端开发实习|某某科技|深圳|李女士"
 
 
-def test_apply_page_filters_clicks_enabled_values(monkeypatch):
+def test_apply_page_filters_city_url_plus_dom_clicks(monkeypatch):
+    """城市 = URL 直填（2026-10-12 重写，先于其他组执行）；其余组仍走 DOM 点击。"""
     async def scenario():
         clicked: list[tuple[str, str]] = []
+        url_calls: list[list[str]] = []
 
         async def click_filter_value(group_name: str, value: str, timeout: float = 5):
             clicked.append((group_name, value))
             return True
 
+        async def fake_url_filter(cities):
+            url_calls.append(list(cities))
+            return True
+
         async def sleep(delay: float):
             clicked.append(("sleep", str(delay)))
 
+        from boss_zhipin.website_oper.core import page_filter_ctrl
+
+        monkeypatch.setattr(page_filter_ctrl, "apply_city_url_filter", fake_url_filter)
         monkeypatch.setattr(finding_jobs, "click_filter_value", click_filter_value)
         monkeypatch.setattr(finding_jobs.asyncio, "sleep", sleep)
 
@@ -458,9 +467,11 @@ def test_apply_page_filters_clicks_enabled_values(monkeypatch):
             }
         )
 
+        # 城市：≥2 城洗牌为随机顺序，URL 直填只应用**第 1 城**（单城，wapi 实证）；
+        # 另一城由巡航逐城推进补投
+        assert len(url_calls) == 1
+        assert url_calls[0][0] in ("深圳", "广州")
         assert clicked == [
-            ("city", "深圳"),
-            ("city", "广州"),
             ("boss_active", "今日活跃"),
             ("sleep", "1"),
         ]
@@ -473,10 +484,12 @@ def test_apply_page_filters_warns_and_continues_when_not_strict(monkeypatch, cap
     async def scenario():
         events: list[dict] = []
 
-        async def click_filter_value(group_name: str, value: str, timeout: float = 5):
-            return False
+        from boss_zhipin.website_oper.core import page_filter_ctrl
 
-        monkeypatch.setattr(finding_jobs, "click_filter_value", click_filter_value)
+        async def fake_url_filter(cities):
+            return False  # URL 直填失败（如没有受控 tab）
+
+        monkeypatch.setattr(page_filter_ctrl, "apply_city_url_filter", fake_url_filter)
         await finding_jobs.apply_page_filters(
             {"strict": False, "city": {"enabled": True, "values": ["深圳"]}},
             emit_event=lambda payload: events.append(payload),

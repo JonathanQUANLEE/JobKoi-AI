@@ -17,35 +17,61 @@ from urllib.parse import quote
 import nodriver as uc
 from nodriver import Config
 
+from boss_zhipin.paths import get_platform_profile_dir
+from boss_zhipin.platforms.browser_lookup import apply_browser_fallback
 from boss_zhipin.platforms.session_cleanup import reap_profile_chrome
 
 log = logging.getLogger(__name__)
 
+# 注意：logs/cookie 导出等资源路径仍用 ROOT（__file__ 相对）；只有浏览器
+# profile 走统一解析器（打包后 ROOT 指向安装目录，profile 必须去用户数据区）。
 ROOT = Path(__file__).resolve().parent.parent.parent
-PROFILE_DIR = os.path.abspath(
-    os.environ.get("JOB51_CHROME_PROFILE", str(ROOT / "job51_profile"))
-)
+
+# Profile 目录单一真相（2026-10-13 打包加固）：env 覆盖 > standalone
+# %APPDATA%（防 Program Files UAC 只读炸 Cookie 落盘）> dev 仓库根
+# job51_profile（历史位置，用户已登录 cookie 一分不动）。
+# platforms/job51.py 的登录探测走同一函数，两边永远同源。
+PROFILE_DIR = str(get_platform_profile_dir("job51"))
 SEARCH_TMPL = "https://we.51job.com/pc/search?keyword={kw}"
 
 _browser: uc.Browser | None = None
 _tab: uc.Tab | None = None
 
-# 解析搜索页卡片：jobId / 标题 / 公司 / 标签（实习/校招）/ 是否已投
+# 解析搜索页卡片：jobId / 标题 / 公司 / 薪资 / 地点 / 链接 / 标签 / 是否已投
 PARSE_CARDS_JS = r"""
 (() => {
   const out = [];
   document.querySelectorAll('.joblist-item').forEach(c => {
     const sd = (c.querySelector('[sensorsdata]')?.getAttribute('sensorsdata') || '');
-    let jobId = '', title = '', jobLabel = '';
+    let jobId = '', title = '', jobLabel = '', salary = '', location = '', href = '';
     try {
       const d = JSON.parse(sd.replace(/&quot;/g, '"').replace(/&amp;/g, '&'));
-      jobId = d.jobId || ''; title = d.jobTitle || ''; jobLabel = d.jobLabel || '';
+      jobId = d.jobId || '';
+      title = d.jobTitle || '';
+      jobLabel = d.jobLabel || '';
+      salary = d.jobSalary || '';
+      location = d.jobArea || d.workArea || '';
     } catch (e) {}
+
+    // DOM 提取兜底（51job 搜索页常用类名）
+    if (!salary) {
+      const salEl = c.querySelector('.sal, [class*="sal"], [class*="salary"]');
+      if (salEl) salary = (salEl.textContent || '').trim();
+    }
+    if (!location) {
+      const areaEl = c.querySelector('.area, [class*="area"], .joblist-item-top .area');
+      if (areaEl) location = (areaEl.textContent || '').trim();
+    }
+
     const btn = c.querySelector('button.btn.apply');
     const applied = btn ? btn.classList.contains('active') : false;
     const coLink = c.querySelector('a[href*="jobs.51job.com"]');
     const company = ((coLink && coLink.textContent) || '').trim().split(/\s+/)[0] || '';
-    out.push({ jobId, title, company, jobLabel, applied, hasBtn: !!btn });
+
+    const jobLink = c.querySelector('a.jname, a[href*="jobs.51job.com"], a[href*="/job/"]');
+    href = (jobLink && jobLink.href) || (jobId ? `https://jobs.51job.com/${jobId}.html` : '');
+
+    out.push({ jobId, title, company, salary, location, href, jobLabel, applied, hasBtn: !!btn });
   });
   return JSON.stringify(out);
 })()
@@ -85,8 +111,13 @@ async def open_browser(url: str) -> uc.Tab:
     cfg.user_data_dir = PROFILE_DIR
     cfg.headless = False
     cfg.sandbox = False  # Chrome 154 + nodriver 0.50.x 下更稳
+    # 无 Chrome 电脑自愈：自动降级 Edge（Chromium 兼容内核）
+    apply_browser_fallback(cfg)
     _browser = await uc.start(config=cfg)
-    _tab = await _browser.get(url, new_window=True)
+    # 直接在 Chrome 启动自带的初始窗口里导航（不开新窗口）——与 BOSS 同款
+    # 修法：new_window=True 会留下 Chrome 原生空白窗口，用户看到两个窗口
+    # （2026-10-13 用户实测反馈）。
+    _tab = await _browser.get(url)
     try:
         await _tab.activate()
         await _tab.bring_to_front()
@@ -96,9 +127,118 @@ async def open_browser(url: str) -> uc.Tab:
     return _tab
 
 
-async def is_logged_in(tab: uc.Tab) -> bool:
-    url = str(getattr(tab, "url", "") or "")
-    return "login.51job.com" not in url
+def _on_login_page(url: str) -> bool:
+    if not url or url == "about:blank":
+        return True
+    return any(s in url for s in ("login.51job.com", "passport.51job.com"))
+
+
+async def is_logged_in(tab: uc.Tab | None = None) -> bool:
+    """登录判据：URL 离开登录域名，且存在 localStorage 凭据 (token/accountId)、登录用户专有 DOM、或凭据 Cookie。
+
+    红线：本函数在轮询链路中每 4s 调用一次，必须极速且有界（≤2s），严禁无超时裸调用
+    或阻塞性 CDP 命令。
+    """
+    global _browser, _tab
+    current_tab = tab or _tab
+
+    # 1. 收集活跃 Tab
+    candidate_tabs: list[Any] = []
+    if _browser is not None:
+        try:
+            candidate_tabs = list(_browser.tabs)
+        except Exception:
+            candidate_tabs = []
+    if current_tab is not None and current_tab not in candidate_tabs:
+        candidate_tabs.append(current_tab)
+
+    active_tab = current_tab or (candidate_tabs[0] if candidate_tabs else None)
+    active_url = str(getattr(active_tab, "url", "") or "") if active_tab else ""
+
+    # 核心安全栅栏：如果活跃 Tab 明确处于登录页，绝对不能判为已登录（避免关掉扫码窗口）
+    if active_url and _on_login_page(active_url):
+        return False
+
+    # 2. 活跃页面 LocalStorage 与业务 DOM 探测（有界 1.5s，最准且与实际页面渲染同步）
+    # 51job 扫码成功后跳至 www.51job.com / we.51job.com，同时写入 localStorage(token, accountId) 与展示用户数据
+    if active_tab is not None and not _on_login_page(active_url) and "51job.com" in active_url:
+        try:
+            probe_js = """(() => {
+                try {
+                    const ls = window.localStorage || {};
+                    if (ls.getItem('token') || ls.getItem('accountId')) return true;
+                    const body = (document.body && document.body.innerText) || '';
+                    if (body.includes('我的投递') || body.includes('谁对我感兴趣') || body.includes('在线简历') || body.includes('我的51Job') || body.includes('个人中心') || body.includes('退出')) {
+                        return true;
+                    }
+                    return false;
+                } catch (e) {
+                    return false;
+                }
+            })()"""
+            raw = await asyncio.wait_for(active_tab.evaluate(probe_js), timeout=1.5)
+            if raw is True or raw == "true" or (isinstance(raw, dict) and raw.get("ok")):
+                return True
+        except Exception:
+            pass
+
+    # 3. 强凭证：有界尝试从浏览器 CookieJar 获取凭证 cookie（超时 1.5s 兜底）
+    # 51job 扫码登录后下发 51job(内含 cuid) 或 accountid / partner_session
+    if _browser is not None:
+        try:
+            cookies = await asyncio.wait_for(_browser.cookies.get_all(), timeout=1.5)
+            for c in cookies:
+                c_name = getattr(c, "name", "")
+                c_val = str(getattr(c, "value", "") or "")
+                if c_name in ("accountid", "partner_session"):
+                    return True
+                if c_name == "51job" and ("cuid" in c_val or len(c_val) > 20):
+                    return True
+        except Exception:
+            pass
+
+    # 4. URL 与标题证据：进入专属个人中心域名（未登录不可达）或标题明确带有个人中心
+    for t in candidate_tabs:
+        u = str(getattr(t, "url", "") or "")
+        target = getattr(t, "target", None)
+        title = str(getattr(target, "title", "") or "")
+        if _on_login_page(u):
+            continue
+        # i.51job.com 是专属求职者个人中心
+        if "i.51job.com" in u or "我的51Job" in title or "个人中心" in title:
+            return True
+
+    return False
+
+
+async def shutdown() -> None:
+    """优雅关闭 Chrome（2026-10-12 升级：巡航结束自动关浏览器，三平台统一）。
+
+    用 CDP ``browser.close()`` 让 Chrome 走正常退出流程（flush cookie/session
+    到磁盘），再兜底 stop——``stop()`` 只断 CDP 连接，进程可能被硬杀导致
+    登录态丢在内存里没写盘。
+    """
+    global _browser, _tab
+    if _browser is not None:
+        try:
+            from nodriver import cdp
+
+            # 关前刷盘缓冲（2026-10-13 打包加固）：扫码刚成功时 cookie
+            # 可能还在 Chrome 内存里——先给 1.5s 追上磁盘再优雅关闭。
+            await asyncio.sleep(1.5)
+            try:
+                await _browser.connection.send(cdp.browser.close())
+            except Exception as e:  # noqa: BLE001 — close 已送达但连接先断属正常
+                log.info("51job 浏览器 CDP close 连接断开（多为正常退出中）: %s", e)
+            await asyncio.sleep(2.0)  # 给 Chrome 时间完成退出 + cookie 落盘
+        except Exception as e:  # noqa: BLE001
+            log.warning("51job 浏览器优雅关闭失败（stop 兜底）: %s", e)
+        try:
+            _browser.stop()
+        except Exception:  # noqa: BLE001
+            pass
+    _browser = None
+    _tab = None
 
 
 async def parse_cards(tab: uc.Tab) -> list[dict]:
@@ -171,6 +311,86 @@ async def apply_by_jobid(tab: uc.Tab, job_id: str) -> dict:
     except (json.JSONDecodeError, TypeError):
         return {"clicked": False}
     return result
+
+
+# ============ 投递后弹窗处理（2026-10-13 用户实测反馈） ============
+# 用户实测：投递成功后会弹一个带微信二维码的"投递成功"大 modal，遮住整个
+# 页面，不关掉就没法投下一个。旧代码只有"确认弹窗"处理且用 tab.find 全页
+# 文本匹配——最坏 15s 低效等待，还可能误点其他岗位卡的"投递"按钮。
+# 两个 dismiss 都用单次 JS evaluate：有界、只在弹层内精确匹配。
+
+# 确认类弹窗（"确认投递/选择简历"）：在弹层内点确认按钮
+DISMISS_CONFIRM_JS = r"""
+(() => {
+  const visible = (el) => !!(el.offsetWidth || el.offsetHeight);
+  const layers = document.querySelectorAll(
+    '[class*="dialog" i], [class*="modal" i], [class*="popup" i], [role="dialog"]');
+  for (const layer of layers) {
+    if (!visible(layer)) continue;
+    const text = layer.innerText || '';
+    if (text.includes('投递成功')) continue;  // 成功弹窗由 dismiss_success_dialog 关
+    const btns = layer.querySelectorAll('button, [class*="btn" i], a');
+    for (const b of btns) {
+      const t = (b.innerText || '').trim();
+      // 精确等于：防止"投递成功"/"继续投递"这类文案误命中
+      if (t === '确认' || t === '确定' || t === '立即投递' || t === '投递' || t === '提交') {
+        b.click();
+        return 'confirm';
+      }
+    }
+  }
+  return 'none';
+})()
+"""
+
+# 成功弹窗（"投递成功"+ 微信二维码）：优先点弹层内关闭钮，找不到发 Escape
+DISMISS_SUCCESS_JS = r"""
+(() => {
+  const visible = (el) => !!(el.offsetWidth || el.offsetHeight);
+  const layers = document.querySelectorAll(
+    '[class*="dialog" i], [class*="modal" i], [class*="popup" i], [role="dialog"], [class*="layer" i]');
+  for (const layer of layers) {
+    if (!visible(layer)) continue;
+    const text = layer.innerText || '';
+    if (!text.includes('投递成功')) continue;
+    const cands = layer.querySelectorAll(
+      '[class*="close" i], [class*="shut" i], [aria-label*="关"], [title*="关"], [class*="icon" i]');
+    for (const c of cands) {
+      const cls = String(c.className || '');
+      const t = (c.innerText || '').trim();
+      if (/close|shut/i.test(cls) || t === '×' || t === '✕' || t === 'X' || t === '关闭') {
+        c.click();
+        return 'closed';
+      }
+    }
+    // 弹层在但没找到关闭钮：Escape 兜底（主流组件库监听 keydown 关弹层）
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
+    return 'escape';
+  }
+  return 'none';
+})()
+"""
+
+
+async def dismiss_confirm_dialog(tab: uc.Tab) -> str:
+    """关"确认投递/选择简历"弹窗（弹层内点确认）。返回 confirm/none。"""
+    try:
+        raw = await asyncio.wait_for(tab.evaluate(DISMISS_CONFIRM_JS), timeout=5)
+    except Exception:  # noqa: BLE001
+        return "none"
+    return str(raw) if isinstance(raw, str) else "none"
+
+
+async def dismiss_success_dialog(tab: uc.Tab) -> str:
+    """关"投递成功"大弹窗（不关没法投下一个，2026-10-13 用户实测）。
+
+    返回 closed/escape（关掉了）/ none（页面上没有成功弹窗）。
+    """
+    try:
+        raw = await asyncio.wait_for(tab.evaluate(DISMISS_SUCCESS_JS), timeout=5)
+    except Exception:  # noqa: BLE001
+        return "none"
+    return str(raw) if isinstance(raw, str) else "none"
 
 
 # ============ 登录态持久化：CDP 导出/注入 cookie ============

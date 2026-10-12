@@ -44,6 +44,9 @@ class ApiJob:
     job_degree: str
     boss_name: str
     boss_online: bool
+    # 招聘方活跃描述（wapi 卡片偶带，如"刚刚活跃/本周活跃"）；可能缺失，
+    # 缺失时 to_job_posting 会用 boss_online 隐含映射兜底。
+    active_time_desc: str = ""
 
 
 def search_query_from_url(url: str) -> str:
@@ -88,6 +91,8 @@ def parse_api_job(item: dict) -> ApiJob | None:
         job_degree=str(item.get("jobDegree") or "").strip(),
         boss_name=str(item.get("bossName") or "").strip(),
         boss_online=bool(item.get("bossOnline")),
+        # 乐观解析：字段不存在就是空串，不炸（真实字段名以 wapi 实测为准）
+        active_time_desc=str(item.get("activeTimeDesc") or "").strip(),
     )
 
 
@@ -95,6 +100,14 @@ def to_job_posting(job: ApiJob, description: str = "") -> finding_jobs.JobPostin
     """映射成主流程用的 JobPosting；description 由详情页补齐。"""
     location = "·".join(
         part for part in (job.city, job.area_district, job.business_district) if part
+    )
+    # 活跃状态（三阶段引擎·机制三 2026-10-13）：
+    # - wapi 卡片的 activeTimeDesc（如"刚刚活跃/本周活跃"）最真实，优先用；
+    # - 缺失时 bossOnline=True 意味着招聘方**此刻在线**——隐含"至少今日
+    #   活跃"，展开成三档标签让 contains 匹配对任一梯队选值都放行；
+    # - 都没有 → 空串（上游 match 链会走缺状态优雅降级，不误杀）。
+    boss_active_status = job.active_time_desc or (
+        "在线 刚刚活跃 今日活跃" if job.boss_online else ""
     )
     return finding_jobs.JobPosting(
         title=job.job_name,
@@ -104,7 +117,7 @@ def to_job_posting(job: ApiJob, description: str = "") -> finding_jobs.JobPostin
         salary=job.salary_desc,
         tags=[*job.job_labels, *job.skills],
         boss_name=job.boss_name,
-        boss_active_status="在线" if job.boss_online else "",
+        boss_active_status=boss_active_status,
         education=job.job_degree,
         detail_url=detail_url_of(job),
     )

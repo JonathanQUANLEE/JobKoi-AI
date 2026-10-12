@@ -95,11 +95,16 @@ from boss_zhipin.website_oper.core.login_detector import (
     log_in,
 )
 from boss_zhipin.website_oper.core.page_filter_ctrl import (
+    BOSS_CITY_CODES,
     BOSS_MAX_CITIES_PER_BATCH,
     _BOSS_ACTIVE_PATTERNS,
     _PAGE_FILTER_LABELS,
+    _build_city_url,
     _city_rotation_state,
+    apply_city_url_filter,
     apply_page_filters,
+    build_shuffled_city_batches,
+    build_shuffled_city_sequence,
     click_filter_value,
     extract_boss_active_status,
     get_platform_city_chunks,
@@ -128,6 +133,7 @@ def get_driver():
 
 
 __all__ = [
+    "BOSS_CITY_CODES",
     "BOSS_MAX_CITIES_PER_BATCH",
     "CHROME_PROFILE_DIR",
     "JobPosting",
@@ -136,6 +142,7 @@ __all__ = [
     "_JD_NOISE_LINES",
     "_PAGE_FILTER_LABELS",
     "_PAGE_IN_URL_RE",
+    "_build_city_url",
     "_browser",
     "_city_rotation_state",
     "_clear_singleton_locks",
@@ -159,8 +166,11 @@ __all__ = [
     "_tab",
     "_wait_url_stable",
     "_xpath_safe",
+    "apply_city_url_filter",
     "apply_page_filters",
     "browser_type",
+    "build_shuffled_city_batches",
+    "build_shuffled_city_sequence",
     "captcha_visible",
     "click_by_xpath",
     "click_filter_value",

@@ -241,6 +241,13 @@ export default function MorningBriefCard({
                 ? "#a1a1aa"
                 : "#71717a"
               : p.color;
+            // 三平台当前未读（真实模式，2026-10-13）：null = 读不到/不适用
+            const unread =
+              p.id === "boss"
+                ? brief.unreadInfo?.boss ?? null
+                : p.id === "liepin"
+                ? brief.unreadInfo?.liepin ?? null
+                : null;
             return (
               <div key={p.id} className="p-3 rounded-xl bg-white/[0.02] border border-white/5 flex flex-col justify-between">
                 <div className="flex items-center justify-between mb-2">
@@ -268,6 +275,14 @@ export default function MorningBriefCard({
                     )}
                   </span>
                 </div>
+                {unread !== null && (
+                  <div className="mt-1.5 pt-1.5 border-t border-white/5 text-[10px] flex items-center justify-between">
+                    <span className="text-stone-500">当前未读消息</span>
+                    <span className="font-mono font-bold" style={{ color: platformColor }}>
+                      {unread} 条
+                    </span>
+                  </div>
+                )}
               </div>
             );
           })}
