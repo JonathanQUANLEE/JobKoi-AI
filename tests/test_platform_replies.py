@@ -45,7 +45,7 @@ def test_liepin_check_unread_opens_then_closes(liepin_driver_state, monkeypatch)
     driver = liepin_driver_state
     events: list[str] = []
 
-    async def fake_open_browser(url):
+    async def fake_open_browser(url, headless=False):
         events.append(f"open:{url}")
         return _FakeTab(json.dumps({"found": True, "unread": 19}))
 
@@ -306,3 +306,87 @@ def test_ipc_liepin_exception_converges(ipc_env, monkeypatch):
     assert result["liepin"]["code"] == "exception"
     # 另一个平台不受影响
     assert result["job51"]["status"] == "unsupported"
+
+
+def test_ipc_cruise_running_liepin_not_opened_returns_busy(ipc_env, monkeypatch):
+    """巡航运行中（仅巡航 BOSS）：猎聘浏览器未开 → 返回 busy，绝不弹窗、绝不开浏览器。"""
+    from boss_zhipin.gui import runner
+    from boss_zhipin.tauri.commands.platform import check_platform_replies
+
+    monkeypatch.setattr(runner, "is_running", lambda: True)
+    ipc_env["install_manager"](True, True)
+    ipc_env["boss_tab"] = object()
+    ipc_env["boss_unread"] = 12
+
+    result = asyncio.run(check_platform_replies())
+    # BOSS 正常复用现有受控 tab 读取
+    assert result["boss"]["status"] == "ok"
+    assert result["boss"]["unread"] == 12
+    # 猎聘被巡航保护拦截，绝不调用后台探测
+    assert result["liepin"]["status"] == "busy"
+    assert result["liepin"]["unread"] == 0
+    assert "巡航运行中" in result["liepin"]["message"]
+    assert ipc_env["liepin_called"] == 0
+
+
+def test_ipc_cruise_running_liepin_open_reads_safely(ipc_env, monkeypatch):
+    """巡航运行中（多平台巡航，猎聘也开着）：复用已打开的猎聘受控页读取未读。"""
+    import liepin.driver as liepin_driver
+    from boss_zhipin.gui import runner
+    from boss_zhipin.tauri.commands.platform import check_platform_replies
+
+    monkeypatch.setattr(runner, "is_running", lambda: True)
+    monkeypatch.setattr(liepin_driver, "_browser", object())
+    ipc_env["install_manager"](True, True)
+    ipc_env["boss_tab"] = object()
+    ipc_env["boss_unread"] = 8
+    ipc_env["liepin_result"] = {
+        "status": "ok",
+        "unread": 5,
+        "chat_url": "https://c.liepin.com/",
+    }
+
+    result = asyncio.run(check_platform_replies())
+    assert result["boss"]["status"] == "ok"
+    assert result["boss"]["unread"] == 8
+    assert result["liepin"]["status"] == "ok"
+    assert result["liepin"]["unread"] == 5
+    assert ipc_env["liepin_called"] == 1
+
+
+def test_ipc_cruise_running_boss_tab_none_returns_busy(ipc_env, monkeypatch):
+    """巡航运行中但 BOSS tab 暂未就绪：返回 busy，绝不在后台开新浏览器或调用 shutdown。"""
+    from boss_zhipin.gui import runner
+    from boss_zhipin.tauri.commands.platform import check_platform_replies
+
+    monkeypatch.setattr(runner, "is_running", lambda: True)
+    ipc_env["install_manager"](True, True)
+    ipc_env["boss_tab"] = None
+
+    result = asyncio.run(check_platform_replies())
+    assert result["boss"]["status"] == "busy"
+    assert result["boss"]["unread"] == 0
+    assert ipc_env["boss_opened"] == 0
+
+
+def test_liepin_check_unread_opens_headless(liepin_driver_state, monkeypatch):
+    """非巡航期读未读（浏览器没开）：必须以 headless=True 运行，绝不弹窗打扰用户。"""
+    driver = liepin_driver_state
+    passed_headless: list[bool] = []
+
+    async def fake_open_browser(url, headless=False):
+        passed_headless.append(headless)
+        return _FakeTab(json.dumps({"found": True, "unread": 3}))
+
+    async def fake_shutdown():
+        pass
+
+    monkeypatch.setattr(driver, "open_browser", fake_open_browser)
+    monkeypatch.setattr(driver, "shutdown", fake_shutdown)
+    monkeypatch.setattr(driver.asyncio, "sleep", _no_sleep)
+
+    result = asyncio.run(driver.check_unread())
+    assert result["status"] == "ok"
+    assert result["unread"] == 3
+    assert passed_headless == [True]
+

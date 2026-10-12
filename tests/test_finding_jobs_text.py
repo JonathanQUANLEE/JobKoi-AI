@@ -542,6 +542,25 @@ def test_kill_profile_chrome_windows_targets_user_data_dir(monkeypatch):
     assert command[-1] == r"D:\boss自动化投递\chrome_profile"
 
 
+def test_kill_profile_chrome_windows_handles_spaces_and_avoids_loose_contains(monkeypatch):
+    calls = []
+    monkeypatch.setattr(finding_jobs.shutil, "which", lambda cmd: "powershell")
+    monkeypatch.setattr(finding_jobs.subprocess, "run", lambda args, **kwargs: calls.append(args))
+
+    finding_jobs._kill_profile_chrome_windows(r"B:\antigtavity projects\bosszhitou\Bosszhipin-job-bot\liepin_profile")
+
+    assert calls
+    command = calls[0]
+    script = command[3]
+    # 必须通过 ValueFromRemainingArguments 收集含空格的路径，绝不能被 powershell 分词截断
+    assert "ValueFromRemainingArguments" in script
+    # 必须精确匹配 --user-data-dir，绝不能有危险的模糊 Contains($profile) 误杀邻近 profile
+    assert "Contains($profile)" not in script
+    assert "Contains($targetDir)" not in script
+    assert "--user-data-dir" in script
+
+
+
 def test_prepare_manual_boss_page_opens_recommend_page_without_tab(monkeypatch):
     async def scenario():
         opened: list[tuple[str, str]] = []

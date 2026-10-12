@@ -103,13 +103,13 @@ def cleanup_profile() -> None:
     reap_profile_chrome(PROFILE_DIR)
 
 
-async def open_browser(url: str) -> uc.Tab:
+async def open_browser(url: str, headless: bool = False) -> uc.Tab:
     global _browser, _tab
     os.makedirs(PROFILE_DIR, exist_ok=True)
     cleanup_profile()
     cfg = Config()
     cfg.user_data_dir = PROFILE_DIR
-    cfg.headless = False
+    cfg.headless = headless
     cfg.sandbox = False  # Chrome 154 + nodriver 0.50.x 下更稳
     # 无 Chrome 电脑自愈：自动降级 Edge（Chromium 兼容内核）
     apply_browser_fallback(cfg)
@@ -118,11 +118,12 @@ async def open_browser(url: str) -> uc.Tab:
     # 修法：new_window=True 会留下 Chrome 原生空白窗口，用户看到两个窗口
     # （2026-10-13 用户实测反馈）。
     _tab = await _browser.get(url)
-    try:
-        await _tab.activate()
-        await _tab.bring_to_front()
-    except Exception:  # noqa: BLE001
-        pass
+    if not headless:
+        try:
+            await _tab.activate()
+            await _tab.bring_to_front()
+        except Exception:  # noqa: BLE001
+            pass
     await asyncio.sleep(6)
     return _tab
 
@@ -181,7 +182,7 @@ async def check_unread() -> dict[str, Any]:
 
     语义（2026-10-13 三平台未读需求）：
     - 浏览器没开：自己开一个到 c.liepin.com，读完**立即关闭**（不常驻、
-      不打扰；打开是读未读的唯一途径——猎聘没有免浏览器的未读接口）；
+      不打扰；打开是读未读的唯一途径——猎聘没有免浏览器的未读接口；无头模式运行绝不弹窗）；
     - 浏览器已开（巡航中/登录后）：从当前受控页直接读，**绝不导航**——
       巡航中的搜索/详情页不能被未读检查打断。
 
@@ -193,7 +194,7 @@ async def check_unread() -> dict[str, Any]:
     global _browser, _tab
     opened_here = _browser is None
     if opened_here:
-        tab = await open_browser("https://c.liepin.com/")
+        tab = await open_browser("https://c.liepin.com/", headless=True)
         await asyncio.sleep(3)  # 等挂件 JS 渲染出角标
     else:
         tab = _tab
