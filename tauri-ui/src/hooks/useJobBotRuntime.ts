@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, type Dispatch, type SetStateAction } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, type Dispatch, type SetStateAction } from "react";
 import { Channel } from "@tauri-apps/api/core";
 import { ipc, type ProgressEvent, type RunConfig, type ProfileData } from "../lib/ipc";
 import { eventLogLine } from "../lib/eventDisplay";
@@ -104,6 +104,47 @@ export function useJobBotRuntime({
   const restoreRunState = useRunStore((s) => s.restoreRunState);
 
   const [replyNotice, setReplyNotice] = useState<{ unread: number; chatUrl: string } | null>(null);
+
+  // 巡航结束（running true→false）：组装「结束说明弹窗」（2026-10-12 用户拍板：
+  // 无论什么原因结束都要如实解释——原因 + 汇总 + 按城市拆开的统计，用户点叉关闭）。
+  const prevRunningRef = useRef(running);
+  useEffect(() => {
+    const wasRunning = prevRunningRef.current;
+    prevRunningRef.current = running;
+    if (!wasRunning || running) return;
+    let ended: ProgressEvent | null = null;
+    let summary: ProgressEvent | null = null;
+    for (let i = events.length - 1; i >= 0; i -= 1) {
+      const ev = events[i];
+      if (!ended && ev.kind === "loop_ended") ended = ev;
+      if (!summary && ev.kind === "api_flow_finished") summary = ev;
+      if (ended && summary) break;
+    }
+    if (!ended) return;
+    const reasonMap: Record<string, string> = {
+      completed: "本轮巡航已结束",
+      cancelled: "巡航已手动停止",
+      error: "巡航异常终止",
+    };
+    const perCity = Array.isArray(summary?.payload.per_city)
+      ? (summary!.payload.per_city as {
+          city: string;
+          scanned: number;
+          sent: number;
+          skipped: number;
+        }[])
+      : [];
+    const startedAt = useRunStore.getState().cruiseStartedAt;
+    useRunStore.getState().showCruiseEndNotice({
+      reason: reasonMap[String(ended.payload.reason || "")] || "巡航已结束",
+      message: String(summary?.payload?.message || ""),
+      perCity,
+      stats: summarizeEvents(events),
+      durationMs: startedAt ? Date.now() - startedAt : null,
+      time: ended.ts_local || "",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running]);
 
   // 初始化恢复运行状态
   useEffect(() => {

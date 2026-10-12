@@ -5,6 +5,7 @@ import MistSettingsModal, { type MistModalType } from "../settings/MistSettingsM
 import GlobalUsagiPet from "../pet/GlobalUsagiPet";
 import CenterToast from "../core/CenterToast";
 import LoginOverlay from "../core/LoginOverlay";
+import CruiseEndDialog from "../core/CruiseEndDialog";
 import type { Lang } from "../../lib/i18n";
 import type { NavItem } from "../Sidebar";
 import type { useProfileFormState } from "../../hooks/useProfileFormState";
@@ -56,6 +57,9 @@ export default function DashboardModalLayer({
 
       {/* FaceID 式登录引导浮层（换号扫码全流程） */}
       <LoginOverlay />
+
+      {/* 巡航结束说明弹窗（结束原因 + 按城市统计 + 建议） */}
+      <CruiseEndDialog />
 
       {/* 侧边滑出高级设置抽屉 */}
       <SettingsDrawer
