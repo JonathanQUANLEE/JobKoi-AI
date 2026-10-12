@@ -16,9 +16,14 @@ export default function MorningBriefCard({
   onRefreshBrief,
 }: MorningBriefCardProps) {
   const [copied, setCopied] = useState(false);
+  // hasReplyData=false（真实模式）：三平台无回复检测能力，回复区域显示「建设中」，绝不编造数字
+  const showReply = brief.hasReplyData !== false;
 
   const handleCopySummary = () => {
-    const text = `【JobHunter 投递早报 · 昨日战报】\n日期: ${brief.yesterdayDate}\n昨日总投: ${brief.totalSent} 家\nHR 回复: ${brief.repliedCount} 家 | 暂无回复: ${brief.unrepliedCount} 家\n综合回复率: ${brief.replyRate}%\n各平台回复: BOSS直聘 ${brief.platformBreakdown[0].replied}家 (${brief.platformBreakdown[0].rate}%) | 猎聘 ${brief.platformBreakdown[1].replied}家 (${brief.platformBreakdown[1].rate}%) | 51job ${brief.platformBreakdown[2].replied}家 (${brief.platformBreakdown[2].rate}%)\n今日建议: ${brief.actionAdvice}`;
+    const replyLine = showReply
+      ? `HR 回复: ${brief.repliedCount} 家 | 暂无回复: ${brief.unrepliedCount} 家\n综合回复率: ${brief.replyRate}%\n各平台回复: BOSS直聘 ${brief.platformBreakdown[0].replied}家 (${brief.platformBreakdown[0].rate}%) | 猎聘 ${brief.platformBreakdown[1].replied}家 (${brief.platformBreakdown[1].rate}%) | 51job ${brief.platformBreakdown[2].replied}家 (${brief.platformBreakdown[2].rate}%)`
+      : `HR 回复: 回复统计暂未开放（平台未提供回复数据）`;
+    const text = `【JobHunter 投递早报 · 昨日战报】\n日期: ${brief.yesterdayDate}\n昨日总投: ${brief.totalSent} 家\n${replyLine}\n今日建议: ${brief.actionAdvice}`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -108,29 +113,44 @@ export default function MorningBriefCard({
           }`}
         >
           <div className="flex items-center justify-between mb-1">
-            <span className={`text-[11px] ${isMonochrome ? "text-zinc-300" : "text-emerald-300"}`}>HR 已回复</span>
+            <span className={`text-[11px] ${isMonochrome ? "text-zinc-300" : "text-emerald-300"}`}>
+              HR 已回复
+            </span>
             <CheckCircle2 className={`size-3.5 ${isMonochrome ? "text-white" : "text-emerald-400"}`} />
           </div>
           <div className="flex items-baseline gap-1.5">
-            <AnimatedNumber
-              value={brief.repliedCount}
-              className={`text-2xl font-black font-mono ${isMonochrome ? "text-white" : "text-emerald-400"}`}
-            />
-            <span className={`text-xs ${isMonochrome ? "text-zinc-400" : "text-emerald-500/80"}`}>家</span>
+            {showReply ? (
+              <>
+                <AnimatedNumber
+                  value={brief.repliedCount}
+                  className={`text-2xl font-black font-mono ${isMonochrome ? "text-white" : "text-emerald-400"}`}
+                />
+                <span className={`text-xs ${isMonochrome ? "text-zinc-400" : "text-emerald-500/80"}`}>家</span>
+              </>
+            ) : (
+              <span className="text-2xl font-black font-mono text-stone-500">—</span>
+            )}
           </div>
+          {!showReply && <p className="text-[10px] text-stone-500 mt-0.5">回复统计 · 建设中</p>}
         </div>
 
         <div className="p-3.5 rounded-xl bg-stone-800/40 border border-white/5">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[11px] text-stone-400">暂无回复</span>
+            <span className="text-[11px] text-stone-400">{showReply ? "暂无回复" : "待回复岗位"}</span>
             <XCircle className="size-3.5 text-stone-500" />
           </div>
           <div className="flex items-baseline gap-1.5">
-            <AnimatedNumber
-              value={brief.unrepliedCount}
-              className="text-2xl font-black text-stone-300 font-mono"
-            />
-            <span className="text-xs text-stone-500">家</span>
+            {showReply ? (
+              <>
+                <AnimatedNumber
+                  value={brief.unrepliedCount}
+                  className="text-2xl font-black text-stone-300 font-mono"
+                />
+                <span className="text-xs text-stone-500">家</span>
+              </>
+            ) : (
+              <span className="text-2xl font-black font-mono text-stone-500">—</span>
+            )}
           </div>
         </div>
 
@@ -146,22 +166,31 @@ export default function MorningBriefCard({
             <span className={`text-[11px] font-semibold ${isMonochrome ? "text-zinc-800" : "text-amber-300"}`}>
               昨日综合回复率
             </span>
-            <span
-              className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${
-                isMonochrome ? "bg-black/10 text-black font-bold" : "text-amber-400/90 font-mono"
-              }`}
-            >
-              {brief.replyRate >= 20 ? "良好" : "平稳"}
-            </span>
+            {showReply && (
+              <span
+                className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${
+                  isMonochrome ? "bg-black/10 text-black font-bold" : "text-amber-400/90 font-mono"
+                }`}
+              >
+                {brief.replyRate >= 20 ? "良好" : "平稳"}
+              </span>
+            )}
           </div>
           <div className="flex items-baseline gap-1">
-            <AnimatedNumber
-              value={brief.replyRate}
-              decimalPlaces={1}
-              className={`text-2xl font-black font-mono ${isMonochrome ? "text-black" : "text-amber-400"}`}
-            />
-            <span className={`text-sm font-bold ${isMonochrome ? "text-black" : "text-amber-400"}`}>%</span>
+            {showReply ? (
+              <>
+                <AnimatedNumber
+                  value={brief.replyRate}
+                  decimalPlaces={1}
+                  className={`text-2xl font-black font-mono ${isMonochrome ? "text-black" : "text-amber-400"}`}
+                />
+                <span className={`text-sm font-bold ${isMonochrome ? "text-black" : "text-amber-400"}`}>%</span>
+              </>
+            ) : (
+              <span className={`text-2xl font-black font-mono ${isMonochrome ? "text-black/70" : "text-amber-400/50"}`}>—</span>
+            )}
           </div>
+          {!showReply && <p className={`text-[10px] mt-0.5 ${isMonochrome ? "text-black/60" : "text-amber-400/60"}`}>回复统计 · 建设中</p>}
         </div>
       </div>
 
@@ -185,7 +214,11 @@ export default function MorningBriefCard({
                     {p.name}
                   </span>
                   <span className="text-xs font-mono font-bold text-white">
-                    <AnimatedNumber value={p.rate} decimalPlaces={1} className="font-mono text-white" />% 回复率
+                    {showReply ? (
+                      <><AnimatedNumber value={p.rate} decimalPlaces={1} className="font-mono text-white" />% 回复率</>
+                    ) : (
+                      <span className="text-stone-500 font-normal">回复统计 · 建设中</span>
+                    )}
                   </span>
                 </div>
                 <div className="text-[11px] text-stone-400 flex items-center justify-between">
@@ -193,7 +226,11 @@ export default function MorningBriefCard({
                     已投 <AnimatedNumber value={p.sent} className="font-mono text-stone-300" /> 家
                   </span>
                   <span className={isMonochrome ? "text-zinc-200" : "text-emerald-400"}>
-                    已回 <AnimatedNumber value={p.replied} className={`font-mono ${isMonochrome ? "text-zinc-200" : "text-emerald-400"}`} /> 家
+                    {showReply ? (
+                      <>已回 <AnimatedNumber value={p.replied} className={`font-mono ${isMonochrome ? "text-zinc-200" : "text-emerald-400"}`} /> 家</>
+                    ) : (
+                      <span className="text-stone-500">已回 —</span>
+                    )}
                   </span>
                 </div>
               </div>

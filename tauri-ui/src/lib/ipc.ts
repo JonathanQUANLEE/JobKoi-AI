@@ -240,6 +240,31 @@ export interface DeliveryHistoryResult {
   records: DeliveryRecordItem[];
 }
 
+// ---------- 统计页真实数据模式（后端按天聚合三平台真实账本） ----------
+
+export type DailyStatDay = {
+  date: string; // "YYYY-MM-DD"
+  label: string; // "MM-DD"
+  weekday: string; // "周一"
+  bossSent: number;
+  liepinSent: number;
+  job51Sent: number;
+  totalSent: number;
+};
+
+export type DeliveryDailyStatsResult = {
+  days: DailyStatDay[];
+  totals: {
+    sentSum: number;
+    activeDays: number;
+    bossSent: number;
+    liepinSent: number;
+    job51Sent: number;
+    firstDate: string;
+    lastDate: string;
+  };
+};
+
 export const ipc = {
   listPlatforms: () => pyInvoke<PlatformListResult>("list_platforms", {}),
   openPlatformLogin: (platformId: string) =>
@@ -256,6 +281,8 @@ export const ipc = {
     }),
   getDeliveryHistory: (platform: string = "", limit: number = 100) =>
     pyInvoke<DeliveryHistoryResult>("get_delivery_history", { platform, limit }),
+  getDeliveryDailyStats: (days: number = 30) =>
+    pyInvoke<DeliveryDailyStatsResult>("get_delivery_daily_stats", { days }),
   resetTodayDelivery: (platform: string = "boss") =>
     pyInvoke<{ status: string; archived_count: number; platform: string }>(
       "reset_today_delivery",

@@ -1,4 +1,5 @@
 import { type FilterPolicy, type MatchMode, type Scope, type RuleForm } from "../../../lib/profileForm";
+import { normalizeCityInput, parseCityList, toggleCityInList } from "../../../lib/cityInput";
 import { optionLabel, type Lang } from "../../../lib/i18n";
 import { useT } from "../../../store";
 
@@ -120,11 +121,7 @@ export default function DrawerRulesTab({
                 key={c}
                 type="button"
                 className={`option-chip ${cityValues.includes(c) ? "active" : ""}`}
-                onClick={() => {
-                  const list = cityValues ? cityValues.split(",").map((s) => s.trim()) : [];
-                  const next = list.includes(c) ? list.filter((x) => x !== c) : [...list, c];
-                  setCityValues(next.join(","));
-                }}
+                onClick={() => setCityValues(toggleCityInList(cityValues, c))}
               >
                 {c}
               </button>
@@ -134,10 +131,14 @@ export default function DrawerRulesTab({
             className="field-input"
             value={cityValues}
             onChange={(e) => setCityValues(e.target.value)}
+            onBlur={(e) => {
+              const normalized = normalizeCityInput(e.target.value);
+              if (normalized !== e.target.value) setCityValues(normalized);
+            }}
             placeholder="选填或手动逗号分隔，如：深圳,广州"
           />
           {(() => {
-            const count = cityValues ? cityValues.split(",").map((s) => s.trim()).filter(Boolean).length : 0;
+            const count = parseCityList(cityValues).length;
             if (count <= 4) return null;
             return (
               <p className="mt-1.5 text-[11px] text-amber-400 flex items-center gap-1">

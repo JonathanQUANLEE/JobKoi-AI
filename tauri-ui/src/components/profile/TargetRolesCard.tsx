@@ -1,5 +1,6 @@
 import { Briefcase } from "lucide-react";
 import { translate, type Lang } from "../../lib/i18n";
+import { appendCity, normalizeCityInput, parseCityList, suggestCities } from "../../lib/cityInput";
 import { MagicCard } from "../core/MagicBento";
 
 interface TargetRolesCardProps {
@@ -28,7 +29,9 @@ export default function TargetRolesCard({
   toggleCity,
 }: TargetRolesCardProps) {
   const t = (key: string, vars?: Record<string, string | number>) => translate(lang, key, vars);
-  const count = cityValues ? cityValues.split(",").map((c) => c.trim()).filter(Boolean).length : 0;
+  const count = parseCityList(cityValues).length;
+  // 输入中最后一段的前缀建议（输入"深"提示"深圳"），点击即追加
+  const citySuggestions = suggestCities(cityValues);
 
   return (
     <MagicCard
@@ -87,12 +90,33 @@ export default function TargetRolesCard({
             type="text"
             value={cityValues}
             onChange={(e) => setCityValues(e.target.value)}
+            onBlur={(e) => {
+              // 离开输入框时宽容归一：空格/顿号/分号等分隔、去"市"后缀、垃圾拦截。
+              // 不在 onChange 里做——打字途中归一会打断输入。
+              const normalized = normalizeCityInput(e.target.value);
+              if (normalized !== e.target.value) setCityValues(normalized);
+            }}
             placeholder={t("trole.citiesPlaceholder")}
             className="w-full rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] px-3.5 py-2.5 text-xs text-stone-100 placeholder-stone-600 focus:border-amber-500/60 focus:outline-none font-mono"
           />
+          {citySuggestions.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+              <span className="text-[10px] text-stone-500">按城市补全：</span>
+              {citySuggestions.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setCityValues(appendCity(cityValues, c))}
+                  className="text-[10px] px-2 py-0.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 transition-all cursor-pointer"
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex flex-wrap gap-1.5 mt-2">
             {commonCities.map((c) => {
-              const isChecked = c === "全国" ? !cityValues : cityValues.split(",").includes(c);
+              const isChecked = c === "全国" ? !cityValues : parseCityList(cityValues).includes(c);
               return (
                 <button
                   key={c}
