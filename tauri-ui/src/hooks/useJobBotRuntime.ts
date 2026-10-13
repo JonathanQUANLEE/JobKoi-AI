@@ -267,18 +267,22 @@ export function useJobBotRuntime({
       return;
     }
 
-    // 前置反馈 1：BOSS 登录态——未登录直接拦下并引导去平台中心扫码
+    // 前置反馈 1：已勾选平台的登录态——若勾选了某平台且尚未登录，拦截并引导去平台中心扫码
     try {
       const plats = await ipc.listPlatforms();
-      const boss = plats.platforms.find((p) => p.id === "boss");
-      if (boss && (boss.status_text || "").includes("未登录")) {
-        setMessage("BOSS 直聘尚未登录：请先在「招聘平台中心」点登录扫码，再回来启动巡航。");
-        useRunStore.getState().notify({
-          type: "warning",
-          text: "BOSS 直聘尚未登录，请先在招聘平台中心扫码登录！",
-          source: "巡航启动",
-        });
-        return;
+      const enabled = loadEnabledPlatforms();
+      for (const pId of enabled) {
+        const p = plats.platforms.find((item) => item.id === pId);
+        if (p && (p.status_text || "").includes("未登录")) {
+          const name = p.name || pId;
+          setMessage(`${name}尚未登录：请先在「招聘平台中心」点登录扫码，再启动巡航。`);
+          useRunStore.getState().notify({
+            type: "warning",
+            text: `${name}尚未登录，请先在招聘平台中心扫码登录！`,
+            source: "巡航启动",
+          });
+          return;
+        }
       }
     } catch {
       /* 平台状态查询失败时交给后端 log_in 兜底，不重复拦截 */

@@ -120,7 +120,12 @@ async def run(keywords: list[str], daily_limit: int, tab=None) -> int:
     if tab is None:
         tab = await driver.open_browser(driver.SEARCH_TMPL.format(kw="AI Agent"))
         if not await driver.is_logged_in(tab):
-            _log("[job51] 未登录，请先跑 scripts/job51_login.py 扫码")
+            _log("[job51] 未登录，请先在「招聘平台中心」扫码登录")
+            events.emit(
+                "login_required",
+                platform="job51",
+                message="前程无忧尚未登录，请先在「招聘平台中心」扫码登录。",
+            )
             return -1
 
     sent_today = today_sent(SENT_LOG)

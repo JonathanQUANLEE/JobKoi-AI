@@ -116,7 +116,12 @@ async def run(keywords: list[str], daily_limit: int, greeting: str) -> int:
 
     tab = await driver.open_browser(driver.SEARCH_TMPL.format(kw="AI Agent"))
     if not await driver.is_logged_in(tab):
-        _log("[liepin] 未登录，请先跑 scripts/liepin_login.py 扫码")
+        _log("[liepin] 未登录，请先在「招聘平台中心」扫码登录")
+        events.emit(
+            "login_required",
+            platform="liepin",
+            message="猎聘尚未登录，请先在「招聘平台中心」扫码登录。",
+        )
         return -1
 
     sent_today = today_sent(SENT_LOG)
