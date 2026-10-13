@@ -41,13 +41,21 @@ interface LiveActivityFeedProps {
   items: LiveFeedItem[];
   running: boolean;
   isMonochrome: boolean;
+  hidePlatformBadge?: boolean;
+  emptyText?: string;
 }
 
 /**
  * 实时活动流时间轴（Trigger.dev 式日志流 + automatisch 式步骤时间轴的融合）：
  * 最新在顶部自动置顶，条目 zoom-in 淡入；live 事件带呼吸脉冲点（"脚本活着"信号）。
  */
-export default function LiveActivityFeed({ items, running, isMonochrome }: LiveActivityFeedProps) {
+export default function LiveActivityFeed({
+  items,
+  running,
+  isMonochrome,
+  hidePlatformBadge = false,
+  emptyText,
+}: LiveActivityFeedProps) {
   // 滚动容器 ref：新条目到达时回到顶部。
   // 注意不能用 scrollIntoView——它会沿祖先链滚动整个页面（2026-10-12 实测：
   // 90 条事件 4 秒涌入时高频触发，把 Dashboard 主区滚得到处跑，用户以为页面死掉）。
@@ -64,19 +72,19 @@ export default function LiveActivityFeed({ items, running, isMonochrome }: LiveA
   if (items.length === 0) {
     return (
       <div
-        className={`flex-1 flex flex-col items-center justify-center gap-3 py-16 text-center ${
+        className={`flex-1 flex flex-col items-center justify-center gap-2.5 py-10 text-center ${
           isMonochrome ? "text-zinc-500" : "text-stone-500"
         }`}
       >
         <div
-          className={`size-12 rounded-2xl border flex items-center justify-center ${
+          className={`size-10 rounded-xl border flex items-center justify-center ${
             isMonochrome ? "border-white/10 bg-white/5" : "border-amber-500/20 bg-amber-500/5"
           }`}
         >
-          <Play className="size-5 opacity-60" />
+          <Play className="size-4 opacity-50" />
         </div>
-        <p className="text-sm">
-          {running ? "巡航已启动，正在唤起浏览器…第一条动态马上出现" : "启动自动巡航后，这里的每个动作都会实时呈现"}
+        <p className="text-xs px-3 text-stone-400 leading-relaxed">
+          {emptyText || (running ? "巡航已启动，正在唤起浏览器…第一条动态马上出现" : "启动自动巡航后，这里的每个动作都会实时呈现")}
         </p>
       </div>
     );
@@ -119,15 +127,17 @@ export default function LiveActivityFeed({ items, running, isMonochrome }: LiveA
                     <Icon className={`size-3.5 mt-0.5 shrink-0 ${style.color}`} />
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span
-                          className="text-[8px] font-mono font-bold px-1 py-px rounded"
-                          style={{
-                            color: meta?.color ?? "#00bebd",
-                            backgroundColor: `${meta?.color ?? "#00bebd"}1a`,
-                          }}
-                        >
-                          {meta?.name ?? item.platform}
-                        </span>
+                        {!hidePlatformBadge && (
+                          <span
+                            className="text-[8px] font-mono font-bold px-1 py-px rounded"
+                            style={{
+                              color: meta?.color ?? "#00bebd",
+                              backgroundColor: `${meta?.color ?? "#00bebd"}1a`,
+                            }}
+                          >
+                            {meta?.name ?? item.platform}
+                          </span>
+                        )}
                         <p className="text-xs font-semibold text-stone-100 truncate leading-5">{item.title}</p>
                       </div>
                       {item.detail && (
