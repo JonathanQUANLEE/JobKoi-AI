@@ -48,7 +48,7 @@ GITHUB_OAUTH_CLIENT_ID = "Ov23liyAFaO5CV36g3Ac"
 # "The client_id and/or client_secret passed are incorrect"）。
 # 获取：OAuth App 详情页 → Client secrets → Generate a new client secret。
 # 注：secret 打包进桌面 EXE 是 GitHub 官方对原生应用的已知妥协，风险可接受。
-GITHUB_OAUTH_CLIENT_SECRET = ""
+GITHUB_OAUTH_CLIENT_SECRET = "8c1d86b21b08b31964436d44fde699250583d7d6"
 
 GITHUB_REPO_OWNER = "JonathanQUANLEE"
 GITHUB_REPO_NAME = "JobKoi-AI"
