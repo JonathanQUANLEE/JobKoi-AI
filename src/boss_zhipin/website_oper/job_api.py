@@ -147,7 +147,13 @@ async def fetch_search_page(tab: uc.Tab, query: str, page: int) -> list[ApiJob]:
         data = raw
     if not isinstance(data, dict) or data.get("code") != 0:
         code = data.get("code") if isinstance(data, dict) else "?"
-        raise RuntimeError(f"搜索接口返回异常 code={code}")
+        # 透传平台返回的人话原因（2026-10-13：code=37 限流时用户只看到
+        # 冰冷代号，不知道是"请求过于频繁"——把 message 带上）
+        detail = ""
+        if isinstance(data, dict):
+            detail = str(data.get("message") or data.get("msg") or "").strip()
+        suffix = f"（{detail}）" if detail else ""
+        raise RuntimeError(f"搜索接口返回异常 code={code}{suffix}")
     zpData = data.get("zpData") or {}
     jobs = [
         parsed

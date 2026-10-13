@@ -86,7 +86,7 @@ export default function PolishProgressStage({
           }`}
         >
           <div className="flex items-center justify-between mb-1">
-            <span className="font-bold">1. ATS 扫描</span>
+            <span className="font-bold">1. 简历扫描</span>
             {currentStageIndex > 0 ? (
               <CheckCircle className="size-3 text-emerald-400" />
             ) : (
@@ -104,14 +104,14 @@ export default function PolishProgressStage({
           }`}
         >
           <div className="flex items-center justify-between mb-1">
-            <span className="font-bold">2. Skills 注入</span>
+            <span className="font-bold">2. 优化重点注入</span>
             {currentStageIndex > 1 ? (
               <CheckCircle className="size-3 text-emerald-400" />
             ) : currentStageIndex === 1 ? (
               <span className="size-2 rounded-full bg-blue-400 animate-ping" />
             ) : null}
           </div>
-          <span className="text-[10px] text-stone-400">STAR/XYZ 规则融合</span>
+          <span className="text-[10px] text-stone-400">按勾选的优化重点融合</span>
         </div>
 
         <div

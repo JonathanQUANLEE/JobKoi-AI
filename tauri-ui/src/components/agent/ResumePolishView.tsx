@@ -53,6 +53,15 @@ export default function ResumePolishView({ getCurrentForm }: ResumePolishViewPro
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start w-full">
       {/* -------------------- 左栏 (5 列)：输入与技能控制台 -------------------- */}
       <div className="lg:col-span-5 space-y-4">
+        {/* 三步向导（2026-10-13 去黑话：一眼看懂先做什么再做什么） */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] px-3.5 py-2.5 text-[11px]">
+          <span className="font-bold text-amber-300">① 放入你的经历</span>
+          <span className="text-stone-600">→</span>
+          <span className="font-bold text-amber-300">② 填目标岗位、勾选优化重点</span>
+          <span className="text-stone-600">→</span>
+          <span className="font-bold text-amber-300">③ 点下方按钮一键精修</span>
+        </div>
+
         {/* 1. 技能包矩阵：精致轻量微光 Pill 芯片 */}
         <PolishSkillChips activeSkills={activeSkills} onToggleSkill={toggleSkill} />
 
@@ -75,10 +84,10 @@ export default function ResumePolishView({ getCurrentForm }: ResumePolishViewPro
                 type="button"
                 onClick={() => setShowHaloUpload((prev) => !prev)}
                 className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-stone-800 hover:bg-stone-700 text-[11px] text-stone-300 transition-all cursor-pointer border border-stone-700"
-                title="展开/折叠光晕文件上传拖拽区"
+                title="展开/折叠简历文件上传区（支持 PDF / Word / 图片）"
               >
                 <UploadCloud className="size-3.5 text-amber-400" />
-                <span>{showHaloUpload ? "收起上传" : "光晕上传"}</span>
+                <span>{showHaloUpload ? "收起上传" : "上传简历文件"}</span>
               </button>
               {resumeText && (
                 <button
@@ -123,7 +132,7 @@ export default function ResumePolishView({ getCurrentForm }: ResumePolishViewPro
           {/* 目标岗位与侧重输入 */}
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div>
-              <label className="block text-[10px] text-stone-400 mb-1">目标岗位 (用于 ATS 关键词匹配)</label>
+              <label className="block text-[10px] text-stone-400 mb-1">目标岗位（想应聘的岗位，用于匹配它的关键词）</label>
               <input
                 type="text"
                 value={targetRole}
@@ -157,7 +166,7 @@ export default function ResumePolishView({ getCurrentForm }: ResumePolishViewPro
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 text-xs font-bold shadow-md shadow-amber-500/20 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Zap className="size-3.5 fill-current" />
-              <span>{diagnosing ? "正在加速诊断中..." : "开始 ATS 算法诊断与 AI 精修"}</span>
+              <span>{diagnosing ? "正在加速诊断中..." : "开始 AI 深度精修"}</span>
             </button>
           </div>
         </div>

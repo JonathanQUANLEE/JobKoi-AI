@@ -57,12 +57,12 @@ export default function AgentPanel({
                 {panelMode === "polish" ? "简历精修" : "求职意向画像"}
               </h2>
               <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                {panelMode === "polish" ? "ATS 算法 + STAR 技能" : "意向提炼"}
+                {panelMode === "polish" ? "AI 深度优化" : "意向提炼"}
               </span>
             </div>
             <p className="text-[11px] text-stone-400 mt-0.5">
               {panelMode === "polish"
-                ? "ATS 算法多维诊断 · STAR 闭环改写 · Google X-Y-Z 业绩量化"
+                ? "结构梳理 · 成果量化 · 岗位关键词匹配 · 用词润色"
                 : "对话提炼求职意向 · 自动生成过滤与投递画像"}
             </p>
           </div>

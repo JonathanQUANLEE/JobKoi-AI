@@ -17,7 +17,6 @@ interface UseHeroChatOptions {
   setLabel: (label: string) => void;
   setCityValues: (cities: string) => void;
   setRule: Dispatch<SetStateAction<RuleForm>>;
-  pushAgentMessage: (message: AgentChatMessage) => void;
   setMessage: (message: string | null) => void;
   hydrateFromProfile?: (profile: LoadedProfile) => void;
   onExecuteAction?: (action: AgentAction) => Promise<void> | void;
@@ -56,7 +55,6 @@ export function useHeroChat({
   setLabel,
   setCityValues,
   setRule,
-  pushAgentMessage,
   setMessage,
   hydrateFromProfile,
   onExecuteAction,
@@ -105,7 +103,8 @@ export function useHeroChat({
       const userMsg: AgentChatMessage = { role: "user", content: trimmed };
       const newHistory: AgentChatMessage[] = [...heroChatMessages, userMsg];
       setHeroChatMessages(newHistory);
-      pushAgentMessage(userMsg);
+      // 2026-10-13 串线修复：工作台对话只进 heroChatMessages（本输入框
+      // 专属），不再 pushAgentMessage 污染「意向管家」的全局会话流。
 
       try {
         const currentForm = currentProfileData();
@@ -125,7 +124,6 @@ export function useHeroChat({
           const reply = res.reply || "收到！已根据你的背景情况完成求职意向诊断与画像提炼。";
           const assistantMsg: AgentChatMessage = { role: "assistant", content: reply };
           setHeroChatMessages([...newHistory, assistantMsg]);
-          pushAgentMessage(assistantMsg);
 
           if (res.profile) {
             setHeroProfileResult(res.profile);
@@ -153,7 +151,6 @@ export function useHeroChat({
           const reply = `已完成简历资料深度解析！由于云端模型网络响应排队较长（已为您自动启动极速本地画像引擎），已优先根据你的核心技术栈与专业方向定制专属求职画像。你可随时在【求职画像】中微调参数。`;
           const assistantMsg: AgentChatMessage = { role: "assistant", content: reply };
           setHeroChatMessages([...newHistory, assistantMsg]);
-          pushAgentMessage(assistantMsg);
 
           setLabel(extracted.query);
           if (extracted.cities) setCityValues(normalizeCityInput(extracted.cities));
@@ -178,7 +175,6 @@ export function useHeroChat({
           }
           const assistantMsg: AgentChatMessage = { role: "assistant", content: reply };
           setHeroChatMessages([...newHistory, assistantMsg]);
-          pushAgentMessage(assistantMsg);
 
           setLabel(extracted.query);
           if (extracted.cities) setCityValues(normalizeCityInput(extracted.cities));
@@ -200,7 +196,6 @@ export function useHeroChat({
         const errMsg = `顾问连线异常：${String(err)}`;
         const assistantMsg: AgentChatMessage = { role: "assistant", content: errMsg };
         setHeroChatMessages([...newHistory, assistantMsg]);
-        pushAgentMessage(assistantMsg);
       } finally {
         setHeroChatting(false);
         setChatStartTime(null);
@@ -210,7 +205,6 @@ export function useHeroChat({
       heroChatting,
       heroChatMessages,
       currentProfileData,
-      pushAgentMessage,
       setMessage,
       setLabel,
       setCityValues,
