@@ -61,10 +61,11 @@ def test_tauri_ipc_commands_match_gui_v02_contract():
         "list_platforms",
         "open_platform_login",
         "check_login_status",
-        # 窗口控制
+        # 窗口控制与系统集成
         "window_minimize",
         "window_toggle_maximize",
         "window_close",
+        "open_external_url",
         # 投递历史与记录
         "get_delivery_history",
         "get_delivery_daily_stats",
