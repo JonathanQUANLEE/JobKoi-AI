@@ -127,6 +127,7 @@ export default function DashboardHeader({
           {activeNav === "workbench" && t("header.nav.workbench")}
           {activeNav === "profile" && t("header.nav.profile")}
           {activeNav === "resumes" && t("header.nav.resumes")}
+          {activeNav === "polish" && t("header.nav.polish")}
           {activeNav === "copilot" && t("header.nav.copilot")}
           {activeNav === "analytics" && t("header.nav.analytics")}
           {activeNav === "live" && t("header.nav.live")}

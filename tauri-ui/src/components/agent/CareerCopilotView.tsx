@@ -7,9 +7,13 @@ import {
   Sparkles,
   Check,
   Plus,
+  Bot,
+  UploadCloud,
+  FileText,
 } from "lucide-react";
 import { ipc, type AgentAction, type AgentToolResult } from "../../lib/ipc";
 import { summarizeAgentProfile } from "../../lib/agentPreview";
+import { readFileAsBase64 } from "../../lib/resumeUtils";
 import { useRunStore, useT } from "../../store";
 import { MagicCard } from "../core/MagicBento";
 import { PROMPT_TAGS } from "./types";
@@ -18,6 +22,7 @@ interface CareerCopilotViewProps {
   getCurrentForm: () => Record<string, unknown>;
   onApply: (profileData: Record<string, unknown>) => void;
   onRun: () => void;
+  onOpenSettings?: (tab?: "rules" | "policy" | "greeting" | "basic" | "model") => void;
   onExecuteAction?: (action: AgentAction) => Promise<void> | void;
 }
 
@@ -25,6 +30,7 @@ export default function CareerCopilotView({
   getCurrentForm,
   onApply,
   onRun,
+  onOpenSettings,
   onExecuteAction,
 }: CareerCopilotViewProps) {
   const t = useT();
@@ -43,11 +49,65 @@ export default function CareerCopilotView({
   const [prepareRunReady, setPrepareRunReady] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // 简历感知与对话上下文绑定
+  const [activeResumeName, setActiveResumeName] = useState<string | null>(null);
+  const [activeResumeText, setActiveResumeText] = useState<string>("");
+  const [loadingResume, setLoadingResume] = useState(false);
+  const uploadFileRef = useRef<HTMLInputElement>(null);
+
+  // 初始化：自动探测本地简历资料库中的默认简历
+  useEffect(() => {
+    ipc
+      .listResumes()
+      .then(async (res) => {
+        const list = res.resumes || [];
+        if (list.length > 0) {
+          const def = list.find((r) => r.is_default) || list[0];
+          setActiveResumeName(def.name);
+          try {
+            const content = await ipc.getResumeContent(def.name);
+            if (content.text) setActiveResumeText(content.text);
+          } catch {}
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (listRef.current) {
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
   }, [agentMessages, agentPending]);
+
+  // 直接在管家内上传新简历附件
+  async function handleDirectUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLoadingResume(true);
+    try {
+      const b64 = await readFileAsBase64(file);
+      await ipc.saveResumeFile(file.name, b64);
+      setActiveResumeName(file.name);
+      let text = "";
+      try {
+        const content = await ipc.getResumeContent(file.name);
+        text = content.text?.trim() || "";
+        setActiveResumeText(text);
+      } catch {}
+      pushAgentMessage({
+        role: "assistant",
+        content: `已成功关联简历《${file.name}》！我已经读完你的简历，你可以随时问我：“帮我分析简历亮点”、“我适合投哪些岗位”或“帮我润色经历”。`,
+      });
+    } catch (err) {
+      pushAgentMessage({
+        role: "assistant",
+        content: `上传简历失败：${String(err)}`,
+      });
+    } finally {
+      setLoadingResume(false);
+      if (uploadFileRef.current) uploadFileRef.current.value = "";
+    }
+  }
 
   async function handleSendText(textToSend: string) {
     const trimmed = textToSend.trim();
@@ -63,7 +123,15 @@ export default function CareerCopilotView({
 
     try {
       const history = agentMessages.slice(-10);
-      const currentForm = getCurrentForm();
+      const currentForm = {
+        ...getCurrentForm(),
+        ...(activeResumeName
+          ? {
+              resume_name: activeResumeName,
+              resume_text: activeResumeText ? activeResumeText.slice(0, 1500) : "",
+            }
+          : {}),
+      };
       const result = await ipc.agentChat(trimmed, history, currentForm);
       if (result.status === "ok") {
         pushAgentMessage({ role: "assistant", content: result.reply ?? "" });
@@ -120,18 +188,131 @@ export default function CareerCopilotView({
   const modeLabel = typeof modeKey === "string" ? t(`mode.${modeKey}.title`) : "-";
 
   return (
-    <div className="flex-1 flex flex-col w-full min-h-[calc(100vh-230px)] space-y-4">
-      {/* 对话区：自适应伸展铺满上半部空间 */}
+    <div className="flex-1 flex flex-col w-full min-h-[calc(100vh-230px)] space-y-3">
+      {/* 顶部：当前关联简历感知栏 */}
+      <div className="flex items-center justify-between px-3.5 py-2 rounded-xl border border-stone-800 bg-stone-900/60 backdrop-blur text-xs shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <span
+            className={`size-2 rounded-full shrink-0 ${
+              activeResumeName ? "bg-emerald-400 animate-pulse" : "bg-stone-600"
+            }`}
+          />
+          <span className="text-stone-400 shrink-0">当前关联简历:</span>
+          {activeResumeName ? (
+            <span
+              className="text-amber-300 font-semibold truncate max-w-[220px]"
+              title={activeResumeName}
+            >
+              {activeResumeName}
+            </span>
+          ) : (
+            <span className="text-stone-500">未关联（可上传简历让管家为你诊断）</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {activeResumeName && (
+            <button
+              type="button"
+              onClick={() =>
+                handleSendText(
+                  `请仔细分析我的简历《${activeResumeName}》，挖掘我的优势亮点，并给出具体的求职与优化建议。`
+                )
+              }
+              className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-[11px] font-medium transition-all cursor-pointer"
+            >
+              让管家分析此简历
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => uploadFileRef.current?.click()}
+            disabled={loadingResume}
+            className="px-2.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-300 text-[11px] transition-all cursor-pointer flex items-center gap-1"
+          >
+            <UploadCloud className="size-3" />
+            <span>{loadingResume ? "解析中..." : activeResumeName ? "更换简历" : "上传简历"}</span>
+          </button>
+          <input
+            ref={uploadFileRef}
+            type="file"
+            accept=".pdf,.docx,.doc,.txt"
+            className="hidden"
+            onChange={handleDirectUpload}
+          />
+        </div>
+      </div>
+
+      {/* 对话区：自适应伸展铺满空间 */}
       <div ref={listRef} className="flex-1 min-h-[420px] overflow-y-auto space-y-4 pr-2 text-xs">
         {agentMessages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full min-h-[360px] text-center p-4">
-            <div className="size-16 rounded-3xl bg-amber-500/10 p-1 flex items-center justify-center mb-3 border border-amber-500/30 shadow-lg shadow-amber-500/10">
-              <img src="/favicon.png" alt="AI 投递规划助手" className="size-full rounded-2xl object-cover" />
+          <div className="flex flex-col items-center justify-center h-full min-h-[380px] text-center p-6 space-y-4">
+            <div className="size-16 rounded-3xl bg-amber-500/10 p-1 flex items-center justify-center border border-amber-500/30 shadow-lg shadow-amber-500/10">
+              <Bot className="size-8 text-amber-400" />
             </div>
-            <p className="text-base font-bold text-stone-100 mb-1">说出你的背景，AI 替你规划投递</p>
-            <p className="text-xs text-stone-400 max-w-md leading-relaxed">
-              说出你的专业、意向城市与薪资期待，大模型自动提炼最优关键词与排查规则。
-            </p>
+            <div className="space-y-1.5 max-w-md">
+              <p className="text-base font-bold text-stone-100">你好！我是你的 AI 智能管家</p>
+              <p className="text-xs text-stone-400 leading-relaxed">
+                随时让我<span className="text-amber-300">切换黑白主题、调节投递快慢、解答软件疑问</span>，
+                或<span className="text-amber-300">把简历交给我，我们随时聊聊你的求职困惑与经历修改</span>。
+              </p>
+            </div>
+
+            {/* 精选快捷测试卡片 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-lg pt-2 text-left">
+              <button
+                type="button"
+                onClick={() => handleSendText("帮我切换到黑白极简高级主题")}
+                className="p-3 rounded-xl border border-stone-800/80 bg-stone-900/50 hover:border-amber-500/40 hover:bg-stone-900/80 transition-all cursor-pointer text-xs group"
+              >
+                <div className="flex items-center gap-1.5 font-bold text-stone-200 group-hover:text-amber-300">
+                  <span>🎨 切换极简黑白主题</span>
+                </div>
+                <p className="text-[11px] text-stone-500 mt-1 leading-normal">
+                  0.01 秒极速变色，体验无刷新主题切换
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSendText("帮我切换到效率档，投递得更快一点")}
+                className="p-3 rounded-xl border border-stone-800/80 bg-stone-900/50 hover:border-amber-500/40 hover:bg-stone-900/80 transition-all cursor-pointer text-xs group"
+              >
+                <div className="flex items-center gap-1.5 font-bold text-stone-200 group-hover:text-amber-300">
+                  <span>⚡ 切换投递为效率档</span>
+                </div>
+                <p className="text-[11px] text-stone-500 mt-1 leading-normal">
+                  调节拟人化节奏至 15~30 秒短时冲刺
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleSendText("你能看看我的简历吗？聊聊我的经历优势和改进建议")
+                }
+                className="p-3 rounded-xl border border-stone-800/80 bg-stone-900/50 hover:border-amber-500/40 hover:bg-stone-900/80 transition-all cursor-pointer text-xs group"
+              >
+                <div className="flex items-center gap-1.5 font-bold text-stone-200 group-hover:text-amber-300">
+                  <span>📄 聊聊我的简历优势</span>
+                </div>
+                <p className="text-[11px] text-stone-500 mt-1 leading-normal">
+                  结合已绑定的简历，给出针对性优化建议
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSendText("这个软件怎么使用？有哪些核心模块？")}
+                className="p-3 rounded-xl border border-stone-800/80 bg-stone-900/50 hover:border-amber-500/40 hover:bg-stone-900/80 transition-all cursor-pointer text-xs group"
+              >
+                <div className="flex items-center gap-1.5 font-bold text-stone-200 group-hover:text-amber-300">
+                  <span>💡 软件使用全能答疑</span>
+                </div>
+                <p className="text-[11px] text-stone-500 mt-1 leading-normal">
+                  了解 7 大核心模块架构与防封号机制
+                </p>
+              </button>
+            </div>
           </div>
         ) : (
           agentMessages.map((msg, index) => {
@@ -270,7 +451,7 @@ export default function CareerCopilotView({
               handleSendText(input);
             }
           }}
-          placeholder="说出求职意向（例如：我是电气自动化应届生想在深圳找研发岗位...）"
+          placeholder="对管家下达指令或聊聊你的求职困惑（例如：帮我换成黑白主题、看看我的简历、投快一点...）"
           disabled={agentPending}
         />
 

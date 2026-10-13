@@ -2,7 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import { ipc, type AgentAction } from "../lib/ipc";
 import ResumePanel from "../components/ResumePanel";
 import ProfilePanel from "../components/ProfilePanel";
-import AgentPanel from "../components/AgentPanel";
+import ResumePolishView from "../components/agent/ResumePolishView";
+import CareerCopilotView from "../components/agent/CareerCopilotView";
 import DeliveryAnalyticsView from "../components/analytics/DeliveryAnalyticsView";
 import LiveCruiseView from "../components/live/LiveCruiseView";
 import DashboardHeader from "../components/DashboardHeader";
@@ -290,7 +291,7 @@ export default function Dashboard() {
               ? "px-2 sm:px-4 lg:px-6 py-0 overflow-hidden"
               : activeNav === "resumes"
               ? "px-3 sm:px-5 py-3 space-y-4 overflow-y-auto"
-              : activeNav === "copilot"
+              : activeNav === "polish" || activeNav === "copilot"
               ? "px-3 sm:px-5 py-3 flex flex-col overflow-y-auto"
               : activeNav === "live"
               ? "px-3 sm:px-5 py-3 flex flex-col overflow-hidden"
@@ -430,17 +431,24 @@ export default function Dashboard() {
                     name: resumeName,
                     text: text || "",
                   });
-                  setActiveNav("copilot");
+                  setActiveNav("polish");
                 }}
                 onGoToProfile={() => setActiveNav("profile")}
               />
             </div>
           )}
 
-          {/* TAB 4: 简历精修与诊断 Studio (Agent 2) / 意向画像 (Agent 1) */}
+          {/* TAB 4: 简历精修 Studio (深度诊断、通俗化改写技能包与前后对比) */}
+          {activeNav === "polish" && (
+            <div className="w-full flex-1 flex flex-col">
+              <ResumePolishView getCurrentForm={profileForm.currentProfileData} />
+            </div>
+          )}
+
+          {/* TAB 5: AI 智能管家 (全能操作管家、软件全知答疑、简历深度辅导与求职闲聊) */}
           {activeNav === "copilot" && (
             <div className="w-full flex-1 flex flex-col">
-              <AgentPanel
+              <CareerCopilotView
                 getCurrentForm={profileForm.currentProfileData}
                 onApply={(data) =>
                   profileForm.hydrateFromProfile({
@@ -450,7 +458,7 @@ export default function Dashboard() {
                   })
                 }
                 onRun={() => botRuntime.startRun()}
-                onOpenSettings={(tab) => {
+                onOpenSettings={(tab?: "rules" | "policy" | "greeting" | "basic" | "model") => {
                   if (tab === "rules" || tab === "policy" || tab === "greeting" || tab === "model") {
                     setMistModalType(tab);
                   } else {
