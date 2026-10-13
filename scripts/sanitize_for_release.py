@@ -27,10 +27,42 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BACKUP_DIR = REPO_ROOT / ".dev_private_backup"
 
-SENSITIVE_PATTERNS = [
-    (re.compile(r"sk-[a-zA-Z0-9_\-]{20,}"), "OpenAI / OpenRouter API Key"),
-    (re.compile(r"求职锦鲤"), "开发者个人真实姓名"),
-]
+# 模板占位名（脱敏后的标准值，不算敏感词）
+_PLACEHOLDER_USER_NAME = "求职锦鲤"
+
+
+def _read_dev_name() -> str:
+    """动态读取开发者的真实姓名（BOSS_USR_NAME）作扫描敏感词。
+
+    2026-10-13 审查修复：旧版把真实姓名硬编码在本文件里——脱敏工具自己
+    成了泄露源（姓名随代码进了 git 历史）。改为运行时从 .env（或已备份
+    的 .env）动态读取，代码库中不再留存任何真实身份信息。
+    """
+    for env_path in (BACKUP_DIR / ".env", REPO_ROOT / ".env"):
+        try:
+            if env_path.exists():
+                for line in env_path.read_text(
+                    encoding="utf-8", errors="ignore"
+                ).splitlines():
+                    line = line.strip()
+                    if line.startswith("BOSS_USR_NAME="):
+                        value = line.split("=", 1)[1].strip()
+                        if value and value != _PLACEHOLDER_USER_NAME:
+                            return value
+        except OSError:
+            continue
+    return ""
+
+
+def sensitive_patterns() -> list[tuple[re.Pattern, str]]:
+    """编译敏感词模式：API Key 固定规则 + 开发者姓名动态读取。"""
+    patterns: list[tuple[re.Pattern, str]] = [
+        (re.compile(r"sk-[a-zA-Z0-9_\-]{20,}"), "OpenAI / OpenRouter API Key"),
+    ]
+    dev_name = _read_dev_name()
+    if dev_name:
+        patterns.append((re.compile(re.escape(dev_name)), "开发者个人真实姓名"))
+    return patterns
 
 CLEAN_AGENT_CONFIG = {
     "base_url": "https://openrouter.ai/api/v1",
@@ -81,6 +113,10 @@ def sanitize() -> None:
         REPO_ROOT / "agent_config.json",
         REPO_ROOT / ".env",
         REPO_ROOT / "resume",
+        # logs/ 里的 *.jsonl 是跨天去重账本（已投/已看记录）——2026-10-13
+        # 审查修复：旧版 --sanitize 直接清空 logs 却不备份，开发者误用后
+        # 账本丢失 → 已投岗位会被重复投递。先备份再清空。
+        REPO_ROOT / "logs",
         REPO_ROOT / "profiles" / "gui-default.yml",
         REPO_ROOT / "profiles" / "0my.yml",
     ]
@@ -186,7 +222,7 @@ def scan_for_leaks() -> list[tuple[Path, str, str]]:
             content = p.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
-        for pattern, desc in SENSITIVE_PATTERNS:
+        for pattern, desc in sensitive_patterns():
             found = pattern.search(content)
             if found:
                 violations.append((p.relative_to(REPO_ROOT), desc, found.group(0)))
