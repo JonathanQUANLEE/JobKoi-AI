@@ -294,17 +294,17 @@ export default function GithubAuthGate({ onLoginSuccess }: GithubAuthGateProps) 
             <Star className="size-3.5 fill-amber-400 text-amber-400" />
           </button>
 
-          {/* 反馈提示 */}
+          {/* 反馈提示（可选中复制，方便用户把报错发给作者排障） */}
           {notice && (
-            <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs">
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs select-text cursor-text">
               <Sparkles className="size-4 shrink-0 text-emerald-400" />
               <span className="leading-relaxed">{notice}</span>
             </div>
           )}
           {error && (
-            <div className="flex items-center gap-2 p-3 rounded-xl bg-red-950/40 border border-red-500/30 text-red-300 text-xs">
-              <AlertCircle className="size-4 shrink-0 text-red-400" />
-              <span className="leading-relaxed">{error}</span>
+            <div className="flex items-start gap-2 p-3 rounded-xl bg-red-950/40 border border-red-500/30 text-red-300 text-xs select-text cursor-text">
+              <AlertCircle className="size-4 shrink-0 text-red-400 mt-0.5" />
+              <span className="leading-relaxed break-all">{error}</span>
             </div>
           )}
 
