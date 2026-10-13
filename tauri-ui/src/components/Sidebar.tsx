@@ -118,15 +118,15 @@ export default function Sidebar({
             <div className="relative shrink-0">
               <img
                 src="/favicon.png"
-                alt="JobHunter Bunny"
-                className="h-8 w-8 rounded-xl object-cover shadow-md shadow-pink-500/20 border border-pink-400/40"
+                alt="JobKoi-AI Logo"
+                className="h-8 w-8 rounded-xl object-cover shadow-md shadow-amber-500/20 border border-amber-400/40"
               />
               <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-[var(--sidebar-bg)]" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <DepthText
-                  text="JobHunter"
+                  text="JobKoi-AI"
                   layers={14}
                   depth={1.4}
                   faceColor={isMonochrome ? "#f4f4f5" : "#fbbf24"}

@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 # 跟 src-tauri/tauri.conf.json 的 identifier 保持一致
-APP_IDENTIFIER = "com.longsizhuo.boss-zhipin"
+APP_IDENTIFIER = "com.jonathanquanlee.jobkoi-ai"
 
 
 def is_standalone() -> bool:

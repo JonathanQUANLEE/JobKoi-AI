@@ -1,9 +1,10 @@
-import { PanelLeftOpen, SlidersHorizontal, Minus, Square, X } from "lucide-react";
+import { PanelLeftOpen, SlidersHorizontal, Minus, Square, X, Star } from "lucide-react";
 import { translate, type Lang } from "../lib/i18n";
 import { useRunStore } from "../store";
 import type { NavItem } from "./Sidebar";
 import { ipc } from "../lib/ipc";
 import { type GithubUser, clearStoredGithubUser } from "../lib/githubAuth";
+import { openSystemBrowser } from "../lib/browserUtils";
 
 interface DashboardHeaderProps {
   sidebarCollapsed: boolean;
@@ -126,7 +127,7 @@ export default function DashboardHeader({
           </button>
         )}
 
-        <span className="text-[var(--muted-fg)]">JobHunter</span>
+        <span className="text-[var(--muted-fg)]">JobKoi-AI</span>
         <span className="text-stone-600">/</span>
         <span className="font-semibold text-[var(--ink)]">
           {activeNav === "workbench" && t("header.nav.workbench")}
@@ -172,6 +173,17 @@ export default function DashboardHeader({
             )}
           </div>
         )}
+
+        {/* GitHub 仓库 Star 支持倡议按钮 */}
+        <button
+          type="button"
+          onClick={() => openSystemBrowser("https://github.com/JonathanQUANLEE/JobKoi-AI")}
+          className="btn-ghost !py-1 !px-2.5 text-xs flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 hover:border-amber-500/50 cursor-pointer transition-all shadow-sm shadow-amber-500/10"
+          title="前往 GitHub 为 JobKoi-AI 点亮 Star 支持作者"
+        >
+          <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400 animate-pulse" />
+          <span className="hidden sm:inline font-semibold">Star 支持</span>
+        </button>
 
         <button
           type="button"

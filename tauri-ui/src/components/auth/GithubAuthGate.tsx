@@ -14,6 +14,7 @@ import {
   UserCheck,
   Globe,
   Sparkles,
+  Star,
 } from "lucide-react";
 import {
   verifyGithubAccount,
@@ -157,7 +158,7 @@ export default function GithubAuthGate({ onLoginSuccess }: GithubAuthGateProps) 
       >
         <div className="flex items-center gap-2 pointer-events-none text-xs text-stone-400">
           <GithubIcon className="size-4 text-white" />
-          <span className="font-semibold text-stone-200">JobHunter · 智能求职锦鲤助手</span>
+          <span className="font-semibold text-stone-200">JobKoi-AI · 全智能求职锦鲤助手</span>
           <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">
             身份认证门禁
           </span>
@@ -216,11 +217,39 @@ export default function GithubAuthGate({ onLoginSuccess }: GithubAuthGateProps) 
             </div>
             <div className="space-y-1">
               <h1 className="text-xl font-bold tracking-tight text-white">
-                JobHunter · 求职锦鲤助手
+                JobKoi-AI · 全智能求职锦鲤助手
               </h1>
               <p className="text-xs text-stone-400">
                 本软件深度绑定 GitHub 开发者生态，请验证您的 GitHub 账号以解锁全站巡航
               </p>
+            </div>
+          </div>
+
+          {/* 开源支持与 Star 解锁倡议卡片 */}
+          <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent p-3.5 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="size-8 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                  <Star className="size-4 fill-amber-400 text-amber-400 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-semibold text-amber-200">开源支持 · 点亮 Star 免费解锁</h3>
+                  <p className="text-[11px] text-stone-400">为作者官方仓库点亮 Star，尊享防封库即时更新</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  handleOpenBrowser(
+                    "https://github.com/JonathanQUANLEE/JobKoi-AI",
+                    "已在系统默认浏览器中打开 JobKoi-AI 仓库，为作者点亮 ⭐ Star 即可！"
+                  )
+                }
+                className="py-1.5 px-3 text-xs flex items-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-[0.98] text-stone-950 font-bold shadow-md shadow-amber-500/20 cursor-pointer transition-all shrink-0"
+              >
+                <Star className="size-3.5 fill-stone-950" />
+                <span>点亮 Star ⭐</span>
+              </button>
             </div>
           </div>
 

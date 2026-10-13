@@ -661,7 +661,7 @@ const en: Record<string, string> = {
   "smodal.title.shortcuts": "Keyboard Shortcuts",
   "smodal.title.model": "AI Model Configuration",
   "smodal.title.notifications": "Audit & Notification Logs",
-  "smodal.title.about": "About JobHunter",
+  "smodal.title.about": "About JobKoi-AI",
   // ---- AppearanceTab ----
   "appear.themeLabel": "Interface Theme",
   "appear.themeHint": "Instant preview & auto-saved",
