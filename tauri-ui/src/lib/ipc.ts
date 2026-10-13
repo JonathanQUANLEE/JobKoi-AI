@@ -395,6 +395,8 @@ export const ipc = {
   windowMinimize: () => pyInvoke<{ status: string }>("window_minimize", {}),
   windowToggleMaximize: () => pyInvoke<{ status: string }>("window_toggle_maximize", {}),
   windowClose: () => pyInvoke<{ status: string }>("window_close", {}),
+  openExternalUrl: (url: string) =>
+    pyInvoke<{ status: string; url?: string }>("open_external_url", { url }),
   // 定时巡航闹钟（系统级 Windows 计划任务）
   getScheduleStatus: () =>
     pyInvoke<{ exists: boolean; raw?: string; error?: string }>("get_schedule_status", {}),

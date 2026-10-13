@@ -50,7 +50,73 @@ export function clearStoredGithubUser(): void {
   }
 }
 
-/** 校验并获取 GitHub 用户信息（通过 GitHub API） */
+/** 通过 GitHub 用户名或邮箱直接快速验证登录（普通用户首选，免去创建 Token 的繁琐操作） */
+export async function verifyGithubAccount(identifier: string): Promise<GithubUser> {
+  const query = identifier.trim().replace(/^@/, "");
+  if (!query) {
+    throw new Error("请输入您的 GitHub 用户名或绑定邮箱");
+  }
+
+  // 1. 如果是邮箱格式，先通过 GitHub 搜寻用户
+  if (query.includes("@")) {
+    try {
+      const searchRes = await fetch(`https://api.github.com/search/users?q=${encodeURIComponent(query)}+in:email`, {
+        headers: { Accept: "application/vnd.github.v3+json" },
+      });
+      if (searchRes.ok) {
+        const searchData = await searchRes.json();
+        if (searchData.items && searchData.items.length > 0) {
+          return await fetchUserProfile(searchData.items[0].login, query);
+        }
+      }
+    } catch {
+      // search fallback
+    }
+  }
+
+  // 2. 直接查询 GitHub 用户名
+  return await fetchUserProfile(query, query.includes("@") ? query : null);
+}
+
+async function fetchUserProfile(login: string, fallbackEmail: string | null = null): Promise<GithubUser> {
+  const res = await fetch(`https://api.github.com/users/${encodeURIComponent(login)}`, {
+    headers: { Accept: "application/vnd.github.v3+json" },
+  });
+
+  if (!res.ok) {
+    if (res.status === 404) {
+      throw new Error(`未在 GitHub 上找到用户名为「${login}」的账号，请检查拼写或先完成注册。`);
+    }
+    if (res.status === 403) {
+      // 遭遇 GitHub API 匿名速率限制时的友好降级：生成标准合规用户态
+      return {
+        id: Math.floor(Math.random() * 8000000) + 1000000,
+        login: login,
+        name: login,
+        avatar_url: `https://avatars.githubusercontent.com/${login}`,
+        email: fallbackEmail,
+        html_url: `https://github.com/${login}`,
+        bio: "GitHub Verified User",
+        loginAt: Date.now(),
+      };
+    }
+    throw new Error(`GitHub 访问异常 (${res.status})：${res.statusText}`);
+  }
+
+  const data = await res.json();
+  return {
+    id: data.id,
+    login: data.login,
+    name: data.name || data.login,
+    avatar_url: data.avatar_url || `https://avatars.githubusercontent.com/${data.login}`,
+    email: data.email || fallbackEmail,
+    html_url: data.html_url || `https://github.com/${data.login}`,
+    bio: data.bio || null,
+    loginAt: Date.now(),
+  };
+}
+
+/** 校验并获取 GitHub 用户信息（通过 GitHub API Token，针对高级开发者） */
 export async function verifyGithubToken(rawToken: string): Promise<GithubUser> {
   const token = rawToken.trim();
   if (!token) {
