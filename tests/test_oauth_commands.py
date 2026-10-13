@@ -43,6 +43,15 @@ def test_oauth_login_not_configured(monkeypatch):
     assert "未配置" in res["message"]
 
 
+def test_oauth_login_missing_secret(monkeypatch):
+    """GitHub OAuth App 换令牌强制要 secret（2026-10-14 实测）：缺失时给明确指引。"""
+    monkeypatch.setattr(oauth_mod, "GITHUB_OAUTH_CLIENT_ID", "Ov23fake")
+    monkeypatch.setattr(oauth_mod, "GITHUB_OAUTH_CLIENT_SECRET", "")
+    res = oauth_mod._oauth_login_blocking()
+    assert res["status"] == "error"
+    assert "Client Secret" in res["message"]
+
+
 def test_check_starred_204(monkeypatch):
     monkeypatch.setattr(oauth_mod, "_github_api_json", lambda url, token=None: (204, None))
     res = oauth_mod._check_starred_blocking("tok")

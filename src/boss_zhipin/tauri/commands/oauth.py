@@ -43,6 +43,12 @@ from boss_zhipin.tauri.commands._registry import commands
 #   3. 创建后复制 Client ID 填到下面即可（Client Secret 留空不用，PKCE 无需）
 # 未配置（空串）时前端自动隐藏"一键登录"按钮，回退旧登录方式，零破坏。
 GITHUB_OAUTH_CLIENT_ID = "Ov23liyAFaO5CV36g3Ac"
+# Client Secret：GitHub OAuth App 的令牌交换【强制要求】——即使已用 PKCE 也
+# 不能省略（2026-10-14 实测：无 secret 时 GitHub 报
+# "The client_id and/or client_secret passed are incorrect"）。
+# 获取：OAuth App 详情页 → Client secrets → Generate a new client secret。
+# 注：secret 打包进桌面 EXE 是 GitHub 官方对原生应用的已知妥协，风险可接受。
+GITHUB_OAUTH_CLIENT_SECRET = ""
 
 GITHUB_REPO_OWNER = "JonathanQUANLEE"
 GITHUB_REPO_NAME = "JobKoi-AI"
@@ -100,6 +106,11 @@ def _oauth_login_blocking() -> dict[str, object]:
 
     if not GITHUB_OAUTH_CLIENT_ID:
         return {"status": "error", "message": "OAuth 未配置：请联系作者填写 client_id"}
+    if not GITHUB_OAUTH_CLIENT_SECRET:
+        return {
+            "status": "error",
+            "message": "OAuth 未配置 Client Secret：作者需在 GitHub OAuth App 页生成并填入代码后重新构建",
+        }
 
     verifier, challenge = _pkce_pair()
     state = secrets.token_urlsafe(16)
@@ -170,12 +181,14 @@ def _oauth_login_blocking() -> dict[str, object]:
         if "error" in result:
             return {"status": "error", "message": str(result["error"])}
 
-        # 用 code + PKCE verifier 换 access_token（无需 client_secret）
+        # 用 code + PKCE verifier + client_secret 换 access_token
+        # （GitHub OAuth App 强制要求 secret，PKCE 不能豁免）
         token_req = urllib.request.Request(
             "https://github.com/login/oauth/access_token",
             data=urllib.parse.urlencode(
                 {
                     "client_id": GITHUB_OAUTH_CLIENT_ID,
+                    "client_secret": GITHUB_OAUTH_CLIENT_SECRET,
                     "code": result["code"],
                     "code_verifier": verifier,
                     "redirect_uri": f"http://127.0.0.1:{REDIRECT_PORT}/callback",

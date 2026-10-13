@@ -240,11 +240,11 @@ export default function StarUnlockModal({
             </button>
           </div>
 
-          {/* 浏览器弹窗反馈 */}
+          {/* 浏览器弹窗反馈（可选中复制） */}
           {browserNotice && (
-            <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs animate-in fade-in">
-              <Sparkles className="size-4 shrink-0 text-emerald-400" />
-              <span className="leading-relaxed">{browserNotice}</span>
+            <div className="flex items-start gap-2 p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs animate-in fade-in select-text cursor-text">
+              <Sparkles className="size-4 shrink-0 text-emerald-400 mt-0.5" />
+              <span className="leading-relaxed break-all">{browserNotice}</span>
             </div>
           )}
 
