@@ -117,6 +117,21 @@ async def run(keywords: list[str], daily_limit: int, tab=None) -> int:
     contacted_companies = sent_companies(SENT_LOG)
     _log(f"[job51] 已投 {len(sent_ids)} 个岗位 / {len(contacted_companies)} 家公司（将跳过）")
 
+    # 满额预检（2026-10-13 用户实测）：今日额度已投满时，旧逻辑仍先开
+    # 浏览器再进循环秒退——用户看到"浏览器开了却一动不动"。改为开浏览器
+    # 前直接判满：发平台限额事件（前端常驻横幅 + 实时动态提醒）+ 本轮
+    # 直接跳过该平台，一个窗口都不浪费。
+    sent_today = today_sent(SENT_LOG)
+    if sent_today >= daily_limit:
+        _log(f"[job51] 今日已投 {sent_today}，达到上限 {daily_limit}，本轮跳过（不开浏览器）")
+        events.emit(
+            "platform_limit_reached",
+            platform="job51",
+            matched_text="(启动前检查)",
+            message=f"前程无忧今日已投满 {sent_today}/{daily_limit}，本轮自动跳过该平台（未打开浏览器）。明日再来。",
+        )
+        return 0
+
     if tab is None:
         tab = await driver.open_browser(driver.SEARCH_TMPL.format(kw="AI Agent"))
         if not await driver.is_logged_in(tab):
@@ -128,7 +143,6 @@ async def run(keywords: list[str], daily_limit: int, tab=None) -> int:
             )
             return -1
 
-    sent_today = today_sent(SENT_LOG)
     sent_this_run = 0
 
     for kw in keywords:

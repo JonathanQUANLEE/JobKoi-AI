@@ -37,9 +37,11 @@ export default function CenterToast() {
           phase === "out" ? "opacity-0" : "opacity-100"
         } ${isError ? "bg-black/25" : "bg-black/20"} backdrop-blur-[2px]`}
       />
-      {/* 纯文字：淡入 → 停留 → 淡出；暗晕 text-shadow 保证可读 */}
+      {/* 纯文字：淡入 → 停留 → 淡出；暗晕 text-shadow 保证可读。
+          max-w + text-center：通知正文可能很长（错误详情等），允许
+          优雅换行而不是顶到屏幕两边（2026-10-13 通知栏改造）。 */}
       <span
-        className={`relative text-xl sm:text-2xl font-semibold tracking-[0.12em] transition-all duration-500 ${
+        className={`relative block max-w-[85vw] text-center leading-relaxed px-6 text-xl sm:text-2xl font-semibold tracking-[0.08em] transition-all duration-500 ${
           phase === "out" ? "opacity-0 translate-y-1.5" : "opacity-100"
         } ${
           isError

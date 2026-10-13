@@ -192,7 +192,7 @@ const NotificationRowItem: FC<NotificationRowItemProps> = ({
       style={{ borderColor }}
     >
       <SwipeRow
-        height={48}
+        height={56}
         radius={12}
         actionWidth={64}
         actionColor="#ef4444"
@@ -227,7 +227,7 @@ const NotificationRowItem: FC<NotificationRowItemProps> = ({
 
             {item.source && (
               <span
-                className={`text-[9px] font-bold px-1 py-0.2 rounded shrink-0 leading-tight uppercase ${
+                className={`text-[10px] font-bold px-1.5 py-0.2 rounded shrink-0 leading-tight uppercase ${
                   item.type === "success"
                     ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
                     : item.type === "error"
@@ -241,8 +241,8 @@ const NotificationRowItem: FC<NotificationRowItemProps> = ({
               </span>
             )}
 
-            {/* 消息正文（紧凑细长排版） */}
-            <span className="text-xs font-medium truncate text-stone-200" title={item.text}>
+            {/* 消息正文（2026-10-13 字号放大：旧 text-xs 用户看不清） */}
+            <span className="text-sm font-medium truncate text-stone-200" title={item.text}>
               {item.text}
             </span>
           </div>

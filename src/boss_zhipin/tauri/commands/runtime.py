@@ -91,11 +91,39 @@ def _build_main_loop_factory(config: RunConfig):
         # 任一平台异常不影响其他平台，统一收敛到日志。
         import asyncio as _asyncio
 
+        async def _close_platform_browser(name: str) -> None:
+            """该平台链结束就关它的受控浏览器（2026-10-13 用户实测）。
+
+            多平台并发时，先干完活的平台（如 51job 满额/扫完秒退）如果
+            等整轮巡航结束才关窗，用户会看到一个开着的窗口一动不动。
+            这里在各链 finally 里优雅关闭（CDP browser.close 保 cookie
+            落盘）；幂等——浏览器没开就是空操作，runner 结束时还有一道
+            全平台兜底关闭。
+            """
+            try:
+                if name == "boss":
+                    from boss_zhipin.website_oper import finding_jobs
+
+                    if finding_jobs._browser is not None:
+                        log.info("[multi-platform] BOSS 链结束，自动关闭其浏览器")
+                        await finding_jobs.shutdown()
+                    return
+                import importlib
+
+                module = importlib.import_module(f"{name}.driver")
+                if getattr(module, "_browser", None) is not None:
+                    log.info("[multi-platform] %s 链结束，自动关闭其浏览器", name)
+                    await module.shutdown()
+            except Exception as e:  # noqa: BLE001 — 关窗失败不影响状态复位
+                log.debug("[multi-platform] 关闭 %s 浏览器跳过：%s", name, e)
+
         async def _wrap_platform(name: str, coro) -> None:
             try:
                 await coro
             except Exception as e:  # noqa: BLE001 — 单平台失败不拖垮其他链路
                 log.warning("[multi-platform] %s 链异常终止: %s", name, e)
+            finally:
+                await _close_platform_browser(name)
 
         tasks = []
         if "boss" in platforms:
