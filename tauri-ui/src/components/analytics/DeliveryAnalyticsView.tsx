@@ -61,41 +61,44 @@ export default function DeliveryAnalyticsView({ onStartCruise }: DeliveryAnalyti
     }
   }, []);
 
+  const fetchUnread = useCallback(async () => {
+    if (mode !== "real") return;
+    setUnreadLoading(true);
+    try {
+      const res = await ipc.checkPlatformReplies();
+      setUnreadSnapshot({
+        boss:
+          res.boss?.status === "ok" || res.boss?.status === "cached"
+            ? (res.boss.unread ?? 0)
+            : null,
+        liepin:
+          res.liepin?.status === "ok" || res.liepin?.status === "cached"
+            ? (res.liepin.unread ?? 0)
+            : null,
+      });
+    } catch {
+      setUnreadSnapshot(null);
+    } finally {
+      setUnreadLoading(false);
+    }
+  }, [mode]);
+
   // 真实模式：进入页面即拉取 + 巡航结束（running true→false）自动刷新，保证数据实时
   useEffect(() => {
-    if (mode === "real") fetchRealStats();
-  }, [mode, fetchRealStats]);
+    if (mode === "real") {
+      fetchRealStats();
+      fetchUnread();
+    }
+  }, [mode, fetchRealStats, fetchUnread]);
 
-  // 真实模式 KPI 的三平台未读消息（2026-10-13）：后端会按需短暂打开平台页面
-  // 读取角标后立即关闭；未登录/不可读 → null。51job 消息走微信服务号，固定不可读。
-  useEffect(() => {
-    if (mode !== "real") return;
-    let cancelled = false;
-    setUnreadLoading(true);
-    ipc
-      .checkPlatformReplies()
-      .then((res) => {
-        if (cancelled) return;
-        setUnreadSnapshot({
-          boss: res.boss?.status === "ok" ? (res.boss.unread ?? 0) : null,
-          liepin: res.liepin?.status === "ok" ? (res.liepin.unread ?? 0) : null,
-        });
-      })
-      .catch(() => {
-        if (!cancelled) setUnreadSnapshot(null);
-      })
-      .finally(() => {
-        if (!cancelled) setUnreadLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [mode, realStats]);
   const prevRunningRef = useRef(running);
   useEffect(() => {
-    if (mode === "real" && prevRunningRef.current && !running) fetchRealStats();
+    if (mode === "real" && prevRunningRef.current && !running) {
+      fetchRealStats();
+      fetchUnread();
+    }
     prevRunningRef.current = running;
-  }, [running, mode, fetchRealStats]);
+  }, [running, mode, fetchRealStats, fetchUnread]);
 
   const switchToReal = useCallback(async () => {
     setMode("real");
@@ -177,6 +180,7 @@ export default function DeliveryAnalyticsView({ onStartCruise }: DeliveryAnalyti
   const handleRefresh = () => {
     if (isReal) {
       fetchRealStats();
+      fetchUnread();
     } else {
       setDemoRecords(deliveryHistoryDb.getRecords());
       setDemoBrief(deliveryHistoryDb.getMorningBrief());
@@ -355,7 +359,7 @@ export default function DeliveryAnalyticsView({ onStartCruise }: DeliveryAnalyti
               unreadLoading ? (
                 <>
                   <span className="text-2xl font-black font-mono text-stone-500">…</span>
-                  <span className="text-xs text-stone-500">读取中（会短暂打开平台页面）</span>
+                  <span className="text-xs text-stone-500">同步中</span>
                 </>
               ) : unreadSnapshot && (unreadSnapshot.boss !== null || unreadSnapshot.liepin !== null) ? (
                 <div className="flex items-baseline gap-3">
@@ -386,7 +390,7 @@ export default function DeliveryAnalyticsView({ onStartCruise }: DeliveryAnalyti
               ) : (
                 <>
                   <span className="text-2xl font-black font-mono text-stone-500">—</span>
-                  <span className="text-xs text-stone-500">未登录 / 暂不可读</span>
+                  <span className="text-xs text-stone-500">巡航时自动同步</span>
                 </>
               )
             ) : (
@@ -401,7 +405,7 @@ export default function DeliveryAnalyticsView({ onStartCruise }: DeliveryAnalyti
           </div>
           {isReal && (
             <p className="text-[10px] text-stone-500 mt-0.5">
-              HR 回复归因建设中 · 51job 消息走微信服务号无法读取
+              HR 回复归因建设中 · 巡航时同步实时未读
             </p>
           )}
         </div>

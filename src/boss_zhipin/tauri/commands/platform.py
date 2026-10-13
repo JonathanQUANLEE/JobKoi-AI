@@ -150,17 +150,14 @@ async def reset_today_delivery(body: _ResetTodayDeliveryBody) -> dict[str, Any]:
 
 @commands.command()
 async def check_platform_replies() -> dict[str, Any]:
-    """三平台未读消息快照（统计页 KPI「未读消息」与早报数据源，2026-10-13）。
+    """三平台未读消息快照（统计页 KPI「未读消息」与早报数据源）。
 
-    各平台能力（probe 实证）：
-    - BOSS：任意页面导航 ``a[ka="header-message"] .nav-chat-num``（已登录且
-      浏览器没开时，自动开一个到 zhipin.com 读完即关；巡航运行中只复用当前受控页）；
-    - 猎聘：c.liepin.com 聊天挂件 ``.im-ui-basic-entry-unread-count``（已登录且
-      浏览器没开时，无头模式读完即关；巡航运行中禁止新开浏览器，避免弹窗抢焦点或误杀进程）；
-    - 51job：PC 网页端**没有消息中心**——HR 消息经微信服务号推送（页面自己
-      写着「扫码关注服务号，及时收取HR消息」），无法读取，status=unsupported。
-
-    全链路有界（每平台 ≤15s），异常收敛为 error 项，绝不拖死 IPC。
+    安全红线（2026-10-13 修复）：
+    - 统计面板纯属被动观察视图，绝不在后台私自启动或关闭桌面浏览器！
+    - 若巡航运行中或浏览器已开启，直接从当前受控页面安全提取未读角标；
+    - 若浏览器未开启，如实返回 offline 状态（或历史快照缓存），严禁弹窗打扰用户或造成 Chrome 异常退出崩溃；
+    - 猎聘：浏览器未启动时同样不启动后台无头进程，避免抢占 Chrome 实例或锁死 profile；
+    - 51job：PC 网页端没有消息中心（HR 消息经微信服务号推送），固定 status=unsupported。
     """
     import asyncio
 
@@ -175,7 +172,15 @@ async def check_platform_replies() -> dict[str, Any]:
         from boss_zhipin.website_oper import finding_jobs, message_check
 
         if finding_jobs.get_tab() is not None:
-            result["boss"] = await message_check.snapshot()
+            current = finding_jobs.get_current_url()
+            if "/web/user/" in (current or ""):
+                result["boss"] = {
+                    "status": "error",
+                    "code": "login_expired",
+                    "message": "BOSS 登录态已失效（页面被重定向到登录页），请在「招聘平台中心」重新扫码登录。",
+                }
+            else:
+                result["boss"] = await message_check.snapshot()
         elif is_cruising:
             # 巡航运行中但受控 tab 暂未就绪（如正在启动或换页）：跳过后台重新开浏览器，绝不关巡航
             result["boss"] = {
@@ -192,39 +197,14 @@ async def check_platform_replies() -> dict[str, Any]:
                     "message": "BOSS 未登录，无法读取未读消息。",
                 }
             else:
-                try:
-                    # 必须开求职端应用页（job-recommend）：www.zhipin.com 首页是
-                    # 营销页头部，没有 a[ka="header-message"] 导航（2026-10-13
-                    # 真机实测首页连续 no_nav）。
-                    await finding_jobs.open_browser_with_options(
-                        "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
-                        "chrome",
-                    )
-                    # 导航是前端渲染的：页面刚开时角标不立刻在，带重试地等它
-                    # 出现；会话失效会被重定向到 /web/user/ 登录页——cookie
-                    # 证据还在但服务端不认（2026-10-13 真机实测），如实报错。
-                    result["boss"] = {
-                        "status": "error",
-                        "code": "no_nav",
-                        "message": "BOSS 页面导航未读数未出现。",
-                    }
-                    for _ in range(4):
-                        await asyncio.sleep(2.5)
-                        current = finding_jobs.get_current_url()
-                        if "/web/user/" in (current or ""):
-                            result["boss"] = {
-                                "status": "error",
-                                "code": "login_expired",
-                                "message": "BOSS 登录态已失效（页面被重定向到登录页），请在「招聘平台中心」重新扫码登录。",
-                            }
-                            break
-                        snap = await message_check.snapshot()
-                        if snap.get("status") == "ok":
-                            result["boss"] = snap
-                            break
-                        result["boss"] = snap  # 保留最后一次错误
-                finally:
-                    await finding_jobs.shutdown()
+                # 浏览器未开启：严禁启动 Chrome！返回离线状态（如有上次基线缓存则附带）
+                last_unread = getattr(message_check, "_last_unread", None)
+                result["boss"] = {
+                    "status": "offline" if last_unread is None else "cached",
+                    "code": "browser_closed",
+                    "unread": last_unread,
+                    "message": "浏览器未运行，巡航启动时自动同步实时未读数。",
+                }
     except Exception as e:  # noqa: BLE001
         result["boss"] = {"status": "error", "code": "exception", "message": str(e)}
 
@@ -252,7 +232,13 @@ async def check_platform_replies() -> dict[str, Any]:
                     "message": "猎聘未登录，无法读取未读消息。",
                 }
             else:
-                result["liepin"] = await liepin_driver.check_unread()
+                # 浏览器未开启：严禁后台新开无头进程，避免抢占 Chrome 实例或锁死 profile
+                result["liepin"] = {
+                    "status": "offline",
+                    "code": "browser_closed",
+                    "unread": None,
+                    "message": "浏览器未运行，巡航启动时自动同步实时未读数。",
+                }
     except Exception as e:  # noqa: BLE001
         result["liepin"] = {"status": "error", "code": "exception", "message": str(e)}
 

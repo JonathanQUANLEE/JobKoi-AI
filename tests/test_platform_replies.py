@@ -202,10 +202,12 @@ def ipc_env(monkeypatch):
     return state
 
 
-def test_ipc_boss_browser_open_reads_snapshot(ipc_env):
+def test_ipc_boss_browser_open_reads_snapshot(ipc_env, monkeypatch):
     """BOSS 浏览器开着 → 直接 snapshot，不重新开浏览器。"""
+    import liepin.driver as liepin_driver
     from boss_zhipin.tauri.commands.platform import check_platform_replies
 
+    monkeypatch.setattr(liepin_driver, "_browser", object())
     ipc_env["install_manager"](True, True)
     ipc_env["boss_tab"] = object()
     ipc_env["boss_unread"] = 21
@@ -228,16 +230,12 @@ def test_ipc_boss_browser_open_reads_snapshot(ipc_env):
     assert ipc_env["boss_opened"] == 0
 
 
-def test_ipc_boss_closed_logged_in_opens_then_closes(ipc_env, monkeypatch):
-    """BOSS 浏览器没开但已登录 → 自动开一个读完即关。"""
+def test_ipc_boss_closed_logged_in_never_opens_browser(ipc_env):
+    """BOSS 浏览器没开但已登录 → 严禁私自开启或关闭桌面浏览器，安全返回 offline。"""
     from boss_zhipin.tauri.commands.platform import check_platform_replies
 
-    async def _instant(seconds):
-        return None
-
-    monkeypatch.setattr(asyncio, "sleep", _instant)
     ipc_env["install_manager"](True, True)
-    ipc_env["boss_unread"] = 5
+    ipc_env["boss_tab"] = None
     ipc_env["liepin_result"] = {
         "status": "error",
         "code": "not_logged_in",
@@ -245,23 +243,23 @@ def test_ipc_boss_closed_logged_in_opens_then_closes(ipc_env, monkeypatch):
     }
 
     result = asyncio.run(check_platform_replies())
-    assert result["boss"]["status"] == "ok"
-    assert result["boss"]["unread"] == 5
-    assert ipc_env["boss_opened"] == 1
-    assert ipc_env["boss_tab"] is None  # 读完已关
+    assert result["boss"]["status"] in ("offline", "cached")
+    assert result["boss"]["code"] == "browser_closed"
+    assert "未运行" in result["boss"]["message"] or "未开启" in result["boss"]["message"]
+    # 核心安全红线断言：绝不调用任何 open_browser
+    assert ipc_env["boss_opened"] == 0
 
 
 def test_ipc_boss_login_expired_detected(ipc_env, monkeypatch):
-    """会话失效被重定向到登录页 → login_expired（cookie 在但服务端不认）。"""
+    """受控浏览器开着且被重定向到登录页 → login_expired（已失效）。"""
+    import liepin.driver as liepin_driver
     from boss_zhipin.tauri.commands.platform import check_platform_replies
 
-    async def _instant(seconds):
-        return None
-
-    monkeypatch.setattr(asyncio, "sleep", _instant)
+    monkeypatch.setattr(liepin_driver, "_browser", object())
     ipc_env["install_manager"](True, True)
+    ipc_env["boss_tab"] = object()
     ipc_env["boss_url"] = "https://www.zhipin.com/web/user/?ka=header-login"
-    ipc_env["boss_unread"] = 5  # 即便 snapshot 桩能读，也应先判登录失效
+    ipc_env["boss_unread"] = 5
     ipc_env["liepin_result"] = {
         "status": "ok",
         "unread": 19,
@@ -274,6 +272,24 @@ def test_ipc_boss_login_expired_detected(ipc_env, monkeypatch):
     assert "重新扫码" in result["boss"]["message"]
     # 猎聘不受影响
     assert result["liepin"]["status"] == "ok"
+
+
+def test_ipc_liepin_closed_logged_in_never_opens_browser(ipc_env):
+    """猎聘浏览器没开但已登录 → 统计快照严禁新开无头进程，安全返回 offline。"""
+    import liepin.driver as liepin_driver
+    from boss_zhipin.tauri.commands.platform import check_platform_replies
+
+    ipc_env["install_manager"](True, True)
+    ipc_env["boss_tab"] = object()
+    ipc_env["boss_unread"] = 10
+    liepin_driver._browser = None
+
+    result = asyncio.run(check_platform_replies())
+    assert result["boss"]["status"] == "ok"
+    assert result["boss"]["unread"] == 10
+    assert result["liepin"]["status"] == "offline"
+    assert result["liepin"]["code"] == "browser_closed"
+    assert ipc_env["liepin_called"] == 0
 
 
 def test_ipc_not_logged_in_degrades_gracefully(ipc_env):
@@ -295,6 +311,7 @@ def test_ipc_liepin_exception_converges(ipc_env, monkeypatch):
     import liepin.driver as liepin_driver
     from boss_zhipin.tauri.commands.platform import check_platform_replies
 
+    monkeypatch.setattr(liepin_driver, "_browser", object())
     ipc_env["install_manager"](True, True)
 
     async def boom():

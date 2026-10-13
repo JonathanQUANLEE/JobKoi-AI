@@ -201,8 +201,8 @@ export type ReplyCheckResult = {
 // ---------- 三平台未读快照（统计页 KPI / 早报数据源，2026-10-13） ----------
 
 export type PlatformUnreadResult = {
-  /** ok=读到数；error=登录/浏览器不可用；unsupported=平台没有 PC 端消息中心 */
-  status: "ok" | "error" | "unsupported";
+  /** ok=读到数；error=异常；unsupported=无PC端消息中心；offline=浏览器未开；cached=缓存快照；busy=巡航中保护 */
+  status: "ok" | "error" | "unsupported" | "offline" | "cached" | "busy";
   code?: string;
   message?: string;
   unread?: number;
