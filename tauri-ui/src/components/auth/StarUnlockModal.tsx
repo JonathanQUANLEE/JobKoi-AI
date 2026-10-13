@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Star,
   Sparkles,
@@ -28,8 +28,48 @@ export default function StarUnlockModal({
 }: StarUnlockModalProps) {
   const [hasOpenedLink, setHasOpenedLink] = useState(false);
   const [browserNotice, setBrowserNotice] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
 
   const targetRepoUrl = "https://github.com/JonathanQUANLEE/JobKoi-AI";
+
+  const unlock = () => {
+    try {
+      localStorage.setItem("jobkoi_star_unlocked", "true");
+    } catch (e) {
+      console.warn("Save star unlock error:", e);
+    }
+    onUnlocked();
+  };
+
+  // 点星真检测（2026-10-14）：OAuth/Token 登录的用户，直接查 GitHub API
+  // 判定是否已点星——已点过 → 无感自动放行（老用户丝滑进入）；
+  // 未点 → 留在引导页。自觉模式（用户名/游客）不受影响。
+  const checkStarred = async (): Promise<boolean> => {
+    if (!user.token) return false;
+    try {
+      const res = await ipc.githubCheckStarred(user.token);
+      if (res?.status === "ok") {
+        return Boolean(res.starred);
+      }
+      if (res?.message) setBrowserNotice(res.message);
+    } catch {
+      /* 网络异常不阻断自觉流程 */
+    }
+    return false;
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    if (user.token) {
+      checkStarred().then((starred) => {
+        if (!cancelled && starred) unlock();
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.token]);
 
   const handleOpenRepo = async () => {
     setBrowserNotice("已在您的系统默认浏览器打开项目主页，请在页面右上角为作者点亮 ⭐ Star！");
@@ -37,13 +77,25 @@ export default function StarUnlockModal({
     await openSystemBrowser(targetRepoUrl);
   };
 
-  const handleConfirmAndEnter = () => {
-    try {
-      localStorage.setItem("jobkoi_star_unlocked", "true");
-    } catch (e) {
-      console.warn("Save star unlock error:", e);
+  const handleConfirmAndEnter = async () => {
+    // 有 token（OAuth/Token 登录）：真实闭环——点完 Star 再查一次 API，
+    // 确认点亮才放行，杜绝"口说点过但没点"的漏网
+    if (user.token) {
+      setVerifying(true);
+      setBrowserNotice("正在向 GitHub 核验您的 Star…");
+      const starred = await checkStarred();
+      setVerifying(false);
+      if (starred) {
+        unlock();
+        return;
+      }
+      setBrowserNotice(
+        "暂未检测到您点亮了 Star：请确认已在浏览器中点击仓库右上角的 ⭐ Star 按钮（可能需要几十秒生效），然后再次点击下方按钮重试。"
+      );
+      return;
     }
-    onUnlocked();
+    // 无 token（用户名/游客）：自觉申报模式
+    unlock();
   };
 
   const handleMinimize = async () => {
@@ -171,15 +223,20 @@ export default function StarUnlockModal({
             <button
               type="button"
               onClick={handleConfirmAndEnter}
-              className={`w-full py-3 px-4 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-[0.99] ${
+              disabled={verifying}
+              className={`w-full py-3 px-4 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-[0.99] disabled:opacity-60 disabled:cursor-wait ${
                 hasOpenedLink
                   ? "bg-emerald-500 hover:bg-emerald-400 text-stone-950 shadow-lg shadow-emerald-500/25 ring-2 ring-emerald-400/50"
                   : "bg-stone-900/90 hover:bg-stone-800 text-stone-300 border border-stone-700/80"
               }`}
             >
               <CheckCircle2 className={`size-4 ${hasOpenedLink ? "text-stone-950" : "text-emerald-400"}`} />
-              <span>第二步：我已在浏览器中点亮 Star，立即进入软件</span>
-              <ArrowRight className="size-4" />
+              <span>
+                {verifying
+                  ? "正在核验 Star…"
+                  : "第二步：我已在浏览器中点亮 Star，立即进入软件"}
+              </span>
+              {!verifying && <ArrowRight className="size-4" />}
             </button>
           </div>
 

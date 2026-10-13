@@ -20,6 +20,7 @@ from boss_zhipin.tauri.commands._registry import commands
 
 from boss_zhipin.tauri.commands import (  # noqa: F401 —— import 即注册
     agent,
+    oauth,
     platform,
     profile,
     resume,

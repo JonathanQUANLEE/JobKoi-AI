@@ -397,6 +397,29 @@ export const ipc = {
   windowClose: () => pyInvoke<{ status: string }>("window_close", {}),
   openExternalUrl: (url: string) =>
     pyInvoke<{ status: string; url?: string }>("open_external_url", { url }),
+  // GitHub OAuth 一键登录与点星检测（2026-10-14）
+  githubOauthStatus: () =>
+    pyInvoke<{ status: string; enabled: boolean; repoUrl: string }>("github_oauth_status", {}),
+  githubOauthLogin: () =>
+    pyInvoke<{
+      status: string;
+      message?: string;
+      user?: {
+        id: number;
+        login: string;
+        name: string;
+        avatarUrl: string;
+        email: string | null;
+        htmlUrl: string;
+        bio: string | null;
+        token: string;
+        loginAt: number;
+      };
+    }>("github_oauth_login", {}),
+  githubCheckStarred: (token: string) =>
+    pyInvoke<{ status: string; starred?: boolean; message?: string }>("github_check_starred", {
+      token,
+    }),
   // 定时巡航闹钟（系统级 Windows 计划任务）
   getScheduleStatus: () =>
     pyInvoke<{ exists: boolean; raw?: string; error?: string }>("get_schedule_status", {}),

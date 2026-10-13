@@ -66,6 +66,10 @@ def test_tauri_ipc_commands_match_gui_v02_contract():
         "window_toggle_maximize",
         "window_close",
         "open_external_url",
+        # GitHub OAuth 一键登录与点星检测（2026-10-14）
+        "github_oauth_status",
+        "github_oauth_login",
+        "github_check_starred",
         # 投递历史与记录
         "get_delivery_history",
         "get_delivery_daily_stats",
