@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from pathlib import Path
 import random
+import time
+from pathlib import Path
 from typing import Any
 
 from boss_zhipin.audit import validate_letter
@@ -537,13 +538,37 @@ async def _run_search_api_flow(
                 )
                 stop_reason = "daily_limit"
                 break
+            page_started = time.monotonic()
             try:
                 api_jobs = await job_api.fetch_search_page(tab, query, page)
             except RuntimeError as e:
-                log.warning("第 %d 页搜索接口失败，结束：%s", page, e)
-                events.emit("api_flow_error", page=page, message=str(e))
-                stop_reason = "api_error"
-                break
+                # code=37 = 请求过于频繁（2026-10-13 实测：全跳过页秒翻 6 次
+                # 后触发）。尊重风控信号冷却退避一次再试，而不是立刻硬停
+                # 浪费整轮巡航；重试仍被限制才优雅结束。
+                if "code=37" in str(e):
+                    events.emit(
+                        "api_flow_error",
+                        page=page,
+                        message=f"触发 BOSS 频率限制（{e}），冷却 45 秒后自动重试第 {page} 页…",
+                    )
+                    log.warning("[api-flow] code=37 频率限制，冷却 45s 后重试第 %d 页", page)
+                    await asyncio.sleep(45)
+                    try:
+                        api_jobs = await job_api.fetch_search_page(tab, query, page)
+                    except RuntimeError as e2:
+                        log.warning("冷却后第 %d 页仍被限制，结束：%s", page, e2)
+                        events.emit(
+                            "api_flow_error",
+                            page=page,
+                            message="冷却后仍触发频率限制，本轮安全结束。建议等待 10 分钟后再试，或换个搜索词。",
+                        )
+                        stop_reason = "api_error"
+                        break
+                else:
+                    log.warning("第 %d 页搜索接口失败，结束：%s", page, e)
+                    events.emit("api_flow_error", page=page, message=str(e))
+                    stop_reason = "api_error"
+                    break
             if not api_jobs:
                 log.info("第 %d 页没有岗位，搜索结果已全部取完", page)
                 break
@@ -608,7 +633,15 @@ async def _run_search_api_flow(
             page += 1
             # 页间节流：秒翻 6 页会触发 BOSS 搜索接口风控（实测 code=37），
             # 拟人化页间停顿再翻下一页。
-            await asyncio.sleep(2.5)
+            # 2026-10-13 加固（自适应上浮）：本页 <3s 秒过 = 全是已投/规则
+            # 不匹配、一个详情页都没开——正在穿越历史已投区，纯接口高频
+            # 翻页最容易触发频率限制。此时把页间停顿上浮到 4~6.5s，
+            # 只慢不快（开过详情页的正常页维持 2.5s 基线）。
+            page_elapsed = time.monotonic() - page_started
+            if page_elapsed < 3.0:
+                await asyncio.sleep(random.uniform(4.0, 6.5))
+            else:
+                await asyncio.sleep(2.5)
 
         # 城市推进判定：只有"自然扫完"才推进下一城
         if halt_flow:

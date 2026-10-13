@@ -12,7 +12,7 @@ export default function AtsScoreDashboard({ atsScore }: AtsScoreDashboardProps) 
         <div className="flex items-center gap-2">
           <Gauge className="size-4 text-emerald-400" />
           <span className="text-xs font-bold text-stone-200">
-            ATS 算法指标体检 (本地即时计算)
+            简历指标体检（本地即时计算）
           </span>
         </div>
 
@@ -57,7 +57,7 @@ export default function AtsScoreDashboard({ atsScore }: AtsScoreDashboardProps) 
 
         <div className="bg-stone-950/70 p-2 rounded-xl border border-stone-800/80">
           <div className="flex justify-between text-[10px] mb-1">
-            <span className="text-stone-400">STAR 闭环</span>
+            <span className="text-stone-400">经历逻辑</span>
             <span className="font-bold text-stone-200">{atsScore.dimensions.star_logic}分</span>
           </div>
           <div className="w-full h-1.5 bg-stone-800 rounded-full overflow-hidden">
@@ -89,7 +89,7 @@ export default function AtsScoreDashboard({ atsScore }: AtsScoreDashboardProps) 
       {/* 统计指标与亮点徽章 */}
       <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
         <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">
-          ⚡ 强动词: {atsScore.strong_verbs_count} 个
+          ⚡ 专业动词: {atsScore.strong_verbs_count} 个
         </span>
         <span className={`px-2 py-0.5 rounded-md border ${atsScore.weak_verbs_count > 0 ? "bg-rose-500/10 border-rose-500/30 text-rose-300" : "bg-stone-800 border-stone-700 text-stone-400"}`}>
           ⚠️ 待优化词: {atsScore.weak_verbs_count} 个

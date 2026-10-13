@@ -124,11 +124,19 @@ def test_api_flow_summary_all_filtered(monkeypatch):
 
 
 def test_api_flow_summary_reports_api_error(monkeypatch):
-    """搜索接口风控（code=37 同款路径）：汇总带 api_error 停机原因。"""
+    """搜索接口风控（code=37 同款路径）：汇总带 api_error 停机原因。
+
+    2026-10-13 行为更新：code=37 会先冷却 45s 重试一次（本测试 stub 成
+    秒过），重试仍失败才优雅结束——因此 api_flow_error 有两条（冷却提示
+    + 最终失败），停机原因与汇总人话不变。
+    """
     collected: list[tuple[str, dict]] = []
 
     async def failing_fetch(tab, query, page):
         raise RuntimeError("搜索接口返回异常 code=37")
+
+    async def fast_sleep(_s):
+        return None
 
     monkeypatch.setattr(job_api, "fetch_search_page", failing_fetch)
     monkeypatch.setattr(finding_jobs, "get_tab", lambda: object())
@@ -138,6 +146,7 @@ def test_api_flow_summary_reports_api_error(monkeypatch):
     monkeypatch.setattr(search_api_flow, "_state_path", lambda name: None)
     monkeypatch.setattr(search_api_flow, "_profile_filters", lambda: {})
     monkeypatch.setattr(search_api_flow, "_sent_today_count", lambda path, profile: 0)
+    monkeypatch.setattr(search_api_flow.asyncio, "sleep", fast_sleep)
 
     _run_flow()
 
@@ -146,4 +155,6 @@ def test_api_flow_summary_reports_api_error(monkeypatch):
     assert finished[0]["stop_reason"] == "api_error"
     assert "风控限流" in finished[0]["message"]
     errors = [p for kind, p in collected if kind == "api_flow_error"]
-    assert len(errors) == 1
+    # 冷却提示 + 重试失败各一条（新退避机制的两次用户可见反馈）
+    assert len(errors) == 2
+    assert any("冷却" in str(p.get("message", "")) for p in errors)

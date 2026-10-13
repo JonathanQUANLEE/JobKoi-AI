@@ -26,7 +26,7 @@ export default function PolishAdviceCard({
       <div className="flex items-center justify-between pb-2 border-b border-stone-800">
         <div className="flex items-center gap-2">
           <Sparkles className="size-4 text-amber-400" />
-          <span className="text-xs font-bold text-stone-100">AI 深度精修报告与 STAR 改写成果</span>
+          <span className="text-xs font-bold text-stone-100">AI 深度精修报告与改写成果</span>
         </div>
 
         <button

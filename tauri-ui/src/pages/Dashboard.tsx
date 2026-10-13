@@ -121,10 +121,22 @@ export default function Dashboard() {
           try {
             const tool = await ipc.agentExecuteAction("get_stats", {});
             if (tool.status === "ok") {
-              pushAgentMessage({ role: "assistant", content: tool.text });
+              // 2026-10-13 串线修复：工具结果回到工作台对话流（heroChat），
+              // 不再进「意向管家」的全局会话——谁触发谁看见。
+              useRunStore
+                .getState()
+                .setHeroChatMessages((prev) => [
+                  ...prev,
+                  { role: "assistant", content: tool.text },
+                ]);
             }
           } catch (e) {
-            pushAgentMessage({ role: "assistant", content: `查询统计异常: ${String(e)}` });
+            useRunStore
+              .getState()
+              .setHeroChatMessages((prev) => [
+                ...prev,
+                { role: "assistant", content: `查询统计异常: ${String(e)}` },
+              ]);
           }
           break;
         }
@@ -134,10 +146,20 @@ export default function Dashboard() {
           try {
             const tool = await ipc.agentExecuteAction("preview_jobs", { n });
             if (tool.status === "ok") {
-              pushAgentMessage({ role: "assistant", content: tool.text });
+              useRunStore
+                .getState()
+                .setHeroChatMessages((prev) => [
+                  ...prev,
+                  { role: "assistant", content: tool.text },
+                ]);
             }
           } catch (e) {
-            pushAgentMessage({ role: "assistant", content: `岗位预览异常: ${String(e)}` });
+            useRunStore
+              .getState()
+              .setHeroChatMessages((prev) => [
+                ...prev,
+                { role: "assistant", content: `岗位预览异常: ${String(e)}` },
+              ]);
           }
           break;
         }
@@ -150,7 +172,7 @@ export default function Dashboard() {
           break;
       }
     },
-    [setTheme, setMistModalType, setSettingsModalTab, setSettingsModalOpen, setActiveNav, setLang, pushAgentMessage],
+    [setTheme, setMistModalType, setSettingsModalTab, setSettingsModalOpen, setActiveNav, setLang],
   );
 
   // 4. AI 顾问意向对话流 Hook
@@ -159,7 +181,6 @@ export default function Dashboard() {
     setLabel: profileForm.setLabel,
     setCityValues: profileForm.setCityValues,
     setRule: profileForm.setRule,
-    pushAgentMessage,
     setMessage,
     hydrateFromProfile: profileForm.hydrateFromProfile,
     onExecuteAction: handleExecuteAppAction,
