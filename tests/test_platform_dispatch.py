@@ -289,3 +289,65 @@ def test_dispatch_injects_user_keyword_first(dispatch_recorder, monkeypatch):
     assert dispatch_recorder["calls"] == {"boss": 0, "liepin": 1, "job51": 1}
     assert len(seen_kws) == 2
     assert all(kws[0] == "AI Agent 实习" for kws in seen_kws)
+
+
+def test_liepin_not_logged_in_emits_login_required(isolated_ledger_logs, monkeypatch):
+    """猎聘未登录时必须向 GUI 事件流发送 login_required 事件，带 platform=liepin。"""
+    import liepin.apply as liepin_apply
+    import liepin.driver as liepin_driver
+    from boss_zhipin.gui import events
+
+    captured = []
+    events.set_emit_callback(captured.append)
+    try:
+        class _FakeTab:
+            pass
+
+        async def fake_open_browser(url):
+            return _FakeTab()
+
+        async def fake_is_logged_in(tab=None):
+            return False
+
+        monkeypatch.setattr(liepin_driver, "open_browser", fake_open_browser)
+        monkeypatch.setattr(liepin_driver, "is_logged_in", fake_is_logged_in)
+
+        result = asyncio.run(liepin_apply.run(["AI Agent"], 5, "hello"))
+        assert result == -1
+        assert len(captured) == 1
+        assert captured[0].kind == "login_required"
+        assert captured[0].payload.get("platform") == "liepin"
+        assert "未登录" in captured[0].payload.get("message", "")
+    finally:
+        events.set_emit_callback(None)
+
+
+def test_job51_not_logged_in_emits_login_required(isolated_ledger_logs, monkeypatch):
+    """51job 未登录时必须向 GUI 事件流发送 login_required 事件，带 platform=job51。"""
+    import job51.apply as job51_apply
+    import job51.driver as job51_driver
+    from boss_zhipin.gui import events
+
+    captured = []
+    events.set_emit_callback(captured.append)
+    try:
+        class _FakeTab:
+            pass
+
+        async def fake_open_browser(url):
+            return _FakeTab()
+
+        async def fake_is_logged_in(tab=None):
+            return False
+
+        monkeypatch.setattr(job51_driver, "open_browser", fake_open_browser)
+        monkeypatch.setattr(job51_driver, "is_logged_in", fake_is_logged_in)
+
+        result = asyncio.run(job51_apply.run(["AI Agent"], 5))
+        assert result == -1
+        assert len(captured) == 1
+        assert captured[0].kind == "login_required"
+        assert captured[0].payload.get("platform") == "job51"
+        assert "未登录" in captured[0].payload.get("message", "")
+    finally:
+        events.set_emit_callback(None)
