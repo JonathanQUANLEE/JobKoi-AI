@@ -11,6 +11,7 @@ export default function AgentPanel({
   getCurrentForm,
   onApply,
   onRun,
+  onExecuteAction,
 }: AgentPanelProps) {
   const llmConfig = useRunStore((s) => s.llmConfig);
   const setLLMConfig = useRunStore((s) => s.setLLMConfig);
@@ -108,6 +109,7 @@ export default function AgentPanel({
           getCurrentForm={getCurrentForm}
           onApply={onApply}
           onRun={onRun}
+          onExecuteAction={onExecuteAction}
         />
       )}
     </MagicCard>

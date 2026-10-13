@@ -21,7 +21,15 @@ MAX_KEYWORD_LEN = 40
 ScopeType = Literal["title", "description", "title_description", "location", "all"]
 MatchType = Literal["contains", "regex", "exact"]
 ModeType = Literal["scan", "review", "auto"]
-ActionType = Literal["get_stats", "preview_jobs", "prepare_run"]
+ActionType = Literal[
+    "get_stats",
+    "preview_jobs",
+    "prepare_run",
+    "switch_theme",
+    "open_settings",
+    "navigate",
+    "switch_lang",
+]
 
 # 不采纳 LLM 值的固定字段（防路径注入写任意文件）
 DEFAULT_GREETING_FILE = "./greetings/default.txt"
@@ -203,10 +211,33 @@ class _ActionParams(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     n: int = 5
+    theme: Literal["monochrome", "classic", "system"] | None = None
+    modal: Literal["settings", "policy", "rules", "greeting", "model"] | None = None
+    tab: Literal[
+        "general",
+        "schedule",
+        "profile",
+        "appearance",
+        "shortcuts",
+        "model",
+        "notifications",
+        "about",
+    ] | None = None
+    to: Literal[
+        "workbench",
+        "profile",
+        "resumes",
+        "copilot",
+        "analytics",
+        "live",
+    ] | None = None
+    lang: Literal["zh", "en"] | None = None
 
     @field_validator("n", mode="before")
     @classmethod
     def _clamp_n(cls, value: Any) -> int:
+        if value is None:
+            return 5
         try:
             num = int(value)
         except (TypeError, ValueError) as e:
@@ -268,7 +299,7 @@ def sanitize_action(raw: Any) -> dict[str, Any] | None:
     except ValidationError as e:
         log.warning("agent action 净化失败，丢弃: %s", _compact_validation_error(e))
         return None
-    return action.model_dump()
+    return action.model_dump(exclude_none=True)
 
 
 def _compact_validation_error(e: ValidationError) -> str:

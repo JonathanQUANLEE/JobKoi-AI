@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ipc } from "../lib/ipc";
+import { useEffect, useState, useCallback } from "react";
+import { ipc, type AgentAction } from "../lib/ipc";
 import ResumePanel from "../components/ResumePanel";
 import ProfilePanel from "../components/ProfilePanel";
 import AgentPanel from "../components/AgentPanel";
@@ -27,6 +27,7 @@ export default function Dashboard() {
   const t = useT();
   const lang = useRunStore((s) => s.lang);
   const setLang = useRunStore((s) => s.setLang);
+  const setTheme = useRunStore((s) => s.setTheme);
   const pushAgentMessage = useRunStore((s) => s.pushAgentMessage);
   const setPendingResumePolish = useRunStore((s) => s.setPendingResumePolish);
   const limitNotice = useRunStore((s) => s.limitNotice);
@@ -80,7 +81,79 @@ export default function Dashboard() {
     onCruiseStarted: () => setActiveNav("live"),
   });
 
-  // 3. AI 顾问意向对话流 Hook
+  // 3. 应用动作分发执行中枢（支持主题切换、设置弹窗呼出、路由跳转、统计/预览执行）
+  const handleExecuteAppAction = useCallback(
+    async (action: AgentAction) => {
+      if (!action || !action.type) return;
+
+      switch (action.type) {
+        case "switch_theme":
+          if (action.params?.theme) {
+            setTheme(action.params.theme);
+          }
+          break;
+
+        case "open_settings": {
+          const modal = action.params?.modal;
+          if (modal === "policy" || modal === "rules" || modal === "greeting" || modal === "model") {
+            setMistModalType(modal);
+          } else {
+            const tab = (action.params?.tab as SettingsTab) || "general";
+            setSettingsModalTab(tab);
+            setSettingsModalOpen(true);
+          }
+          break;
+        }
+
+        case "navigate":
+          if (action.params?.to) {
+            setActiveNav(action.params.to);
+          }
+          break;
+
+        case "switch_lang":
+          if (action.params?.lang) {
+            setLang(action.params.lang);
+          }
+          break;
+
+        case "get_stats": {
+          try {
+            const tool = await ipc.agentExecuteAction("get_stats", {});
+            if (tool.status === "ok") {
+              pushAgentMessage({ role: "assistant", content: tool.text });
+            }
+          } catch (e) {
+            pushAgentMessage({ role: "assistant", content: `查询统计异常: ${String(e)}` });
+          }
+          break;
+        }
+
+        case "preview_jobs": {
+          const n = action.params?.n || 5;
+          try {
+            const tool = await ipc.agentExecuteAction("preview_jobs", { n });
+            if (tool.status === "ok") {
+              pushAgentMessage({ role: "assistant", content: tool.text });
+            }
+          } catch (e) {
+            pushAgentMessage({ role: "assistant", content: `岗位预览异常: ${String(e)}` });
+          }
+          break;
+        }
+
+        case "prepare_run":
+          // prepare_run 提示用户确认
+          break;
+
+        default:
+          break;
+      }
+    },
+    [setTheme, setMistModalType, setSettingsModalTab, setSettingsModalOpen, setActiveNav, setLang, pushAgentMessage],
+  );
+
+  // 4. AI 顾问意向对话流 Hook
   const heroChat = useHeroChat({
     currentProfileData: profileForm.currentProfileData,
     setLabel: profileForm.setLabel,
@@ -88,6 +161,8 @@ export default function Dashboard() {
     setRule: profileForm.setRule,
     pushAgentMessage,
     setMessage,
+    hydrateFromProfile: profileForm.hydrateFromProfile,
+    onExecuteAction: handleExecuteAppAction,
   });
 
   // 4. 3D 万花筒滚轮动力学引擎 Hook
@@ -361,6 +436,7 @@ export default function Dashboard() {
                     setMistModalType("model");
                   }
                 }}
+                onExecuteAction={handleExecuteAppAction}
               />
             </div>
           )}

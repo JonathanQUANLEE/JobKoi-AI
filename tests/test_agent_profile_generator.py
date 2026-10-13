@@ -379,3 +379,55 @@ def test_sanitize_new_send_switches_default_off():
     assert out["send"]["send_resume_after_greeting"] is True
     assert out["send"]["ai_greeting"] is True
     assert out["send"]["auto_send_resume_on_reply"] is False
+
+
+def test_sanitize_action_ui_actions():
+    """验证新声明的系统控制动作能够被准确净化与参数提取。"""
+    from boss_zhipin.agent.profile_schema import sanitize_action
+
+    # 1. 切换主题
+    act = sanitize_action({"type": "switch_theme", "params": {"theme": "monochrome"}})
+    assert act == {"type": "switch_theme", "params": {"n": 5, "theme": "monochrome"}}
+
+    # 非法主题值应丢弃 action
+    assert sanitize_action({"type": "switch_theme", "params": {"theme": "rainbow"}}) is None
+
+    # 2. 打开投递设置与安全
+    act = sanitize_action({"type": "open_settings", "params": {"modal": "policy"}})
+    assert act == {"type": "open_settings", "params": {"n": 5, "modal": "policy"}}
+
+    # 打开系统设置 schedule tab
+    act = sanitize_action({"type": "open_settings", "params": {"modal": "settings", "tab": "schedule"}})
+    assert act == {"type": "open_settings", "params": {"n": 5, "modal": "settings", "tab": "schedule"}}
+
+    # 3. 页面跳转
+    act = sanitize_action({"type": "navigate", "params": {"to": "resumes"}})
+    assert act == {"type": "navigate", "params": {"n": 5, "to": "resumes"}}
+
+    # 非法路由页面丢弃
+    assert sanitize_action({"type": "navigate", "params": {"to": "nowhere"}}) is None
+
+    # 4. 语言切换
+    act = sanitize_action({"type": "switch_lang", "params": {"lang": "en"}})
+    assert act == {"type": "switch_lang", "params": {"n": 5, "lang": "en"}}
+
+
+def test_generate_ui_action_flow(monkeypatch):
+    """验证 generate 全流程中 LLM 产出 UI 控制意图的正确提取。"""
+    _configured_agent(monkeypatch)
+    _mock_llm(
+        monkeypatch,
+        json.dumps(
+            {
+                "reply": "已为您切换至黑白极简主题。",
+                "profile": None,
+                "action": {"type": "switch_theme", "params": {"theme": "monochrome"}},
+            },
+            ensure_ascii=False,
+        ),
+    )
+    result = asyncio.run(pg.generate("换成黑白主题", [], None))
+    assert result["status"] == "ok"
+    assert result["reply"] == "已为您切换至黑白极简主题。"
+    assert result["action"] == {"type": "switch_theme", "params": {"n": 5, "theme": "monochrome"}}
+
