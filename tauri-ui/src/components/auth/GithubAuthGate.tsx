@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   KeyRound,
   ExternalLink,
@@ -51,6 +51,59 @@ export default function GithubAuthGate({ onLoginSuccess }: GithubAuthGateProps) 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [browserNotice, setBrowserNotice] = useState<string | null>(null);
+  // OAuth 一键登录（2026-10-14）：后端配置了 client_id 才显示，未配置零影响
+  const [oauthEnabled, setOauthEnabled] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    ipc
+      .githubOauthStatus()
+      .then((res) => {
+        if (!cancelled && res?.status === "ok") setOauthEnabled(Boolean(res.enabled));
+      })
+      .catch(() => {
+        /* 查询失败按未配置处理，走旧登录方式 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 浏览器一键 OAuth 登录：软件自动识别浏览器授权回调，彻底解决
+  // "浏览器明明登录了 GitHub，软件却识别不到"的痛点
+  const handleOauthLogin = async () => {
+    setOauthLoading(true);
+    setError(null);
+    setBrowserNotice("已在浏览器打开 GitHub 授权页，完成登录/授权后将自动进入…");
+    try {
+      const res = await ipc.githubOauthLogin();
+      if (res?.status === "ok" && res.user) {
+        const u = res.user;
+        const user: GithubUser = {
+          id: u.id,
+          login: u.login,
+          name: u.name,
+          avatar_url: u.avatarUrl,
+          email: u.email,
+          html_url: u.htmlUrl,
+          bio: u.bio,
+          token: u.token,
+          loginAt: u.loginAt,
+        };
+        setStoredGithubUser(user);
+        onLoginSuccess(user);
+      } else {
+        setError(res?.message || "GitHub 授权失败，请重试或改用用户名登录");
+        setBrowserNotice(null);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setBrowserNotice(null);
+    } finally {
+      setOauthLoading(false);
+    }
+  };
 
   // 跨平台唤起系统默认浏览器（彻底解决 Webview 内 window.open 打不开的 Bug）
   const handleOpenBrowser = async (url: string, noticeText?: string) => {
@@ -292,6 +345,26 @@ export default function GithubAuthGate({ onLoginSuccess }: GithubAuthGateProps) 
           {/* TAB 1: 登录界面 */}
           {activeTab === "login" && (
             <div className="space-y-4">
+              {/* GitHub 一键登录（OAuth，2026-10-14）：后端已配置 client_id 时显示。
+                  用户在系统浏览器完成 GitHub 登录/授权 → 软件自动识别进入，
+                  彻底解决"浏览器已登录但软件识别不到"的痛点。 */}
+              {oauthEnabled && (
+                <button
+                  type="button"
+                  onClick={handleOauthLogin}
+                  disabled={oauthLoading}
+                  className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 active:scale-[0.99] disabled:opacity-60 disabled:cursor-wait text-stone-950 font-bold text-sm flex items-center justify-center gap-2.5 shadow-lg shadow-amber-500/25 transition-all cursor-pointer"
+                >
+                  <GithubIcon className="size-4.5" />
+                  <span>
+                    {oauthLoading
+                      ? "等待您在浏览器完成授权…"
+                      : "使用 GitHub 一键登录（推荐）"}
+                  </span>
+                  {!oauthLoading && <ArrowRight className="size-4" />}
+                </button>
+              )}
+
               {/* 登录子模式选择：推荐普通账号登录 / 高级 Token */}
               <div className="flex items-center justify-between text-[11px] text-stone-400 border-b border-stone-800/80 pb-2">
                 <span className="font-semibold text-stone-300">
