@@ -120,3 +120,6 @@ tauri-ui/.ds-compiled.css
 
 # 默认简历标记（含个人文件名）
 /resume/default.txt
+
+# 打包发布脱敏备份目录（开发者私有，绝不进仓）
+/.dev_private_backup/
