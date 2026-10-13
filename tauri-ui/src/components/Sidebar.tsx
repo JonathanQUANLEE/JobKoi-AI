@@ -11,6 +11,7 @@ import {
   Clock,
   MoreVertical,
   Radio,
+  Bot,
 } from "lucide-react";
 import { translate, type Lang } from "../lib/i18n";
 import { useRunStore } from "../store";
@@ -21,7 +22,7 @@ import NavItemButton from "./sidebar/NavItemButton";
 import SidebarTimeWidget from "./sidebar/SidebarTimeWidget";
 import SidebarUserMenu from "./sidebar/SidebarUserMenu";
 
-export type NavItem = "workbench" | "profile" | "resumes" | "copilot" | "analytics" | "live";
+export type NavItem = "workbench" | "profile" | "resumes" | "polish" | "copilot" | "analytics" | "live";
 
 interface SidebarProps {
   activeNav: NavItem;
@@ -227,11 +228,28 @@ export default function Sidebar({
           />
 
           <NavItemButton
-            active={activeNav === "copilot"}
-            onClick={() => onSelectNav("copilot")}
+            active={activeNav === "polish"}
+            onClick={() => onSelectNav("polish")}
             icon={
               <Sparkles
                 className={`h-4 w-4 shrink-0 ${isMonochrome ? "text-zinc-300" : "text-amber-400"}`}
+              />
+            }
+            label={t("sidebar.nav.polish")}
+            badge={t("sidebar.nav.polishBadge")}
+            badgeColor={
+              isMonochrome
+                ? "bg-white/10 text-zinc-300 border border-white/20"
+                : "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+            }
+          />
+
+          <NavItemButton
+            active={activeNav === "copilot"}
+            onClick={() => onSelectNav("copilot")}
+            icon={
+              <Bot
+                className={`h-4 w-4 shrink-0 ${isMonochrome ? "text-zinc-300" : "text-purple-400"}`}
               />
             }
             label={t("sidebar.nav.copilot")}

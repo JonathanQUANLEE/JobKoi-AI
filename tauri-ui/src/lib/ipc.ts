@@ -115,7 +115,7 @@ export type AgentAction = {
       | "model"
       | "notifications"
       | "about";
-    to?: "workbench" | "profile" | "resumes" | "copilot" | "analytics" | "live";
+    to?: "workbench" | "profile" | "resumes" | "polish" | "copilot" | "analytics" | "live";
     lang?: "zh" | "en";
   };
 };

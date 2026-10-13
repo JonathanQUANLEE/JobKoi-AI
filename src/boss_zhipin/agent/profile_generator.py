@@ -113,10 +113,18 @@ async def generate(
 def _user_message(message: str, current_form: dict[str, Any] | None) -> str:
     parts = [message.strip()]
     if current_form:
-        parts.append(
-            "\n[当前投递配置(JSON)。用户没提到的字段保持这里的原值，不要自行改动]"
-        )
-        parts.append(json.dumps(current_form, ensure_ascii=False))
+        cfg = dict(current_form)
+        resume_name = cfg.pop("resume_name", None)
+        resume_text = cfg.pop("resume_text", None)
+        if resume_text:
+            parts.append(
+                f"\n[用户关联简历资料 ({resume_name or '默认简历'})]\n{str(resume_text).strip()}"
+            )
+        if cfg:
+            parts.append(
+                "\n[当前投递配置(JSON)。用户没提到的字段保持这里的原值，不要自行改动]"
+            )
+            parts.append(json.dumps(cfg, ensure_ascii=False))
     return "\n".join(parts)
 
 

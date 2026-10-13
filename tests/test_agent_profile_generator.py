@@ -403,6 +403,8 @@ def test_sanitize_action_ui_actions():
     # 3. 页面跳转
     act = sanitize_action({"type": "navigate", "params": {"to": "resumes"}})
     assert act == {"type": "navigate", "params": {"n": 5, "to": "resumes"}}
+    act_polish = sanitize_action({"type": "navigate", "params": {"to": "polish"}})
+    assert act_polish == {"type": "navigate", "params": {"n": 5, "to": "polish"}}
 
     # 非法路由页面丢弃
     assert sanitize_action({"type": "navigate", "params": {"to": "nowhere"}}) is None

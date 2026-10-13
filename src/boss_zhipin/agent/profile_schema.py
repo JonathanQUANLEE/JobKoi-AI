@@ -227,6 +227,7 @@ class _ActionParams(BaseModel):
         "workbench",
         "profile",
         "resumes",
+        "polish",
         "copilot",
         "analytics",
         "live",
