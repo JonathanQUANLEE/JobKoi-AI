@@ -92,10 +92,32 @@ export type AgentChatMessage = {
   content: string;
 };
 
-/** agent 声明的工具意图（白名单在后端净化，前端只透传）。 */
+/** agent 声明的工具意图（白名单在后端净化，前端只透传或就地执行）。 */
 export type AgentAction = {
-  type: "get_stats" | "preview_jobs" | "prepare_run";
-  params?: { n?: number };
+  type:
+    | "get_stats"
+    | "preview_jobs"
+    | "prepare_run"
+    | "switch_theme"
+    | "open_settings"
+    | "navigate"
+    | "switch_lang";
+  params?: {
+    n?: number;
+    theme?: "monochrome" | "classic" | "system";
+    modal?: "settings" | "policy" | "rules" | "greeting" | "model";
+    tab?:
+      | "general"
+      | "schedule"
+      | "profile"
+      | "appearance"
+      | "shortcuts"
+      | "model"
+      | "notifications"
+      | "about";
+    to?: "workbench" | "profile" | "resumes" | "copilot" | "analytics" | "live";
+    lang?: "zh" | "en";
+  };
 };
 
 /** agent_chat 的返回：可预期错误也走返回值（status=error），保持聊天历史。 */

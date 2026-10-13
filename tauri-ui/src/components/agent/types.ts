@@ -51,6 +51,8 @@ export const PROMPT_TAGS: PromptTag[] = [
   { label: "计算机应届·深圳实习", prompt: "我是计算机应届生，帮我找深圳的 AI Agent 实习岗位" },
   { label: "电气自动化·研发岗", prompt: "电气自动化专业，找深圳/广州的智能硬件或制造业研发岗" },
   { label: "文科/社科·不限经验", prompt: "文科专业，找新媒体运营或管培生岗位，要求双休不加班" },
+  { label: "切换黑白主题", prompt: "帮我切换到黑白极简高级主题" },
+  { label: "加速投递(效率档)", prompt: "帮我切换到效率档，投递得更快一点" },
   { label: "查今日投递统计", prompt: "帮我查询今天各个平台的投递统计数据" },
   { label: "预览岗位匹配", prompt: "预览一下当前列表前 5 个岗位的匹配情况" },
 ];
@@ -60,4 +62,5 @@ export interface AgentPanelProps {
   onApply: (profileData: Record<string, unknown>) => void;
   onRun: () => void;
   onOpenSettings?: (tab?: "rules" | "policy" | "greeting" | "basic" | "model") => void;
+  onExecuteAction?: (action: import("../../lib/ipc").AgentAction) => Promise<void> | void;
 }

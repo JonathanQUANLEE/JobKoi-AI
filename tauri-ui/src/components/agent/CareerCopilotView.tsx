@@ -8,7 +8,7 @@ import {
   Check,
   Plus,
 } from "lucide-react";
-import { ipc, type AgentToolResult } from "../../lib/ipc";
+import { ipc, type AgentAction, type AgentToolResult } from "../../lib/ipc";
 import { summarizeAgentProfile } from "../../lib/agentPreview";
 import { useRunStore, useT } from "../../store";
 import { MagicCard } from "../core/MagicBento";
@@ -18,12 +18,14 @@ interface CareerCopilotViewProps {
   getCurrentForm: () => Record<string, unknown>;
   onApply: (profileData: Record<string, unknown>) => void;
   onRun: () => void;
+  onExecuteAction?: (action: AgentAction) => Promise<void> | void;
 }
 
 export default function CareerCopilotView({
   getCurrentForm,
   onApply,
   onRun,
+  onExecuteAction,
 }: CareerCopilotViewProps) {
   const t = useT();
   const running = useRunStore((s) => s.running);
@@ -70,20 +72,31 @@ export default function CareerCopilotView({
         if (action?.type === "prepare_run") {
           setPrepareRunReady(true);
         } else if (action) {
-          pushAgentMessage({ role: "assistant", content: t("agent.action.executing") });
-          try {
-            const tool = await ipc.agentExecuteAction(action.type, action.params ?? {});
-            if (tool.status === "ok") {
-              pushAgentMessage({ role: "assistant", content: tool.text });
-              setToolResult(tool);
-            } else {
-              pushAgentMessage({
-                role: "assistant",
-                content: `${t("agent.error.prefix")}${tool.message ?? ""}`,
-              });
+          if (
+            action.type === "switch_theme" ||
+            action.type === "open_settings" ||
+            action.type === "navigate" ||
+            action.type === "switch_lang"
+          ) {
+            if (onExecuteAction) {
+              await onExecuteAction(action);
             }
-          } catch (toolErr) {
-            pushAgentMessage({ role: "assistant", content: `${t("agent.error.prefix")}${String(toolErr)}` });
+          } else {
+            pushAgentMessage({ role: "assistant", content: t("agent.action.executing") });
+            try {
+              const tool = await ipc.agentExecuteAction(action.type, action.params ?? {});
+              if (tool.status === "ok") {
+                pushAgentMessage({ role: "assistant", content: tool.text });
+                setToolResult(tool);
+              } else {
+                pushAgentMessage({
+                  role: "assistant",
+                  content: `${t("agent.error.prefix")}${tool.message ?? ""}`,
+                });
+              }
+            } catch (toolErr) {
+              pushAgentMessage({ role: "assistant", content: `${t("agent.error.prefix")}${String(toolErr)}` });
+            }
           }
         }
       } else {

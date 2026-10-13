@@ -1,5 +1,11 @@
 import { useCallback, useEffect, type Dispatch, type SetStateAction } from "react";
-import { ipc, type AgentChatMessage, type ProfileData } from "../lib/ipc";
+import {
+  ipc,
+  type AgentAction,
+  type AgentChatMessage,
+  type LoadedProfile,
+  type ProfileData,
+} from "../lib/ipc";
 import { summarizeAgentProfile } from "../lib/agentPreview";
 import { extractFallbackProfile } from "../lib/dashboardHelpers";
 import { normalizeCityInput } from "../lib/cityInput";
@@ -13,6 +19,8 @@ interface UseHeroChatOptions {
   setRule: Dispatch<SetStateAction<RuleForm>>;
   pushAgentMessage: (message: AgentChatMessage) => void;
   setMessage: (message: string | null) => void;
+  hydrateFromProfile?: (profile: LoadedProfile) => void;
+  onExecuteAction?: (action: AgentAction) => Promise<void> | void;
 }
 
 export interface UseHeroChatReturn {
@@ -50,6 +58,8 @@ export function useHeroChat({
   setRule,
   pushAgentMessage,
   setMessage,
+  hydrateFromProfile,
+  onExecuteAction,
 }: UseHeroChatOptions): UseHeroChatReturn {
   const heroChatting = useRunStore((s) => s.heroChatting);
   const setHeroChatting = useRunStore((s) => s.setHeroChatting);
@@ -119,11 +129,23 @@ export function useHeroChat({
 
           if (res.profile) {
             setHeroProfileResult(res.profile);
-            const preview = summarizeAgentProfile(res.profile);
-            if (preview?.query && preview.query !== "-") setLabel(preview.query);
-            if (preview?.cities) setCityValues(normalizeCityInput(preview.cities));
-            if (preview?.anyKeywords) setRule((prev) => ({ ...prev, anyKeywords: preview.anyKeywords }));
-            if (preview?.excludeKeywords) setRule((prev) => ({ ...prev, excludeKeywords: preview.excludeKeywords }));
+            if (hydrateFromProfile) {
+              hydrateFromProfile({
+                name: "",
+                path: "",
+                data: res.profile as ProfileData,
+              });
+            } else {
+              const preview = summarizeAgentProfile(res.profile);
+              if (preview?.query && preview.query !== "-") setLabel(preview.query);
+              if (preview?.cities) setCityValues(normalizeCityInput(preview.cities));
+              if (preview?.anyKeywords) setRule((prev) => ({ ...prev, anyKeywords: preview.anyKeywords }));
+              if (preview?.excludeKeywords) setRule((prev) => ({ ...prev, excludeKeywords: preview.excludeKeywords }));
+            }
+          }
+
+          if (res.action && onExecuteAction) {
+            await onExecuteAction(res.action);
           }
         } else if (res.status === "timeout") {
           // 超时本地快速智能提炼兜底
@@ -193,6 +215,8 @@ export function useHeroChat({
       setLabel,
       setCityValues,
       setRule,
+      hydrateFromProfile,
+      onExecuteAction,
     ],
   );
 
