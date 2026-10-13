@@ -29,7 +29,7 @@ export default function MorningBriefCard({
     const replyLine = showReply
       ? `HR 回复: ${brief.repliedCount} 家 | 暂无回复: ${brief.unrepliedCount} 家\n综合回复率: ${brief.replyRate}%\n各平台回复: BOSS直聘 ${brief.platformBreakdown[0].replied}家 (${brief.platformBreakdown[0].rate}%) | 猎聘 ${brief.platformBreakdown[1].replied}家 (${brief.platformBreakdown[1].rate}%) | 51job ${brief.platformBreakdown[2].replied}家 (${brief.platformBreakdown[2].rate}%)`
       : `HR 回复: 回复统计暂未开放（平台未提供回复数据）`;
-    const text = `【JobHunter 投递早报 · 昨日战报】\n日期: ${brief.yesterdayDate}\n昨日总投: ${brief.totalSent} 家\n${replyLine}\n今日建议: ${brief.actionAdvice}`;
+    const text = `【JobKoi-AI 投递早报 · 昨日战报】\n日期: ${brief.yesterdayDate}\n昨日总投: ${brief.totalSent} 家\n${replyLine}\n今日建议: ${brief.actionAdvice}`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);

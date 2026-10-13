@@ -35,7 +35,7 @@ export interface DepthTextProps {
 }
 
 const DepthText = ({
-  text = 'JobHunter',
+  text = 'JobKoi-AI',
   layers = 34,
   depth = 2.4,
   faceColor = '#f8fafc',
