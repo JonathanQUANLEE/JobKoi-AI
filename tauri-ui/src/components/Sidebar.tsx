@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { translate, type Lang } from "../lib/i18n";
 import { useRunStore } from "../store";
+import { type GithubUser } from "../lib/githubAuth";
 import PillNavButton from "./core/PillNavButton";
 import NotificationDock from "./NotificationDock";
 import DepthText from "./core/DepthText";
@@ -41,6 +42,9 @@ interface SidebarProps {
   dailyLimit: string;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  /** 当前登录的 GitHub 用户（2026-10-14：底部卡片显示真实账号） */
+  githubUser?: GithubUser | null;
+  onLogout?: () => void;
 }
 
 export default function Sidebar({
@@ -60,6 +64,8 @@ export default function Sidebar({
   dailyLimit,
   collapsed = false,
   onToggleCollapse,
+  githubUser,
+  onLogout,
 }: SidebarProps) {
   const t = (key: string, vars?: Record<string, string | number>) => translate(lang, key, vars);
 
@@ -334,21 +340,35 @@ export default function Sidebar({
           {/* 当前北京时间实时显示槽 */}
           <SidebarTimeWidget lang={lang} isMonochrome={isMonochrome} />
 
-          {/* 底部用户卡片按钮 */}
-          <button
-            type="button"
+          {/* 底部用户卡片：已登录 GitHub → 显示真实账号（头像 + @用户名 + 退出）；
+              未登录/游客 → 保留品牌卡。点击卡片主体仍打开用户菜单。 */}
+          <div
+            role="button"
+            tabIndex={0}
             onClick={() => setMenuOpen(!menuOpen)}
-            className="w-full flex items-center justify-between rounded-xl p-2 hover:bg-[var(--panel-hover)] active:scale-[0.98] transition-all cursor-pointer"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") setMenuOpen(!menuOpen);
+            }}
+            className="w-full flex items-center justify-between rounded-xl p-2 hover:bg-[var(--panel-hover)] active:scale-[0.98] transition-all cursor-pointer select-none"
           >
             <div className="flex items-center gap-2.5 min-w-0">
-              <img
-                src="/favicon.png"
-                alt="Avatar"
-                className="h-8 w-8 rounded-lg object-cover border border-pink-400/30 shrink-0 shadow-sm"
-              />
+              {githubUser ? (
+                <img
+                  src={githubUser.avatar_url || "/favicon.png"}
+                  alt={githubUser.login}
+                  title={githubUser.html_url}
+                  className="h-8 w-8 rounded-full object-cover border border-amber-400/40 shrink-0 shadow-sm"
+                />
+              ) : (
+                <img
+                  src="/favicon.png"
+                  alt="Avatar"
+                  className="h-8 w-8 rounded-lg object-cover border border-pink-400/30 shrink-0 shadow-sm"
+                />
+              )}
               <div className="min-w-0 text-left">
                 <div className="font-semibold text-xs text-[var(--ink)] truncate leading-tight">
-                  {t("sidebar.userName")}
+                  {githubUser ? `@${githubUser.login}` : t("sidebar.userName")}
                 </div>
                 <div className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-950/70 px-2 py-0.5 shadow-sm">
                   <span className="relative flex size-1.5 shrink-0">
@@ -358,15 +378,33 @@ export default function Sidebar({
                   <span className="text-[10px] font-medium text-emerald-300 leading-none truncate tracking-tight">
                     {running
                       ? t("sidebar.statusCruising")
-                      : t("sidebar.statusOnline")}
+                      : githubUser
+                        ? t("sidebar.statusGithub")
+                        : t("sidebar.statusOnline")}
                   </span>
                 </div>
               </div>
             </div>
-            <div className="text-stone-400 hover:text-stone-200 p-1 shrink-0">
-              <MoreVertical className="h-4 w-4" />
-            </div>
-          </button>
+            {githubUser && onLogout ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (window.confirm(`确定要退出 @${githubUser.login} 的 GitHub 登录吗？`)) {
+                    onLogout();
+                  }
+                }}
+                title="退出当前 GitHub 账号"
+                className="shrink-0 rounded-md border border-stone-600/70 bg-stone-800/80 px-2.5 py-1 text-[11px] font-medium text-stone-300 hover:border-red-500/50 hover:bg-red-950/40 hover:text-red-300 active:scale-95 transition-all cursor-pointer"
+              >
+                退出
+              </button>
+            ) : (
+              <div className="text-stone-400 hover:text-stone-200 p-1 shrink-0">
+                <MoreVertical className="h-4 w-4" />
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </aside>

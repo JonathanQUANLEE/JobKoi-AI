@@ -271,6 +271,8 @@ export default function Dashboard({ githubUser, onLogout }: DashboardProps = {})
         dailyLimit={profileForm.dailyLimit}
         collapsed={sidebarCollapsed}
         onToggleCollapse={toggleSidebar}
+        githubUser={githubUser}
+        onLogout={onLogout}
       />
 
       {/* 右侧主工作流区域 */}
