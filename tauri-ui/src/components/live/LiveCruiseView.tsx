@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, MapPin, Banknote, Rocket, Square, Radio, Compass, Clock3, Search, FlagTriangleRight, Check } from "lucide-react";
+import { Activity, MapPin, Banknote, Rocket, Square, Radio, Compass, Clock3, Search, FlagTriangleRight, Check, Columns3, List } from "lucide-react";
 import { useRunStore } from "../../store";
 import { summarizeEvents, summarizeEventsByPlatform } from "../../lib/dashboardHelpers";
 import { buildLiveFeed, currentProcessingJob, lastCruiseSummary, PLATFORM_META } from "../../lib/liveFeed";
@@ -102,7 +102,26 @@ export default function LiveCruiseView({ onStartRun, onStopRun, busy = false }: 
     } catch {}
   };
 
+  // 视图模式：默认三列分列并排（BOSS/猎聘/51job 三平台独立并排）；可切换为混合流
+  const [viewMode, setViewMode] = useState<"columns" | "combined">("columns");
+
   const feed = useMemo(() => buildLiveFeed(events, 200, channels), [events, channels]);
+
+  // 针对三平台分别构建专属活动流
+  const feedByPlatform = useMemo(() => {
+    return {
+      boss: buildLiveFeed(events, 200, ["boss"]),
+      liepin: buildLiveFeed(events, 200, ["liepin"]),
+      job51: buildLiveFeed(events, 200, ["job51"]),
+    };
+  }, [events]);
+
+  // 分列展示的平台列表（默认三平台并列；联动右侧通道勾选）
+  const displayPlatforms = useMemo(() => {
+    const list = PLATFORM_CHANNELS.filter((c) => c.live && channels.includes(c.id));
+    return list.length > 0 ? list : PLATFORM_CHANNELS.filter((c) => c.live);
+  }, [channels]);
+
   const spotlight = useMemo(() => currentProcessingJob(events), [events]);
   const cruiseSummary = useMemo(() => lastCruiseSummary(events), [events]);
   const stats = useMemo(() => summarizeEvents(events), [events]);
@@ -258,13 +277,13 @@ export default function LiveCruiseView({ onStartRun, onStopRun, busy = false }: 
 
       {/* ===== 主体：左活动流时间轴 + 右聚光卡与平台通道（撑满剩余高度） ===== */}
       <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4">
-        {/* 左：实时活动流（feed 通道即 BOSS——当前唯一打通的平台） */}
+        {/* 左：实时活动流（三平台分列并排实时直播，亦可切为混合流） */}
         <div
           className={`flex flex-col rounded-2xl border backdrop-blur-xl p-4 min-h-0 ${
             isMonochrome ? "bg-zinc-950/70 border-white/10" : "bg-stone-900/40 border-white/10"
           }`}
         >
-          <div className="flex items-center justify-between pb-3 border-b border-white/8">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/8 shrink-0">
             <div className="flex items-center gap-2">
               <Activity className={`size-4 ${running ? "text-emerald-300" : "text-stone-500"}`} />
               <h3 className="text-sm font-bold text-white">实时动态</h3>
@@ -274,9 +293,110 @@ export default function LiveCruiseView({ onStartRun, onStopRun, busy = false }: 
                 </span>
               )}
             </div>
-            <span className="text-[10px] text-stone-500">滚动查看历史 · 新动态自动置顶</span>
+
+            <div className="flex items-center gap-2.5">
+              {/* 布局切换：默认分三列并排，满足用户多平台独立监控诉求 */}
+              <div className="flex items-center p-0.5 rounded-lg border border-white/10 bg-white/5 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("columns")}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${
+                    viewMode === "columns"
+                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm"
+                      : "text-stone-400 hover:text-stone-200 border border-transparent"
+                  }`}
+                  title="多平台分列并排实时监控"
+                >
+                  <Columns3 className="size-3" />
+                  <span>分列并排 ({displayPlatforms.length}列)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("combined")}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${
+                    viewMode === "combined"
+                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm"
+                      : "text-stone-400 hover:text-stone-200 border border-transparent"
+                  }`}
+                  title="单时间轴合并信息流"
+                >
+                  <List className="size-3" />
+                  <span>混合流</span>
+                </button>
+              </div>
+              <span className="text-[10px] text-stone-500 hidden xl:inline">新动态自动置顶</span>
+            </div>
           </div>
-          <LiveActivityFeed items={feed} running={running} isMonochrome={isMonochrome} />
+
+          {viewMode === "columns" ? (
+            <div
+              className={`grid gap-3 flex-1 min-h-0 pt-3 ${
+                displayPlatforms.length === 1
+                  ? "grid-cols-1"
+                  : displayPlatforms.length === 2
+                    ? "grid-cols-1 md:grid-cols-2"
+                    : "grid-cols-1 md:grid-cols-3"
+              }`}
+            >
+              {displayPlatforms.map((c) => {
+                const meta = PLATFORM_META[c.id];
+                const p = perPlatform[c.id] ?? { scanned: 0, sent: 0, skipped: 0 };
+                const pFeed = feedByPlatform[c.id as keyof typeof feedByPlatform] ?? [];
+                const color = meta?.color ?? "#00bebd";
+                const isPlatformActive = running && p.scanned > 0;
+                return (
+                  <div
+                    key={c.id}
+                    className="flex flex-col min-h-0 rounded-xl border border-white/8 bg-black/20 overflow-hidden shadow-inner"
+                    style={{ borderTop: `2px solid ${color}` }}
+                  >
+                    {/* 平台专属列头 */}
+                    <div className="flex items-center justify-between px-3 py-2 border-b border-white/8 bg-white/[0.02] shrink-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span
+                          className={`size-2 rounded-full shrink-0 ${isPlatformActive ? "animate-pulse" : ""}`}
+                          style={{
+                            backgroundColor: color,
+                            boxShadow: isPlatformActive ? `0 0 8px ${color}` : "none",
+                          }}
+                        />
+                        <span className="text-xs font-bold text-stone-100 truncate">{c.name}</span>
+                        {isPlatformActive && (
+                          <span
+                            className="text-[8px] font-mono font-bold px-1 py-px rounded uppercase shrink-0"
+                            style={{
+                              color,
+                              backgroundColor: `${color}18`,
+                            }}
+                          >
+                            LIVE
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] font-mono text-stone-400 shrink-0">
+                        投 <span style={{ color }} className="font-bold">{p.sent}</span>/{limitOf(c.id)} · 扫 {p.scanned} · 跳 {p.skipped}
+                      </div>
+                    </div>
+
+                    {/* 平台专属独立滚动时间轴 */}
+                    <div className="flex-1 min-h-0 flex flex-col p-2">
+                      <LiveActivityFeed
+                        items={pFeed}
+                        running={running}
+                        isMonochrome={isMonochrome}
+                        hidePlatformBadge={true}
+                        emptyText={running ? `正在监听 ${c.name} 动态…` : `暂无 ${c.name} 动态`}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex-1 min-h-0 flex flex-col pt-3">
+              <LiveActivityFeed items={feed} running={running} isMonochrome={isMonochrome} />
+            </div>
+          )}
         </div>
 
         {/* 右：当前岗位聚光卡 + 平台通道选择（撑满高度） */}
