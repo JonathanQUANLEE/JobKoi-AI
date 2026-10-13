@@ -42,7 +42,7 @@ from boss_zhipin.tauri.commands._registry import commands
 #      Authorization callback URL 必须精确填：http://127.0.0.1:17891/callback
 #   3. 创建后复制 Client ID 填到下面即可（Client Secret 留空不用，PKCE 无需）
 # 未配置（空串）时前端自动隐藏"一键登录"按钮，回退旧登录方式，零破坏。
-GITHUB_OAUTH_CLIENT_ID = ""
+GITHUB_OAUTH_CLIENT_ID = "Ov23liyAFaO5CV36g3Ac"
 
 GITHUB_REPO_OWNER = "JonathanQUANLEE"
 GITHUB_REPO_NAME = "JobKoi-AI"
