@@ -45,21 +45,22 @@ export const SKILL_CHIPS: SkillChip[] = [
 export interface PromptTag {
   label: string;
   prompt: string;
+  iconType: "palette" | "sun" | "zap" | "shield" | "settings" | "bar-chart" | "file-text" | "activity" | "layout" | "help";
 }
 
 export const PROMPT_TAGS: PromptTag[] = [
-  { label: "换黑白极简主题", prompt: "帮我切换到黑白极简高级主题" },
-  { label: "换经典暖色主题", prompt: "换回经典琥珀暖色主题" },
-  { label: "投递更快(效率档)", prompt: "帮我切换到效率档，投递得更快一点" },
-  { label: "安全防封(稳健档)", prompt: "帮我切换到稳健档，长期挂机安全第一，防封号" },
-  { label: "打开防封设置", prompt: "打开投递安全与防护风控保护设置" },
-  { label: "查今日投递统计", prompt: "帮我查询今天各个平台的投递统计数据" },
-  { label: "带我去看简历", prompt: "带我去看看我的简历资料库" },
-  { label: "去实时巡航看看", prompt: "带我去实时巡航监控" },
-  { label: "回工作台", prompt: "回巡航工作台" },
-  { label: "聊聊我的简历优势", prompt: "你能看看我的简历吗？聊聊我的经历优势和改进建议" },
-  { label: "软件怎么使用？", prompt: "这个软件怎么使用？有哪些核心模块？" },
-  { label: "软件怎么防封？", prompt: "你们软件是怎么做拟人化防封的？遇到验证码会怎么样？" },
+  { label: "换黑白极简主题", prompt: "帮我切换到黑白极简高级主题", iconType: "palette" },
+  { label: "换经典暖色主题", prompt: "换回经典琥珀暖色主题", iconType: "sun" },
+  { label: "投递更快(效率档)", prompt: "帮我切换到效率档，投递得更快一点", iconType: "zap" },
+  { label: "安全防封(稳健档)", prompt: "帮我切换到稳健档，长期挂机安全第一，防封号", iconType: "shield" },
+  { label: "打开防封设置", prompt: "打开投递安全与防护风控保护设置", iconType: "settings" },
+  { label: "查今日投递统计", prompt: "帮我查询今天各个平台的投递统计数据", iconType: "bar-chart" },
+  { label: "带我去看简历", prompt: "带我去看看我的简历资料库", iconType: "file-text" },
+  { label: "去实时巡航看看", prompt: "带我去实时巡航监控", iconType: "activity" },
+  { label: "回工作台", prompt: "回巡航工作台", iconType: "layout" },
+  { label: "聊聊我的简历优势", prompt: "你能看看我的简历吗？聊聊我的经历优势和改进建议", iconType: "file-text" },
+  { label: "软件怎么使用？", prompt: "这个软件怎么使用？有哪些核心模块？", iconType: "help" },
+  { label: "软件怎么防封？", prompt: "你们软件是怎么做拟人化防封的？遇到验证码会怎么样？", iconType: "shield" },
 ];
 
 export interface AgentPanelProps {

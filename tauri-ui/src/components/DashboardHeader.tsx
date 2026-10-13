@@ -3,6 +3,7 @@ import { translate, type Lang } from "../lib/i18n";
 import { useRunStore } from "../store";
 import type { NavItem } from "./Sidebar";
 import { ipc } from "../lib/ipc";
+import { type GithubUser, clearStoredGithubUser } from "../lib/githubAuth";
 
 interface DashboardHeaderProps {
   sidebarCollapsed: boolean;
@@ -13,6 +14,8 @@ interface DashboardHeaderProps {
   statusText: string;
   lang: Lang;
   onOpenSettingsModal: (tab?: any) => void;
+  githubUser?: GithubUser | null;
+  onLogout?: () => void;
 }
 
 // 统一解析 Tauri 窗口句柄（优先使用全局 withGlobalTauri 句柄，回退动态引入）
@@ -43,6 +46,8 @@ export default function DashboardHeader({
   statusText,
   lang,
   onOpenSettingsModal,
+  githubUser,
+  onLogout,
 }: DashboardHeaderProps) {
   const t = (key: string, vars?: Record<string, string | number>) => translate(lang, key, vars);
 
@@ -139,6 +144,35 @@ export default function DashboardHeader({
 
       {/* 右侧操作栏与窗口原生控制按钮 */}
       <div className="flex items-center gap-3 shrink-0 relative z-30">
+        {/* GitHub 认证身份徽标与登出 */}
+        {githubUser && (
+          <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg border border-[var(--grid)] bg-stone-900/60 text-xs">
+            <img
+              src={githubUser.avatar_url}
+              alt={githubUser.login}
+              className="size-4 rounded-full border border-stone-700 object-cover"
+            />
+            <span className="text-stone-300 font-medium text-[11px] truncate max-w-[100px]" title={githubUser.login}>
+              @{githubUser.login}
+            </span>
+            {onLogout && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm("确定要退出当前 GitHub 登录吗？退出后需重新验证。")) {
+                    clearStoredGithubUser();
+                    onLogout();
+                  }
+                }}
+                className="text-[10px] text-stone-500 hover:text-red-400 cursor-pointer transition-all border-l border-stone-700/80 pl-1.5"
+                title="退出当前 GitHub 账号"
+              >
+                退出
+              </button>
+            )}
+          </div>
+        )}
+
         <button
           type="button"
           onClick={() => onOpenSettingsModal?.("general")}

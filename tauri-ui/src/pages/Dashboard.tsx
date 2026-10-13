@@ -20,11 +20,18 @@ import { useJobBotRuntime } from "../hooks/useJobBotRuntime";
 import { useHeroChat } from "../hooks/useHeroChat";
 import { useRunStore, useT } from "../store";
 
+import { type GithubUser } from "../lib/githubAuth";
+
+interface DashboardProps {
+  githubUser?: GithubUser | null;
+  onLogout?: () => void;
+}
+
 /**
  * 仪表盘顶级页面 (Layout Router 外壳)
  * 严格遵从《GEMINI.md 架构铁律》：仅负责顶层框架装配与按需子面板路由，不包含具体业务与展示细节。
  */
-export default function Dashboard() {
+export default function Dashboard({ githubUser, onLogout }: DashboardProps = {}) {
   const t = useT();
   const lang = useRunStore((s) => s.lang);
   const setLang = useRunStore((s) => s.setLang);
@@ -42,7 +49,7 @@ export default function Dashboard() {
   const [drawerTab, setDrawerTab] = useState<DrawerTab>("rules");
   const [mistModalType, setMistModalType] = useState<MistModalType>(null);
   const [defaultResumeName, setDefaultResumeName] = useState<string>(
-    "李象泉-后端-AI-Agent开发-2027届.docx"
+    "我的求职简历.docx"
   );
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [settingsModalTab, setSettingsModalTab] = useState<SettingsTab>("general");
@@ -281,6 +288,8 @@ export default function Dashboard() {
             setSettingsModalTab(tab || "general");
             setSettingsModalOpen(true);
           }}
+          githubUser={githubUser}
+          onLogout={onLogout}
         />
 
         {/* 主内容区域 */}

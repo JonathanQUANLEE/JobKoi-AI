@@ -6,17 +6,27 @@ import {
   Terminal,
   Sparkles,
   Check,
-  Plus,
   Bot,
   UploadCloud,
   FileText,
+  RotateCcw,
+  Palette,
+  Sun,
+  Zap,
+  Shield,
+  Settings,
+  BarChart2,
+  Activity,
+  LayoutDashboard,
+  HelpCircle,
+  FileCode2,
 } from "lucide-react";
 import { ipc, type AgentAction, type AgentToolResult } from "../../lib/ipc";
 import { summarizeAgentProfile } from "../../lib/agentPreview";
 import { readFileAsBase64 } from "../../lib/resumeUtils";
 import { useRunStore, useT } from "../../store";
 import { MagicCard } from "../core/MagicBento";
-import { PROMPT_TAGS } from "./types";
+import { PROMPT_TAGS, type PromptTag } from "./types";
 
 interface CareerCopilotViewProps {
   getCurrentForm: () => Record<string, unknown>;
@@ -39,6 +49,7 @@ export default function CareerCopilotView({
   const agentPending = useRunStore((s) => s.agentPending);
   const agentProfilePreview = useRunStore((s) => s.agentProfilePreview);
   const pushAgentMessage = useRunStore((s) => s.pushAgentMessage);
+  const clearAgentMessages = useRunStore((s) => s.clearAgentMessages);
   const setAgentPending = useRunStore((s) => s.setAgentPending);
   const setAgentProfilePreview = useRunStore((s) => s.setAgentProfilePreview);
 
@@ -232,6 +243,21 @@ export default function CareerCopilotView({
             <UploadCloud className="size-3" />
             <span>{loadingResume ? "解析中..." : activeResumeName ? "更换简历" : "上传简历"}</span>
           </button>
+          {agentMessages.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm("确定要清空与 AI 智能管家的历史对话并开启新对话吗？")) {
+                  clearAgentMessages();
+                }
+              }}
+              title="清空对话记录，开启全新对话"
+              className="px-2.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-300 text-[11px] transition-all cursor-pointer flex items-center gap-1"
+            >
+              <RotateCcw className="size-3 text-stone-400" />
+              <span>开启新对话</span>
+            </button>
+          )}
           <input
             ref={uploadFileRef}
             type="file"
@@ -262,12 +288,15 @@ export default function CareerCopilotView({
               <button
                 type="button"
                 onClick={() => handleSendText("帮我切换到黑白极简高级主题")}
-                className="p-3 rounded-xl border border-stone-800/80 bg-stone-900/50 hover:border-amber-500/40 hover:bg-stone-900/80 transition-all cursor-pointer text-xs group"
+                className="p-3 rounded-xl border border-stone-800/80 bg-stone-900/50 hover:border-violet-500/40 hover:bg-stone-900/80 transition-all cursor-pointer text-xs group"
               >
-                <div className="flex items-center gap-1.5 font-bold text-stone-200 group-hover:text-amber-300">
-                  <span>🎨 切换极简黑白主题</span>
+                <div className="flex items-center gap-2 font-bold text-stone-200 group-hover:text-violet-300">
+                  <div className="p-1 rounded-lg bg-violet-500/15 border border-violet-500/30 text-violet-400">
+                    <Palette className="size-3.5" />
+                  </div>
+                  <span>切换极简黑白主题</span>
                 </div>
-                <p className="text-[11px] text-stone-500 mt-1 leading-normal">
+                <p className="text-[11px] text-stone-500 mt-1.5 leading-normal">
                   0.01 秒极速变色，体验无刷新主题切换
                 </p>
               </button>
@@ -277,10 +306,13 @@ export default function CareerCopilotView({
                 onClick={() => handleSendText("帮我切换到效率档，投递得更快一点")}
                 className="p-3 rounded-xl border border-stone-800/80 bg-stone-900/50 hover:border-amber-500/40 hover:bg-stone-900/80 transition-all cursor-pointer text-xs group"
               >
-                <div className="flex items-center gap-1.5 font-bold text-stone-200 group-hover:text-amber-300">
-                  <span>⚡ 切换投递为效率档</span>
+                <div className="flex items-center gap-2 font-bold text-stone-200 group-hover:text-amber-300">
+                  <div className="p-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                    <Zap className="size-3.5" />
+                  </div>
+                  <span>切换投递为效率档</span>
                 </div>
-                <p className="text-[11px] text-stone-500 mt-1 leading-normal">
+                <p className="text-[11px] text-stone-500 mt-1.5 leading-normal">
                   调节拟人化节奏至 15~30 秒短时冲刺
                 </p>
               </button>
@@ -290,12 +322,15 @@ export default function CareerCopilotView({
                 onClick={() =>
                   handleSendText("你能看看我的简历吗？聊聊我的经历优势和改进建议")
                 }
-                className="p-3 rounded-xl border border-stone-800/80 bg-stone-900/50 hover:border-amber-500/40 hover:bg-stone-900/80 transition-all cursor-pointer text-xs group"
+                className="p-3 rounded-xl border border-stone-800/80 bg-stone-900/50 hover:border-indigo-500/40 hover:bg-stone-900/80 transition-all cursor-pointer text-xs group"
               >
-                <div className="flex items-center gap-1.5 font-bold text-stone-200 group-hover:text-amber-300">
-                  <span>📄 聊聊我的简历优势</span>
+                <div className="flex items-center gap-2 font-bold text-stone-200 group-hover:text-indigo-300">
+                  <div className="p-1 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-400">
+                    <FileText className="size-3.5" />
+                  </div>
+                  <span>聊聊我的简历优势</span>
                 </div>
-                <p className="text-[11px] text-stone-500 mt-1 leading-normal">
+                <p className="text-[11px] text-stone-500 mt-1.5 leading-normal">
                   结合已绑定的简历，给出针对性优化建议
                 </p>
               </button>
@@ -303,12 +338,15 @@ export default function CareerCopilotView({
               <button
                 type="button"
                 onClick={() => handleSendText("这个软件怎么使用？有哪些核心模块？")}
-                className="p-3 rounded-xl border border-stone-800/80 bg-stone-900/50 hover:border-amber-500/40 hover:bg-stone-900/80 transition-all cursor-pointer text-xs group"
+                className="p-3 rounded-xl border border-stone-800/80 bg-stone-900/50 hover:border-sky-500/40 hover:bg-stone-900/80 transition-all cursor-pointer text-xs group"
               >
-                <div className="flex items-center gap-1.5 font-bold text-stone-200 group-hover:text-amber-300">
-                  <span>💡 软件使用全能答疑</span>
+                <div className="flex items-center gap-2 font-bold text-stone-200 group-hover:text-sky-300">
+                  <div className="p-1 rounded-lg bg-sky-500/15 border border-sky-500/30 text-sky-400">
+                    <HelpCircle className="size-3.5" />
+                  </div>
+                  <span>软件使用全能答疑</span>
                 </div>
-                <p className="text-[11px] text-stone-500 mt-1 leading-normal">
+                <p className="text-[11px] text-stone-500 mt-1.5 leading-normal">
                   了解 7 大核心模块架构与防封号机制
                 </p>
               </button>
@@ -457,18 +495,46 @@ export default function CareerCopilotView({
 
         <div className="flex items-center justify-between gap-2 pt-2 border-t border-stone-800/80">
           <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
-            {PROMPT_TAGS.map((tItem, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => handleSendText(tItem.prompt)}
-                disabled={agentPending}
-                className="shrink-0 flex items-center gap-1 rounded-full border border-stone-800 bg-stone-950/80 px-2.5 py-1 text-[11px] text-stone-400 hover:border-amber-500/40 hover:text-stone-200 transition-all cursor-pointer"
-              >
-                <Plus className="h-3 w-3 text-stone-500" />
-                <span>{tItem.label}</span>
-              </button>
-            ))}
+            {PROMPT_TAGS.map((tItem, idx) => {
+              const renderIcon = () => {
+                switch (tItem.iconType) {
+                  case "palette":
+                    return <Palette className="size-3 text-violet-400" />;
+                  case "sun":
+                    return <Sun className="size-3 text-amber-400" />;
+                  case "zap":
+                    return <Zap className="size-3 text-amber-400" />;
+                  case "shield":
+                    return <Shield className="size-3 text-emerald-400" />;
+                  case "settings":
+                    return <Settings className="size-3 text-stone-400" />;
+                  case "bar-chart":
+                    return <BarChart2 className="size-3 text-sky-400" />;
+                  case "file-text":
+                    return <FileText className="size-3 text-indigo-400" />;
+                  case "activity":
+                    return <Activity className="size-3 text-rose-400" />;
+                  case "layout":
+                    return <LayoutDashboard className="size-3 text-stone-400" />;
+                  case "help":
+                    return <HelpCircle className="size-3 text-teal-400" />;
+                  default:
+                    return <Sparkles className="size-3 text-amber-400" />;
+                }
+              };
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleSendText(tItem.prompt)}
+                  disabled={agentPending}
+                  className="shrink-0 flex items-center gap-1.5 rounded-full border border-stone-800 bg-stone-950/80 px-2.5 py-1 text-[11px] text-stone-400 hover:border-amber-500/40 hover:text-stone-200 transition-all cursor-pointer"
+                >
+                  {renderIcon()}
+                  <span>{tItem.label}</span>
+                </button>
+              );
+            })}
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
