@@ -8,6 +8,7 @@ import {
   X,
   UserCheck,
   Sparkles,
+  Star,
 } from "lucide-react";
 import {
   verifyGithubAccount,
@@ -168,7 +169,7 @@ export default function GithubAuthGate({ onLoginSuccess }: GithubAuthGateProps) 
         className="h-10 shrink-0 border-b border-stone-800/80 bg-stone-950/80 backdrop-blur-md px-4 flex items-center justify-between z-50 cursor-move"
       >
         <div className="flex items-center gap-2 pointer-events-none text-xs text-stone-400">
-          <GithubIcon className="size-4 text-white" />
+          <img src="/favicon.png" alt="JobKoi-AI" className="size-5 rounded" />
           <span className="font-semibold text-stone-200">JobKoi-AI · 全智能求职锦鲤助手</span>
         </div>
         <div data-tauri-drag-region className="flex-1 h-full cursor-move" />
@@ -211,10 +212,10 @@ export default function GithubAuthGate({ onLoginSuccess }: GithubAuthGateProps) 
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[320px] bg-amber-500/10 rounded-full blur-[140px] pointer-events-none" />
 
         <div className="relative w-full max-w-sm rounded-3xl border border-stone-800 bg-[#0d1117]/95 shadow-2xl shadow-black/80 backdrop-blur-xl p-7 sm:p-8 space-y-6">
-          {/* 品牌区 */}
+          {/* 品牌区（粉色锦鲤品牌图标） */}
           <div className="flex flex-col items-center text-center space-y-2.5">
-            <div className="size-14 rounded-2xl bg-stone-900 border border-stone-700/80 p-3 shadow-inner flex items-center justify-center text-white">
-              <GithubIcon className="size-8" />
+            <div className="size-16 rounded-2xl bg-stone-900 border border-stone-700/80 p-1.5 shadow-inner flex items-center justify-center ring-4 ring-pink-500/15">
+              <img src="/favicon.png" alt="JobKoi-AI" className="size-full rounded-xl object-cover" />
             </div>
             <h1 className="text-lg font-bold tracking-tight text-white">登录 JobKoi-AI</h1>
             <p className="text-xs text-stone-400 leading-relaxed">
@@ -277,6 +278,20 @@ export default function GithubAuthGate({ onLoginSuccess }: GithubAuthGateProps) 
           >
             <ExternalLink className="size-4 text-stone-400" />
             <span>没有账号？注册 GitHub</span>
+          </button>
+
+          {/* 点亮 Star 支持作者（醒目入口）：一键打开仓库页 */}
+          <button
+            type="button"
+            onClick={() => {
+              setNotice("已在浏览器打开作者仓库，点亮右上角 ⭐ Star 就是最大的支持！");
+              void openSystemBrowser("https://github.com/JonathanQUANLEE/JobKoi-AI");
+            }}
+            className="w-full py-3 px-4 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/50 hover:border-amber-400/70 text-amber-300 font-bold text-sm flex items-center justify-center gap-2.5 shadow-lg shadow-amber-500/10 ring-1 ring-amber-500/20 animate-pulse transition-all cursor-pointer"
+          >
+            <Star className="size-4.5 fill-amber-400 text-amber-400" />
+            <span>点亮 Star · 支持作者</span>
+            <Star className="size-3.5 fill-amber-400 text-amber-400" />
           </button>
 
           {/* 反馈提示 */}
