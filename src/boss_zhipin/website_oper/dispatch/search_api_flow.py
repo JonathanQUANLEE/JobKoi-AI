@@ -525,6 +525,16 @@ async def _run_search_api_flow(
                 stop_reason = "max_sent"
                 break
             if daily_limit is not None and daily_sent_count >= daily_limit:
+                # 启动即满额（或发完最后一单翻页回来）：发醒目事件——
+                # 前端常驻横幅 + 实时动态都会提醒"BOSS 今日已投满"，
+                # 不再只把原因埋进结束汇总里（2026-10-13 用户实测）。
+                events.emit(
+                    "platform_limit_reached",
+                    platform="boss",
+                    matched_text="(进入翻页循环时检查)",
+                    message=f"BOSS 直聘今日已投满 {daily_sent_count}/{daily_limit}，已安全停止。"
+                    "今天的实际投递数量可在「投递明细记录」中查看。",
+                )
                 stop_reason = "daily_limit"
                 break
             try:

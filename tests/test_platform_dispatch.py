@@ -351,3 +351,124 @@ def test_job51_not_logged_in_emits_login_required(isolated_ledger_logs, monkeypa
         assert "未登录" in captured[0].payload.get("message", "")
     finally:
         events.set_emit_callback(None)
+
+
+# ---------------------------------------------------------------------------
+# 满额预检（2026-10-13 用户实测）：今日额度投满后启动巡航，旧逻辑先开
+# 浏览器再秒退——用户看到"浏览器开了却一动不动"，也没有任何提醒。
+# ---------------------------------------------------------------------------
+
+
+def _prefill_today_sent(log_path, count):
+    """往账本里预填今天的投递记录，模拟"今日额度已投满"。"""
+    import json
+    from datetime import datetime
+
+    with open(log_path, "w", encoding="utf-8") as f:
+        for i in range(count):
+            f.write(
+                json.dumps(
+                    {
+                        "ts": datetime.now().isoformat(),
+                        "job_id": f"prefill-{i}",
+                        "sent": True,
+                    }
+                )
+                + "\n"
+            )
+
+
+def test_job51_quota_exhausted_skips_browser_and_notifies(isolated_ledger_logs, monkeypatch):
+    """51job 今日满额：不开浏览器 + 发 platform_limit_reached 事件提醒用户。"""
+    import job51.apply as job51_apply
+    import job51.driver as job51_driver
+    from boss_zhipin.gui import events
+
+    _prefill_today_sent(job51_apply.SENT_LOG, 5)
+
+    captured = []
+    events.set_emit_callback(captured.append)
+    try:
+        opened = []
+
+        async def fake_open_browser(url):
+            opened.append(url)
+            raise AssertionError("满额时不应打开浏览器")
+
+        monkeypatch.setattr(job51_driver, "open_browser", fake_open_browser)
+
+        result = asyncio.run(job51_apply.run(["AI Agent"], 5))
+        assert result == 0
+        assert opened == []
+        limit_events = [
+            e for e in captured if e.kind == "platform_limit_reached"
+        ]
+        assert len(limit_events) == 1
+        assert limit_events[0].payload.get("platform") == "job51"
+        assert "已投满" in limit_events[0].payload.get("message", "")
+        assert "未打开浏览器" in limit_events[0].payload.get("message", "")
+    finally:
+        events.set_emit_callback(None)
+
+
+def test_liepin_quota_exhausted_skips_browser_and_notifies(isolated_ledger_logs, monkeypatch):
+    """猎聘今日满额：不开浏览器 + 发 platform_limit_reached 事件提醒用户。"""
+    import liepin.apply as liepin_apply
+    import liepin.driver as liepin_driver
+    from boss_zhipin.gui import events
+
+    _prefill_today_sent(liepin_apply.SENT_LOG, 5)
+
+    captured = []
+    events.set_emit_callback(captured.append)
+    try:
+        opened = []
+
+        async def fake_open_browser(url):
+            opened.append(url)
+            raise AssertionError("满额时不应打开浏览器")
+
+        monkeypatch.setattr(liepin_driver, "open_browser", fake_open_browser)
+
+        result = asyncio.run(liepin_apply.run(["AI Agent"], 5, "hello"))
+        assert result == 0
+        assert opened == []
+        limit_events = [
+            e for e in captured if e.kind == "platform_limit_reached"
+        ]
+        assert len(limit_events) == 1
+        assert limit_events[0].payload.get("platform") == "liepin"
+        assert "已投满" in limit_events[0].payload.get("message", "")
+    finally:
+        events.set_emit_callback(None)
+
+
+def test_quota_not_exhausted_still_opens_browser(isolated_ledger_logs, monkeypatch):
+    """额度没用完时行为不变：照常开浏览器跑一轮（回归保护）。"""
+    import job51.apply as job51_apply
+    import job51.driver as job51_driver
+
+    # 不预填账本（今日 0 投，额度 5）——open_browser 必须被调用
+    opened = []
+
+    class _FakeTab:
+        pass
+
+    async def fake_open_browser(url):
+        opened.append(url)
+        return _FakeTab()
+
+    async def fake_is_logged_in(tab=None):
+        return False
+
+    async def fake_goto_search(tab, kw):
+        return None
+
+    monkeypatch.setattr(job51_driver, "open_browser", fake_open_browser)
+    monkeypatch.setattr(job51_driver, "is_logged_in", fake_is_logged_in)
+    monkeypatch.setattr(job51_driver, "goto_search", fake_goto_search)
+    monkeypatch.setattr(job51_apply.asyncio, "sleep", _instant_sleep)
+
+    result = asyncio.run(job51_apply.run(["AI Agent"], 5))
+    assert result == -1  # 未登录返回 -1（预检放行后正常走到登录检查）
+    assert len(opened) == 1

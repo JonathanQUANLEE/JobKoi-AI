@@ -121,6 +121,16 @@ export const createNoticeSlice: StateCreator<RunStore, [], [], NoticeSlice> = (s
       );
       return {
         notifications: nextList,
+        // 2026-10-13 用户反馈：侧栏通知卡字太小看不清。每条通知同时以
+        // 「中央大字浮现」呈现——淡入 → 停留 → 淡出（保存反馈同款动效，
+        // 用户认可的"慢慢出现在正中央再慢慢消失"）。多条连发时最新一条
+        // 优先；完整历史仍留在侧栏通知坞（含时间戳与堆叠）。
+        centerToast: {
+          id: `toast_${id}`,
+          text: item.source ? `${item.source}：${item.text}` : item.text,
+          tone: item.type === "error" ? "error" : "success",
+          duration: item.type === "error" ? 3200 : 2600,
+        },
       };
     });
 
