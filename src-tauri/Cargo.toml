@@ -20,9 +20,13 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [[bin]]
 name = "boss-zhipin"
 path = "src/main.rs"
-# pytauri/standalone 这个 feature 是 standalone 模式必开的，不开 main.rs 里
-# PythonInterpreterBuilder 这堆类型都没有
-required-features = ["pytauri/standalone"]
+# 2026-10-14 修复：删掉 required-features = ["pytauri/standalone"]——
+# tauri-cli 已知 bug：[[bin]] 带 required-features 时，cli 跑 cargo metadata
+# 不激活 feature，targets 里没有这个 bin，interface/rust.rs unwrap None 直接
+# panic。本目录只被 tauri build 使用，而 tauri.conf.json 的
+# build.features 已永久启用 pytauri/standalone，删除无副作用。
+# （代价：有人裸跑 `cargo build`（不带 feature）会得到 main.rs 编译错误，
+#  而不是静默跳过 bin——dev 模式不碰本目录，无实际影响。）
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
