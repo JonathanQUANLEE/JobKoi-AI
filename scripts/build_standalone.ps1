@@ -100,9 +100,15 @@ Write-Host "==> 嵌入式 Python: $PyVersion"
 # "externally managed"，默认拒绝 pip 写入。本场景就是要往里写，加 flag 放行。
 # （macOS 的 .sh 没踩到大概是早期 uv 没强制，新版 uv 两边都会拦。）
 Write-Host "==> 安装 boss_zhipin + 依赖到 pyembed（首次会拉 torch，较慢）"
+# pypi.org 直连在大陆网络经常 TLS 握手失败/连接重置（2026-10-14 实测：同一
+# 天内时好时坏，第 5 次构建能连上、第 6 次就 HandshakeFailure）。默认走阿里
+# 云全量镜像（包与哈希和官方一致），要切其他源设 BOSS_PYPI_INDEX。
+# 注：清华 TUNA 也会间歇性 403 反爬，阿里云最稳（同日实测）。
+$PypiIndex = if ($env:BOSS_PYPI_INDEX) { $env:BOSS_PYPI_INDEX } else { 'https://mirrors.aliyun.com/pypi/simple/' }
 $env:PYTAURI_STANDALONE = '1'
 uv pip install --exact --compile-bytecode --break-system-packages `
     "--python=$EmbedPy" `
+    "--index-url=$PypiIndex" `
     --reinstall-package=boss-zhipin-job-search `
     "$RepoRoot[standalone]"
 if ($LASTEXITCODE -ne 0) { throw "uv pip install 失败（exit $LASTEXITCODE）" }
@@ -128,9 +134,13 @@ $PythonLibs = Join-Path $PyembedDir 'python\libs'
 if (-not (Test-Path $PythonLibs)) {
     throw "$PythonLibs 不存在——python-build-standalone 该带 libs/python313.lib 给 pyo3 链"
 }
-# 注意：RUSTFLAGS 按 whitespace 切，路径里如果有空格会炸。本仓库默认装 E:\
-# 下没空格，没空格就别提前优化；以后真踩到再用 CARGO_ENCODED_RUSTFLAGS。
-$env:RUSTFLAGS = "-L native=$PythonLibs"
+# RUSTFLAGS 按 whitespace 切，路径含空格（如 "B:\antigtavity projects\..."）
+# 会把 -L native=<路径> 切成两个文件名，rustc 报 "multiple input filenames"
+# （2026-10-14 实测踩中）。改用 CARGO_ENCODED_RUSTFLAGS：参数间用 \x1f
+# (unit separator) 分隔，值内空格原样保留。
+$UnitSep = [char]31
+$env:CARGO_ENCODED_RUSTFLAGS = "-L${UnitSep}native=$PythonLibs"
+Remove-Item Env:RUSTFLAGS -ErrorAction SilentlyContinue
 
 # ---------- 5. 前端 + tauri bundle ----------
 Write-Host "==> pnpm install（tauri-ui）"
