@@ -26,7 +26,7 @@ interface SettingsDrawerProps {
   profileName: string;
   setProfileName: (name: string) => void;
   onLoadProfile: (name: string) => void;
-  onSaveConfig: () => Promise<void>;
+  onSaveConfig: () => Promise<boolean>;
   busy: boolean;
 
   // Basic

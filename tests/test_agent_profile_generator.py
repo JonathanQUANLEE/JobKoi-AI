@@ -188,7 +188,7 @@ def test_parse_llm_json_garbage_raises():
 def _configured_agent(monkeypatch) -> None:
     monkeypatch.setattr(
         pg,
-        "read_config",
+        "effective_config",
         lambda: AgentConfig(
             base_url="https://example.test/v1",
             api_key="sk-test",
@@ -248,7 +248,7 @@ def test_generate_chat_only_returns_null_profile(monkeypatch):
 
 
 def test_generate_not_configured(monkeypatch):
-    monkeypatch.setattr(pg, "read_config", lambda: AgentConfig())
+    monkeypatch.setattr(pg, "effective_config", lambda: AgentConfig())
     result = asyncio.run(pg.generate("hi", [], None))
     assert result["status"] == "error"
     assert result["code"] == "not_configured"

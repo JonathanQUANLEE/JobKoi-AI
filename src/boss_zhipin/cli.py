@@ -92,7 +92,14 @@ def get_start_url() -> str:
     if label:
         from urllib.parse import quote
 
-        return f"https://www.zhipin.com/web/geek/jobs?query={quote(label)}"
+        from boss_zhipin.config.query_fission import split_search_keywords
+
+        # 多岗位输入只取第一个词构造起始 URL（2026-10-15）：旧逻辑把整串
+        # "A, B," 塞进 query 参数，BOSS 按全文匹配搜出的岗位与画像无关。
+        # 其余关键词由猎聘/51job 裂变链路消化；BOSS 多词轮换属 Phase 2。
+        keywords = split_search_keywords(label)
+        first_kw = keywords[0] if keywords else label
+        return f"https://www.zhipin.com/web/geek/jobs?query={quote(first_kw)}"
     return RECOMMEND_URL
 
 

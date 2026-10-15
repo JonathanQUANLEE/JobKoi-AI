@@ -1,13 +1,16 @@
-"""BOSS 搜索接口防过频（code=37）测试（2026-10-13 三项加固）。
+"""BOSS 搜索接口防过频（code=37）测试（2026-10-13 三项加固 + 2026-10-15 阶梯化）。
 
 用户实测事故回放：150 个岗位全是历史已投 → 每页秒过（无详情页/无发送
 延迟）→ 13 秒翻 6 页 → 触发 wapi 频率限制 code=37，且旧代码只显示冰冷
-代号、直接硬停整轮巡航。
+代号、直接硬停整轮巡航。2026-10-15 二次实测：上轮投递半小时后连翻 5 页，
+4~6.5s 页间隔仍不够，第 6 页照样 code=37。
 
 加固点：
 1. job_api 错误信息透传（code=37 + 平台人话 message）；
-2. code=37 冷却 45s 重试一次：成功则继续巡航，仍失败才优雅结束；
-3. 全跳过页自适应页间节流（<3s 秒过的页上浮到 4~6.5s，只慢不快）。
+2. code=37 冷却 90s + Page.reload 重建风控令牌后重试一次：成功则继续
+   巡航，仍失败才优雅结束（明确不轮换关键词硬闯——熔断保号优先）；
+3. 全跳过页自适应页间节流（<3s 秒过的页上浮到 4~6.5s，只慢不快）；
+4. 阶梯上浮：连续 3+ 页秒过（深度穿越历史已投区）→ 页间隔上浮 9~15s。
 """
 
 from __future__ import annotations
@@ -72,10 +75,11 @@ def test_unknown_error_without_message_still_clean():
 # ---------------------------------------------------------------------------
 
 
-def _install_stubs(monkeypatch, fetch_impl) -> tuple[list[tuple[str, dict]], list[float]]:
-    """公共桩：事件收集 + 睡眠记录。返回 (事件列表, 睡眠时长列表)。"""
+def _install_stubs(monkeypatch, fetch_impl) -> tuple[list[tuple[str, dict]], list[float], list[bool]]:
+    """公共桩：事件收集 + 睡眠记录 + 刷新记录。返回 (事件, 睡眠, reload 调用)。"""
     collected: list[tuple[str, dict]] = []
     sleeps: list[float] = []
+    reloads: list[bool] = []
 
     monkeypatch.setattr(
         gui_events, "emit", lambda kind, **payload: collected.append((kind, payload))
@@ -92,7 +96,22 @@ def _install_stubs(monkeypatch, fetch_impl) -> tuple[list[tuple[str, dict]], lis
         sleeps.append(seconds)
 
     monkeypatch.setattr(search_api_flow.asyncio, "sleep", rec_sleep)
-    return collected, sleeps
+
+    # code=37 自愈路径的桩（2026-10-15）：重试前的 Page.reload 与带站岗冷却
+    # 都定义在 browser_session、由流程懒加载——patch 模块属性即可接管；同时
+    # 避免真站岗逻辑在测试环境里因假 browser 误抛"浏览器已关闭"。
+    from boss_zhipin.website_oper.core import browser_session
+
+    async def fake_reload():
+        reloads.append(True)
+        return True
+
+    async def fake_guard_sleep(seconds: float, chunk: float = 2.0):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(browser_session, "reload_current_page", fake_reload)
+    monkeypatch.setattr(browser_session, "sleep_with_browser_guard", fake_guard_sleep)
+    return collected, sleeps, reloads
 
 
 def _run_flow():
@@ -115,7 +134,7 @@ def _seen_jobs(monkeypatch, eids: list[str]):
 
 
 def test_code37_cooldown_retry_recovers(monkeypatch):
-    """首次 code=37 → 冷却 45s 重试成功 → 巡航继续（不硬停浪费整轮）。"""
+    """首次 code=37 → 冷却 90s + 刷新页面重试成功 → 巡航继续（不硬停浪费整轮）。"""
     state = {"page1_calls": 0}
     jobs = _seen_jobs(monkeypatch, ["e1", "e2"])
 
@@ -127,11 +146,13 @@ def test_code37_cooldown_retry_recovers(monkeypatch):
             return jobs
         return []  # 第 2 页自然取完 → 巡航正常结束
 
-    collected, sleeps = _install_stubs(monkeypatch, fake_fetch)
+    collected, sleeps, reloads = _install_stubs(monkeypatch, fake_fetch)
     _run_flow()
 
-    # 冷却动作真实发生（45 秒退避）
-    assert 45.0 in sleeps
+    # 冷却动作真实发生（90 秒带站岗退避）
+    assert 90.0 in sleeps
+    # 重试前刷新了页面（重建风控令牌）
+    assert reloads == [True]
     # 用户可见的冷却提示（实时动态里出现"冷却"说明）
     cooldown_notices = [
         (kind, payload)
@@ -146,21 +167,21 @@ def test_code37_cooldown_retry_recovers(monkeypatch):
 
 
 def test_code37_retry_failure_stops_gracefully(monkeypatch):
-    """冷却后重试仍被限制：优雅结束 + 明确建议（等待/换词），而非裸代号。"""
+    """冷却+刷新后重试仍被限制：优雅结束 + 明确建议（等待/换词），而非裸代号。"""
     _seen_jobs(monkeypatch, ["e1"])
 
     async def always_limited(tab, query, page):
         raise RuntimeError(RATE_LIMIT_ERROR)
 
-    collected, sleeps = _install_stubs(monkeypatch, always_limited)
+    collected, sleeps, reloads = _install_stubs(monkeypatch, always_limited)
     _run_flow()
 
     # 冷却与最终失败两次提示都有
     error_messages = [
         str(payload.get("message", "")) for kind, payload in collected if kind == "api_flow_error"
     ]
-    assert any("冷却 45 秒" in m for m in error_messages)
-    assert any("冷却后仍触发频率限制" in m and "10 分钟" in m for m in error_messages)
+    assert any("冷却 90 秒" in m for m in error_messages)
+    assert any("仍触发频率限制" in m and "10 分钟" in m for m in error_messages)
     summaries = [payload for kind, payload in collected if kind == "api_flow_finished"]
     assert len(summaries) == 1
     assert "稍后再试" in summaries[0].get("message", "")
@@ -173,11 +194,31 @@ def test_fast_all_skip_page_gets_longer_throttle(monkeypatch):
     async def fake_fetch(tab, query, page):
         return jobs if page == 1 else []
 
-    collected, sleeps = _install_stubs(monkeypatch, fake_fetch)
+    collected, sleeps, reloads = _install_stubs(monkeypatch, fake_fetch)
     _run_flow()
 
     # 第 1 页全 seen 秒过（<3s）→ 页间睡眠应出现 4.0~6.5 区间值
     assert any(4.0 <= s <= 6.5 for s in sleeps), f"页间节流未上浮: {sleeps}"
+
+
+def test_consecutive_fast_pages_escalate_throttle(monkeypatch):
+    """连续 3+ 页全跳过（深度穿越历史已投区）→ 页间隔阶梯上浮到 9~15s。
+
+    2026-10-15 实测回放：上一轮投递半小时后，前 5 页 148/150 全是已投，
+    4~6.5s 间隔 28s 连翻 5 页，第 6 页照样 code=37——单级上浮不够，
+    陷得越深必须越慢。
+    """
+    jobs = _seen_jobs(monkeypatch, [f"e{i}" for i in range(5)])
+
+    async def fake_fetch(tab, query, page):
+        return jobs if page <= 4 else []  # 4 个连续全跳过页后自然取完
+
+    collected, sleeps, reloads = _install_stubs(monkeypatch, fake_fetch)
+    _run_flow()
+
+    # 第 1~2 个连续快页维持 4~6.5s；第 3 个起上浮 9~15s
+    assert any(4.0 <= s <= 6.5 for s in sleeps), f"前两级节流丢失: {sleeps}"
+    assert any(9.0 <= s <= 15.0 for s in sleeps), f"阶梯上浮未生效: {sleeps}"
 
 
 def test_non_37_error_still_stops_immediately(monkeypatch):
@@ -187,11 +228,12 @@ def test_non_37_error_still_stops_immediately(monkeypatch):
     async def bad_request(tab, query, page):
         raise RuntimeError("搜索接口返回异常 code=19（参数不合法）")
 
-    collected, sleeps = _install_stubs(monkeypatch, bad_request)
+    collected, sleeps, reloads = _install_stubs(monkeypatch, bad_request)
     _run_flow()
 
-    # 不进入冷却（无 45s 睡眠），直接报错结束
-    assert 45.0 not in sleeps
+    # 不进入冷却（无 90s 站岗睡眠、无页面刷新），直接报错结束
+    assert 90.0 not in sleeps
+    assert reloads == []
     error_messages = [
         str(payload.get("message", "")) for kind, payload in collected if kind == "api_flow_error"
     ]

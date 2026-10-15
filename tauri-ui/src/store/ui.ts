@@ -47,6 +47,12 @@ export type UiSlice = {
   // UI 语言：启动时按系统 locale 探测，仅保存在当前前端会话。
   lang: Lang;
   setLang: (lang: Lang) => void;
+
+  // 新手引导重置信号（2026-10-14 用户需求）：「关于与帮助」的"再次引导"
+  // 按钮 bump 这个 tick，useOnboardingTour 监听到变化就把当前账号的引导
+  // 状态重置为全新，完整重走一遍流程。
+  tourResetTick: number;
+  requestTourReset: () => void;
 };
 
 export const createUiSlice: StateCreator<RunStore, [], [], UiSlice> = (set) => ({
@@ -58,4 +64,7 @@ export const createUiSlice: StateCreator<RunStore, [], [], UiSlice> = (set) => (
 
   lang: detectLang(),
   setLang: (lang) => set({ lang }),
+
+  tourResetTick: 0,
+  requestTourReset: () => set((s) => ({ tourResetTick: s.tourResetTick + 1 })),
 });

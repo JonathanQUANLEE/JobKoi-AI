@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 import re
 from pathlib import Path
 from urllib.parse import quote
@@ -220,6 +221,14 @@ async def shutdown() -> None:
     """
     global _browser, _tab
     if _browser is not None:
+        # 先摘 nodriver 的 target 事件监听（2026-10-15）：避免 close 引发的
+        # TargetDestroyed 事件风暴派生 update_targets 重连任务，对着已死端口
+        # 刷 WinError 1225 红字（机制详见 browser_session 的 helper 注释）。
+        from boss_zhipin.website_oper.core.browser_session import (
+            detach_nodriver_target_handlers,
+        )
+
+        detach_nodriver_target_handlers(_browser)
         try:
             from nodriver import cdp
 
@@ -249,9 +258,30 @@ async def parse_cards(tab: uc.Tab) -> list[dict]:
         return []
 
 
+async def human_pause(low: float, high: float) -> None:
+    """拟人化停顿（2026-10-15 三平台封号复盘）：高斯钟形分布，截断进
+    [low, high]。均匀分布的"随机"延迟同样是机器签名（调研依据见猎聘
+    driver.human_pause 注释：JobPilot「Human Actor」技术文）。
+    """
+    mid = (low + high) / 2.0
+    sigma = max((high - low) / 4.0, 0.05)
+    await asyncio.sleep(min(high, max(low, random.gauss(mid, sigma))))
+
+
 async def goto_search(tab: uc.Tab, keyword: str) -> list[dict]:
     await tab.get(SEARCH_TMPL.format(kw=quote(keyword)))
-    await asyncio.sleep(8)
+    # 拟人化浏览（2026-10-15 封号复盘）：加载后扫一眼 + 滚动看几条再解析
+    # （固定 sleep(8) 是机器签名；滚动顺带触发懒加载多抓卡片）。
+    await human_pause(4.0, 8.0)
+    for _ in range(random.randint(1, 2)):
+        try:
+            await tab.evaluate(
+                "window.scrollBy({top: 400 + Math.floor(Math.random()*500),"
+                " behavior: 'smooth'})"
+            )
+        except Exception:  # noqa: BLE001 — 滚动失败不影响主流程
+            pass
+        await human_pause(1.5, 4.0)
     return await parse_cards(tab)
 
 
@@ -296,7 +326,8 @@ async def next_page(tab: uc.Tab) -> bool:
     except (json.JSONDecodeError, TypeError):
         return False
     if ok:
-        await asyncio.sleep(5)  # 等列表刷新
+        # 拟人化：等列表刷新的间隔从固定 5s 改高斯 4~9s（机器签名消除）
+        await human_pause(4.0, 9.0)
     return ok
 
 

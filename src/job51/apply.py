@@ -84,6 +84,21 @@ def _is_computer_title(title: str) -> bool:
     return any(_kw_hit(low, p) for p in COMPUTER_TITLE_PATTERNS)
 
 
+def _sample_keywords(keywords: list[str], low: int = 3, high: int = 5) -> list[str]:
+    """每轮随机抽 low~high 个关键词（2026-10-15 三平台封号复盘统一策略）。
+
+    与猎聘同款：一轮多词连搜是"搜索风暴"访问画像。词数 ≤ high 全跑
+    （零回归）；前 2 个（用户主词）必带；其余随机补齐——多轮自然覆盖。
+    """
+    if len(keywords) <= high:
+        return list(keywords)
+    take = random.randint(low, high)
+    head = keywords[:2]
+    rest = [k for k in keywords[2:] if k not in head]
+    need = max(0, take - len(head))
+    return head + random.sample(rest, min(need, len(rest)))
+
+
 def _log(msg: str) -> None:
     print(msg, flush=True)
 
@@ -109,7 +124,18 @@ def _delay_range() -> tuple[float, float]:
     return clamp_delay_range(value_min, value_max, JOB51_DELAY_RANGE_SECONDS)
 
 
-async def run(keywords: list[str], daily_limit: int, tab=None) -> int:
+async def run(
+    keywords: list[str],
+    daily_limit: int,
+    tab=None,
+    run_max: int | None = None,
+) -> int:
+    """跑一轮投递，返回本轮新发送条数。
+
+    ``run_max``（2026-10-15 新号保护模式）：本轮新发送数达到即停——
+    三时段配额切分的「单轮份额」。None = 不限（旧行为）。日累计上限
+    仍由 daily_limit + sent log 跨轮累计兜底。
+    """
     sent_ids = sent_job_ids(SENT_LOG)
     # 局部集合必须改名：曾用 sent_companies 同名遮蔽导入的 ledger 函数，
     # Python 把整个函数作用域内的 sent_companies 当局部变量 → 首行
@@ -144,10 +170,20 @@ async def run(keywords: list[str], daily_limit: int, tab=None) -> int:
             return -1
 
     sent_this_run = 0
+    # 关键词抽样（2026-10-15 三平台封号复盘统一策略，与猎聘同款）
+    keywords = _sample_keywords(keywords)
+    _log(f"[job51] 本轮关键词（拟人化抽样后）：{keywords}")
+    # 拟人化批次休息：每连投 5~8 个（随机）休 3~8 分钟（与猎聘同款，
+    # 调研依据见猎聘 apply.py 注释：影刀 RPA 实测 + Apply4Me 清单）。
+    sends_since_break = 0
+    break_after = random.randint(5, 8)
 
     for kw in keywords:
         if sent_today >= daily_limit:
             _log(f"[job51] 今日已投 {sent_today}，达到上限 {daily_limit}")
+            break
+        if run_max is not None and sent_this_run >= run_max:
+            _log(f"[job51] 本轮已达单轮保护上限 {run_max}，停（今日累计 {sent_today}）")
             break
 
         await driver.goto_search(tab, kw)
@@ -158,6 +194,8 @@ async def run(keywords: list[str], daily_limit: int, tab=None) -> int:
 
             for card in cards:
                 if sent_today >= daily_limit:
+                    break
+                if run_max is not None and sent_this_run >= run_max:
                     break
                 job_id = card.get("jobId") or ""
                 title = card.get("title") or ""
@@ -249,10 +287,18 @@ async def run(keywords: list[str], daily_limit: int, tab=None) -> int:
                     sent=sent_today,
                 )
                 _log(f"[job51] ✅ 已投递 #{sent_today}：{title} @ {company} [{salary} | {location}]")
-                # 拟人化节奏：用户在 GUI 设置的分平台档位（钳制进安全区间），
-                # 不再硬编码 40~80s 无视配置
+                # 拟人化节奏：用户在 GUI 设置的分平台档位（钳制进安全区间）。
+                # 2026-10-15 封号复盘：均匀分布改高斯钟形分布（driver.human_pause）。
                 delay_min, delay_max = _delay_range()
-                await asyncio.sleep(random.uniform(delay_min, delay_max))
+                await driver.human_pause(delay_min, delay_max)
+                # 批次休息：连投 break_after 个后歇 3~8 分钟（见上方注释）
+                sends_since_break += 1
+                if sends_since_break >= break_after:
+                    rest = random.uniform(180, 480)
+                    _log(f"[job51] ⏸️ 拟人化休息 {int(rest)}s（已连投 {sends_since_break} 个，模拟真人歇一会儿再继续）")
+                    await asyncio.sleep(rest)
+                    sends_since_break = 0
+                    break_after = random.randint(5, 8)
 
             if sent_today >= daily_limit:
                 break
@@ -261,7 +307,9 @@ async def run(keywords: list[str], daily_limit: int, tab=None) -> int:
                 break
             page += 1
 
-        await asyncio.sleep(random.uniform(15, 30))
+        # 关键词之间稍停：旧 15~30s 匀速换词太快（与猎聘同款复盘），
+        # 上浮到 40~100s 高斯停顿，只慢不快。
+        await driver.human_pause(40.0, 100.0)
 
     _log(f"[job51] 本轮结束：新投递 {sent_this_run}，今日累计 {sent_today}")
     events.emit(
@@ -278,7 +326,12 @@ def main() -> int:
     import nodriver as uc
 
     limit = int(os.environ.get("JOB51_DAILY_LIMIT", str(DEFAULT_DAILY_LIMITS["job51"])))
-    result = uc.loop().run_until_complete(run(DEFAULT_KEYWORDS, limit))
+    # 单轮上限（2026-10-15 用户拍板"一次巡航投多少就停"）：保护模式注入的
+    # 份额优先，未注入时回退保守默认 10（platforms/limits.py 单一真相）。
+    from boss_zhipin.platforms.limits import env_run_max
+
+    run_max = env_run_max("JOB51_RUN_MAX", "job51")
+    result = uc.loop().run_until_complete(run(DEFAULT_KEYWORDS, limit, run_max=run_max))
     return 0 if result >= 0 else 1
 
 

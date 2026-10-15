@@ -196,6 +196,71 @@ def _build_city_url(current_url: str, cities: list[str]) -> tuple[str, list[str]
     return urlunsplit(parts._replace(query=urlencode(params))), unknown
 
 
+def _build_keyword_url(current_url: str, keyword: str) -> str:
+    """把 query 参数整体替换为新岗位词，其余参数（city/degree/ka…）原样保留。
+
+    与 ``_build_city_url`` 同款 URL 手术（真·换词：无叠加残留）。
+    urlencode 会负责关键词的百分号编码，不要预先 quote（会双重编码）。
+    """
+    from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+    parts = urlsplit(current_url or "")
+    params = [
+        (key, value)
+        for key, value in parse_qsl(parts.query, keep_blank_values=True)
+        if key != "query"
+    ]
+    params.append(("query", keyword or ""))
+    return urlunsplit(parts._replace(query=urlencode(params)))
+
+
+async def rotate_to_keyword(
+    keyword: str,
+    emit_event: Callable[[dict], None] | None = None,
+) -> bool:
+    """岗位关键词轮换（2026-10-15 多岗位 Phase 2）：URL 的 query 参数直填导航。
+
+    与 ``apply_city_url_filter`` 同机制：换词基准必须是搜索页（不在时回退
+    到记录的搜索页 URL）；导航 + 等稳定 + 更新基准。城市等其余筛选参数
+    原样保留。失败返回 False（调用方降级：跳过该词或转入城市推进）。
+    """
+    from boss_zhipin.website_oper import finding_jobs
+
+    tab = finding_jobs._tab
+    kw = (keyword or "").strip()
+    if tab is None or not kw:
+        return False
+    current_url = finding_jobs.get_current_url()
+    if "/web/geek/jobs" not in current_url:
+        saved = str(_city_rotation_state.get("search_url") or "")
+        if "/web/geek/jobs" in saved:
+            current_url = saved
+            log.info("当前不在搜索页，用记录的搜索页 URL 作为换词基准：%s", saved)
+        else:
+            return False
+    new_url = _build_keyword_url(current_url, kw)
+    if new_url == current_url:
+        return True
+    try:
+        await asyncio.wait_for(tab.get(new_url), timeout=20)
+    except Exception as e:  # noqa: BLE001
+        log.warning("关键词轮换导航失败：%s（%s）", new_url, e)
+        return False
+    await finding_jobs._wait_url_stable(stable_for=1.5, timeout=20)
+    _city_rotation_state["search_url"] = new_url
+    log.info("[关键词轮换] 已切换岗位搜索词：%s", kw)
+    if emit_event:
+        emit_event(
+            {
+                "group": "keyword_rotation",
+                "keyword": kw,
+                "status": "rotated",
+                "message": f"岗位关键词轮换：切换到「{kw}」继续投递",
+            }
+        )
+    return True
+
+
 async def apply_city_url_filter(cities: list[str]) -> bool:
     """URL 直填城市筛选并导航（2026-10-12 重写：替代 DOM 点击）。
 

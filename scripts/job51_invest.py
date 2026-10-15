@@ -13,6 +13,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SENT_LOG = ROOT / "logs" / "job51_sent.jsonl"
 DAILY_LIMIT = int(os.environ.get("JOB51_DAILY_LIMIT", "40"))
+# 新号保护模式的单轮份额（2026-10-15）：0/未设 = 不限（旧行为）。
+# apply.py 循环内部有同一道闸，这里是看门狗层的总量闸。
+RUN_MAX = int(os.environ.get("JOB51_RUN_MAX", "0") or 0)
 MAX_ROUNDS = 12
 MAX_IDLE_ROUNDS = 3
 
@@ -43,11 +46,19 @@ def main() -> None:
     env["JOB51_DAILY_LIMIT"] = str(DAILY_LIMIT)
     rounds = 0
     idle = 0
+    # 单轮份额的总量闸基线：本次看门狗启动前已投数（份额只约束本次）
+    baseline = _today_sent()
 
     while True:
         today = _today_sent()
         if today >= DAILY_LIMIT:
             print(f"[{_stamp()}] 前程无忧今日已投 {today}/{DAILY_LIMIT}，达上限，退出。")
+            return
+        if RUN_MAX > 0 and today - baseline >= RUN_MAX:
+            print(
+                f"[{_stamp()}] 前程无忧本次巡航已达单轮保护上限 {RUN_MAX}"
+                f"（本轮新增 {today - baseline}），退出。"
+            )
             return
         rounds += 1
         if rounds > MAX_ROUNDS:

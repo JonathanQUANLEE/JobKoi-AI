@@ -40,7 +40,7 @@ interface MistSettingsModalProps {
   setJob51DelayMax?: (val: string) => void;
   greeting?: string;
   setGreeting?: (val: string) => void;
-  onSaveConfig?: () => Promise<void>;
+  onSaveConfig?: () => Promise<boolean>;
 }
 
 export default function MistSettingsModal({
@@ -87,10 +87,10 @@ export default function MistSettingsModal({
   const [localJob51DelayMax, setLocalJob51DelayMax] = useState(String(job51DelayMax ?? ""));
   const [localGreeting, setLocalGreeting] = useState(greeting);
 
-  // 大模型设置状态
-  const [baseUrl, setBaseUrl] = useState(llmConfig?.base_url || "https://openrouter.ai/api/v1");
+  // 大模型设置状态（V0.4：默认智谱 GLM-4-Flash，OpenRouter 作为第二推荐可切换）
+  const [baseUrl, setBaseUrl] = useState(llmConfig?.base_url || "https://open.bigmodel.cn/api/paas/v4");
   const [apiKey, setApiKey] = useState(llmConfig?.api_key || "");
-  const [model, setModel] = useState(llmConfig?.model || "nvidia/nemotron-3.5-lightning:free");
+  const [model, setModel] = useState(llmConfig?.model || "glm-4-flash");
   const [testingModel, setTestingModel] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
@@ -115,9 +115,9 @@ export default function MistSettingsModal({
     setLocalJob51DelayMax(String(job51DelayMax ?? ""));
     setLocalGreeting(greeting);
     if (llmConfig) {
-      setBaseUrl(llmConfig.base_url || "https://openrouter.ai/api/v1");
+      setBaseUrl(llmConfig.base_url || "https://open.bigmodel.cn/api/paas/v4");
       setApiKey(llmConfig.api_key || "");
-      setModel(llmConfig.model || "nvidia/nemotron-3.5-lightning:free");
+      setModel(llmConfig.model || "glm-4-flash");
     }
   }, [rule, dailyLimit, delayMin, delayMax, liepinDelayMin, liepinDelayMax, job51DelayMin, job51DelayMax, greeting, llmConfig]);
 
@@ -169,17 +169,22 @@ export default function MistSettingsModal({
   const handleSaveModel = async () => {
     try {
       const res = await ipc.saveLLMConfig(baseUrl.trim(), apiKey.trim(), model.trim());
-      if (res.status === "ok") {
+      // 后端 save_llm_config 成功返回 status="saved"（出错抛异常走 catch）。
+      // 老代码判 "ok" 永远不成立且无 else → 点"保存配置"毫无反应，
+      // 用户实测"没办法保存"的根因（2026-10-14 修复；保留 "ok" 双兼容）。
+      if (res.status === "saved" || res.status === "ok") {
         setLLMConfig({
           base_url: baseUrl.trim(),
           api_key: res.api_key || apiKey.trim(),
           model: model.trim(),
-          configured: true,
+          configured: res.configured ?? true,
           presets: llmConfig?.presets || [],
         });
         useRunStore.getState().showCenterToast("模型配置已保存", { tone: "success" });
         notify({ type: "success", text: "AI 大模型配置保存成功" });
         onClose();
+      } else {
+        notify({ type: "error", text: `保存失败: ${res.status}` });
       }
     } catch (err) {
       notify({ type: "error", text: `保存失败: ${String(err)}` });
@@ -309,6 +314,7 @@ export default function MistSettingsModal({
             setApiKey={setApiKey}
             model={model}
             setModel={setModel}
+            presets={llmConfig?.presets || []}
             testingModel={testingModel}
             testResult={testResult}
             onTestModel={handleTestModel}

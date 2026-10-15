@@ -109,6 +109,7 @@ from boss_zhipin.website_oper.core.page_filter_ctrl import (
     extract_boss_active_status,
     get_platform_city_chunks,
     rotate_next_city_batch,
+    rotate_to_keyword,
     select_dropdown_option,
 )
 
@@ -201,6 +202,7 @@ __all__ = [
     "reload_current_page",
     "return_to_job_list",
     "rotate_next_city_batch",
+    "rotate_to_keyword",
     "scroll_to_load_more_jobs",
     "select_dropdown_option",
     "send_chat_message",

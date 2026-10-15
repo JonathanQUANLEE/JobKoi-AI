@@ -1,15 +1,21 @@
+import { useRunStore } from "../../../store";
+
 interface AboutTabProps {
   isMonochrome: boolean;
+  /** 点击"再次引导"后顺手关掉设置弹窗，让欢迎卡立刻出现。 */
+  onClose?: () => void;
 }
 
-export default function AboutTab({ isMonochrome }: AboutTabProps) {
+export default function AboutTab({ isMonochrome, onClose }: AboutTabProps) {
+  const requestTourReset = useRunStore((s) => s.requestTourReset);
+
   return (
     <div className="space-y-4">
       <div className="p-4 rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] flex items-center gap-3.5">
         <img src="/favicon.png" alt="Logo" className="size-10 rounded-xl border border-pink-400/30" />
         <div>
           <div className="font-bold text-sm text-stone-100">JobKoi-AI · 全智能求职锦鲤助手</div>
-          <div className="text-[11px] text-stone-400 mt-0.5">全平台智能巡航 · Offer 尊享版 v0.2.0</div>
+          <div className="text-[11px] text-stone-400 mt-0.5">全平台智能巡航 · Offer 尊享版 v0.4.0</div>
         </div>
       </div>
 
@@ -20,13 +26,27 @@ export default function AboutTab({ isMonochrome }: AboutTabProps) {
 
       <div className="pt-3 border-t border-[var(--grid)] flex items-center justify-between text-[11px] text-stone-500">
         <span>© 2026 JobKoi-AI (JonathanQUANLEE). 保留所有权利。</span>
-        <button
-          type="button"
-          onClick={() => alert("当前已是最新版本 v0.2.0")}
-          className={`hover:underline cursor-pointer ${isMonochrome ? "text-zinc-300 hover:text-white" : "text-amber-400"}`}
-        >
-          检查更新
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              // 再次引导（2026-10-14 用户需求）：重置当前账号的引导状态，
+              // 关掉设置弹窗后欢迎卡立即出现，可完整重走一遍三步流程。
+              requestTourReset();
+              onClose?.();
+            }}
+            className={`hover:underline cursor-pointer ${isMonochrome ? "text-zinc-300 hover:text-white" : "text-amber-400"}`}
+          >
+            再次走一遍新手引导
+          </button>
+          <button
+            type="button"
+            onClick={() => alert("当前已是最新版本 v0.4.0")}
+            className={`hover:underline cursor-pointer ${isMonochrome ? "text-zinc-300 hover:text-white" : "text-amber-400"}`}
+          >
+            检查更新
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -14,11 +14,42 @@ P2（2026-10）统一于此。用户可经 profile YAML（daily_sent_limit）或
 """
 from __future__ import annotations
 
+import os
+
 DEFAULT_DAILY_LIMITS: dict[str, int] = {
-    "boss": 150,  # 用户要求：BOSS 每日 150 份（与 profiles/0my.yml 的 daily_sent_limit 一致）
-    "liepin": 100,
+    # BOSS 150→100（2026-10-15 用户拍板"宁可慢点也不想被封号"）：调研实证
+    # BOSS 主动沟通上限就是 100/天（企业 VIP 权益 200 砍到 100、求职侧
+    # 同为 100）——超 100 后要么静默限流要么直接计风险分。
+    "boss": 100,
+    # 猎聘 100→50（2026-10-15 封号复盘用户拍板）：调研结论（JobPilot/
+    # Apply4Me）自动化投递的安全量级是 20~50/天，100 偏激进；且该账号
+    # 已因"异常访问行为"吃过 2h 临时封禁。用户可在画像/GUI 覆盖。
+    "liepin": 50,
     "job51": 40,
 }
+
+# 单轮巡航上限默认（2026-10-15 用户拍板"一次开启巡航之后各平台投多少
+# 就停止，宁可慢点也不想被封号"）：单轮少投、多轮分摊，把一轮巡航的
+# 访问/发送节奏压回真人"一次坐下来投几份"的水平。env（新号保护模式
+# 注入的更小份额）永远优先；BOSS 单轮上限走既有 BOSS_AUTO_SEND_MAX_SENT
+# 链路（GUI「拟人风控与策略」max_sent 可调），不在此重复定义。
+DEFAULT_RUN_MAX_LIMITS: dict[str, int] = {
+    "liepin": 15,
+    "job51": 10,
+}
+
+
+def env_run_max(env_name: str, platform: str) -> int | None:
+    """读单轮上限 env；未设/非法时回退保守默认（liepin 15 / job51 10）。
+
+    保护模式显式注入的更小份额（如 5）经 env 读到后原样返回、永远优先；
+    正常巡航未注入时也不再无限投（旧 None=不限），到默认份额即停。
+    """
+    raw = os.getenv(env_name, "").strip()
+    if raw.isdigit() and int(raw) > 0:
+        return int(raw)
+    return DEFAULT_RUN_MAX_LIMITS.get(platform)
+
 
 # BOSS 拟人化节流安全区间（用户 2026-10-12 拍板，供用户在此范围内选档）：
 # - 下限 15s：同类自动化工具公开文档中最保守的明确建议（影刀 RPA 智能招聘

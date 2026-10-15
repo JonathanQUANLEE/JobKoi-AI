@@ -29,6 +29,8 @@ interface DashboardModalLayerProps {
   setMistModalType: (type: MistModalType) => void;
   botRuntime: ReturnType<typeof useJobBotRuntime>;
   sidebarCollapsed: boolean;
+  /** 宠物首次被用户按下：Dashboard 用它触发"宠物管家"介绍卡。 */
+  onPetFirstInteract?: () => void;
 }
 
 export default function DashboardModalLayer({
@@ -49,6 +51,7 @@ export default function DashboardModalLayer({
   setMistModalType,
   botRuntime,
   sidebarCollapsed,
+  onPetFirstInteract,
 }: DashboardModalLayerProps) {
   return (
     <>
@@ -173,6 +176,7 @@ export default function DashboardModalLayer({
         }}
         lang={lang}
         sidebarCollapsed={sidebarCollapsed}
+        onFirstInteract={onPetFirstInteract}
       />
     </>
   );

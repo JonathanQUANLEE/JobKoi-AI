@@ -50,6 +50,15 @@ def _install_common_stubs(monkeypatch, pages: dict[int, list]) -> list[tuple[str
         return None
 
     monkeypatch.setattr(search_api_flow.asyncio, "sleep", fast_sleep)
+
+    # 页间/词间/城间隔 2026-10-15 起走 human_pause → sleep_with_browser_guard
+    # （带站岗）：必须接管，否则测试真睡 + 假 browser 触发"浏览器已关闭"误抛。
+    from boss_zhipin.website_oper.core import browser_session
+
+    async def fast_guard_sleep(_s, _chunk: float = 2.0):
+        return None
+
+    monkeypatch.setattr(browser_session, "sleep_with_browser_guard", fast_guard_sleep)
     return collected
 
 
@@ -129,6 +138,8 @@ def test_api_flow_summary_reports_api_error(monkeypatch):
     2026-10-13 行为更新：code=37 会先冷却 45s 重试一次（本测试 stub 成
     秒过），重试仍失败才优雅结束——因此 api_flow_error 有两条（冷却提示
     + 最终失败），停机原因与汇总人话不变。
+    2026-10-15 行为更新：冷却改为 90s 带站岗 + 重试前 Page.reload 重建风控
+    令牌——测试里同样 stub 成秒过/noop，断言不变。
     """
     collected: list[tuple[str, dict]] = []
 
@@ -147,6 +158,20 @@ def test_api_flow_summary_reports_api_error(monkeypatch):
     monkeypatch.setattr(search_api_flow, "_profile_filters", lambda: {})
     monkeypatch.setattr(search_api_flow, "_sent_today_count", lambda path, profile: 0)
     monkeypatch.setattr(search_api_flow.asyncio, "sleep", fast_sleep)
+
+    # code=37 自愈路径（2026-10-15）：站岗冷却/页面刷新都定义在
+    # browser_session、由流程懒加载——stub 掉，避免真站岗在假 browser
+    # 环境里误抛"浏览器已关闭"。
+    from boss_zhipin.website_oper.core import browser_session
+
+    async def fast_guard_sleep(_seconds, chunk: float = 2.0):
+        return None
+
+    async def noop_reload():
+        return True
+
+    monkeypatch.setattr(browser_session, "sleep_with_browser_guard", fast_guard_sleep)
+    monkeypatch.setattr(browser_session, "reload_current_page", noop_reload)
 
     _run_flow()
 

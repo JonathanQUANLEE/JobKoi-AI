@@ -77,6 +77,27 @@ class TestGetStartUrl:
         monkeypatch.setenv("BOSS_START_URL", "https://example.test/jobs?city=101280600")
         assert main.get_start_url() == "https://example.test/jobs?city=101280600"
 
+    def test_label_builds_search_url(self, monkeypatch):
+        monkeypatch.delenv("BOSS_START_URL", raising=False)
+        monkeypatch.setenv("BOSS_LABEL", "AI agent 实习")
+        assert main.get_start_url() == (
+            "https://www.zhipin.com/web/geek/jobs?query=AI%20agent%20%E5%AE%9E%E4%B9%A0"
+        )
+
+    def test_multi_keyword_label_uses_first_keyword(self, monkeypatch):
+        """多岗位输入只取第一个词构造搜索 URL（2026-10-15 修复）。
+
+        旧逻辑把 "AI应用工程师, AI agent实习," 整串塞进 query 参数，
+        BOSS 按全文匹配搜出的岗位与画像完全无关。
+        """
+        from urllib.parse import quote
+
+        monkeypatch.delenv("BOSS_START_URL", raising=False)
+        monkeypatch.setenv("BOSS_LABEL", "AI应用工程师, AI agent实习,")
+        assert main.get_start_url() == (
+            f"https://www.zhipin.com/web/geek/jobs?query={quote('AI应用工程师')}"
+        )
+
 
 class TestCliArgs:
     def test_parse_args_accepts_profile(self):

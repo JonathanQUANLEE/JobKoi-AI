@@ -15,6 +15,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 import re
 from pathlib import Path
 from typing import Any
@@ -138,6 +139,14 @@ async def shutdown() -> None:
     """
     global _browser, _tab
     if _browser is not None:
+        # 先摘 nodriver 的 target 事件监听（2026-10-15）：避免 close 引发的
+        # TargetDestroyed 事件风暴派生 update_targets 重连任务，对着已死端口
+        # 刷 WinError 1225 红字（机制详见 browser_session 的 helper 注释）。
+        from boss_zhipin.website_oper.core.browser_session import (
+            detach_nodriver_target_handlers,
+        )
+
+        detach_nodriver_target_handlers(_browser)
         try:
             from nodriver import cdp
 
@@ -294,9 +303,70 @@ async def parse_cards(tab: uc.Tab) -> list[dict]:
         return []
 
 
+class LiepinBannedError(RuntimeError):
+    """猎聘账号被临时封禁（「账号行为异常」页，2026-10-15 用户实测约 2 小时自动解锁）。"""
+
+
+# 封禁页正文特征（截图中的人话原文，任一命中即判）
+_BAN_PAGE_KEYWORDS = ("账号行为异常", "异常访问行为", "暂时禁止访问")
+
+
+async def _check_ban_page(tab: uc.Tab) -> bool:
+    """检测「账号行为异常」封禁页（2026-10-15 封号复盘）。
+
+    该页会顶掉搜索/详情内容——不识别的话整轮巡航静默空转（每词 0 岗位），
+    用户还以为没岗位了。
+    """
+    try:
+        txt = await asyncio.wait_for(
+            tab.evaluate(
+                "(document.body && document.body.innerText || '').slice(0, 2000)"
+            ),
+            timeout=5,
+        )
+    except Exception:  # noqa: BLE001
+        return False
+    if not isinstance(txt, str):
+        return False
+    return any(k in txt for k in _BAN_PAGE_KEYWORDS)
+
+
+async def human_pause(low: float, high: float) -> None:
+    """拟人化停顿：高斯钟形分布（截断进 [low, high]），替代均匀 random.uniform。
+
+    2026-10-15 网络调研（JobPilot「Human Actor」技术文）：平台风控不止看
+    间隔长短，还看间隔的**分布形状**——真人的动作间隔服从钟形（高斯）
+    分布，均匀分布的"随机"延迟同样是机器签名。取区间中点为均值、
+    1/4 区间宽为标准差，越界截断回区间（不影响"只慢不快"红线）。
+    """
+    mid = (low + high) / 2.0
+    sigma = max((high - low) / 4.0, 0.05)
+    value = random.gauss(mid, sigma)
+    await asyncio.sleep(min(high, max(low, value)))
+
+
 async def goto_search(tab: uc.Tab, keyword: str) -> list[dict]:
-    await tab.get(SEARCH_TMPL.format(kw=__import__("urllib.parse", fromlist=["quote"]).quote(keyword)))
-    await asyncio.sleep(6)
+    from urllib.parse import quote
+
+    await tab.get(SEARCH_TMPL.format(kw=quote(keyword)))
+    # 封禁页检测：第一时间识别并叫停（抛 LiepinBannedError 由 apply 层
+    # 转成用户可见事件 + 安全停止），不再静默空转整轮。
+    if await _check_ban_page(tab):
+        raise LiepinBannedError("猎聘「账号行为异常」临时封禁页（通常约 2 小时自动解锁）")
+    # 拟人化浏览（2026-10-15 调研：人类的搜索页行为是 加载→扫一眼→滚动
+    # 看几条→再行动；机器是加载完立即批量抽 DOM，Session Behavior 是
+    # 六大检测维度之一）。固定 sleep(6) 是机器签名，改高斯停顿；滚动
+    # 顺带触发懒加载，能多抓首屏以下的卡片。
+    await human_pause(3.5, 7.0)
+    for _ in range(random.randint(1, 2)):
+        try:
+            await tab.evaluate(
+                "window.scrollBy({top: 400 + Math.floor(Math.random()*500),"
+                " behavior: 'smooth'})"
+            )
+        except Exception:  # noqa: BLE001 — 滚动失败不影响主流程
+            pass
+        await human_pause(1.5, 4.0)
     return await parse_cards(tab)
 
 
@@ -309,9 +379,34 @@ def _greeting_text() -> str:
     return "对这个职位很感兴趣，希望可以详聊"
 
 
+def pick_greeting(fallback: str = "") -> str:
+    """每个岗位随机挑一条招呼语（2026-10-15 封号复盘用户拍板）。
+
+    模板池 ``greetings/liepin-greetings-pool.txt`` 优先（一行一条，可由
+    用户自行编辑替换）：同一句固定招呼语连发几百次是最明显的内容指纹。
+    池不存在/为空时退回 fallback（调用方传入的默认招呼语，行为同旧）。
+    """
+    pool = ROOT / "greetings" / "liepin-greetings-pool.txt"
+    try:
+        lines = [
+            ln.strip()
+            for ln in pool.read_text(encoding="utf-8").splitlines()
+            if ln.strip()
+        ]
+    except OSError:
+        lines = []
+    if lines:
+        return random.choice(lines)
+    return fallback
+
+
 async def open_detail(tab: uc.Tab, href: str) -> None:
     await tab.get(href)
-    await asyncio.sleep(5)
+    # 拟人化"阅读"停顿（2026-10-15 调研：JobPilot——人类在新页面上行动前
+    # 有 reading pause；ApplyGoat——人扫一个岗 30s、细读 3min）。旧固定
+    # sleep(5) 秒开秒关详情页，是"高频访问"画像的直接来源（本次封禁
+    # 正是"异常**访问**行为"而非打招呼超限）。
+    await human_pause(8.0, 20.0)
 
 
 async def detail_company(tab: uc.Tab) -> str:
@@ -356,22 +451,65 @@ async def _check_limit_alert(tab: uc.Tab) -> bool:
     return match_limit_alert("liepin", txt) is not None
 
 
-async def click_chat_and_send(tab: uc.Tab, greeting: str) -> str:
-    """点详情页"聊一聊"，在 IM 输入框里发招呼语。
+def _message_sending_disabled() -> bool:
+    """只点"聊一聊"，禁止再手动发消息（2026-10-15 用户实测拍板，默认开）。
 
-    返回 "sent" / "limit"（平台今日上限） / "captcha"（触发风控，应立即停止） / "failed: 原因" / "already"。
+    用户在页面上实测发现：点击"聊一聊"后**猎聘已自动给 HR 发了一段
+    默认招呼**——再手打一条属于双重消息，既多余又极易被风控识别。
+    与 BOSS 的 BOSS_CLICK_ONLY 同款机制；LIEPIN_CLICK_ONLY=0 可恢复
+    手发（不建议，仅为紧急回退保留）。
     """
-    # 0. 先查是不是风控验证页（找不到按钮多半是因为被验证码顶掉了）
+    return os.getenv("LIEPIN_CLICK_ONLY", "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+    )
+
+
+async def _type_human(box, text: str) -> None:
+    """逐字符拟人输入：60~150ms/字符，标点/空格处长停顿。
+
+    2026-10-15 调研（JobPilot）：人类打字 100-200ms/字符且节奏有起伏；
+    整串 send_keys 是"粘贴级"速度，IM 输入框的 typing 事件上报后指纹
+    明显。逐字符失败时兜底回整串输入——拟人化绝不能以发送失败为代价
+    （异常向上抛由 click_chat 捕获，岗位安全跳过、不发错话）。
+    仅在 LIEPIN_CLICK_ONLY=0 的手发模式下使用。
+    """
+    try:
+        for ch in text:
+            await box.send_keys(ch)
+            if ch in "，。！？；、,.!?; ":
+                await asyncio.sleep(random.uniform(0.25, 0.6))
+            else:
+                await asyncio.sleep(random.uniform(0.06, 0.15))
+    except Exception as e:  # noqa: BLE001
+        log.warning("逐字符输入失败，回退整串输入：%s", e)
+        await box.send_keys(text)
+
+
+async def click_chat(tab: uc.Tab, greeting: str = "") -> str:
+    """点详情页"聊一聊"建立对话（平台会自动给 HR 发默认招呼）。
+
+    2026-10-15 用户实测拍板：点击"聊一聊"后猎聘已自动发一段招呼给 HR，
+    再手打一条属于双重消息、极易被检测封号——默认**只点击不手发**
+    （_message_sending_disabled，与 BOSS_CLICK_ONLY 同款）。
+
+    返回 "sent"（对话已建立，平台默认招呼已发出）/ "limit"（平台今日
+    上限）/ "captcha" / "banned"（封禁页）/ "failed: 原因"。
+    """
+    # 0. 先查是不是封禁页/风控验证页（找不到按钮多半是因为被它们顶掉了）
+    if await _check_ban_page(tab):
+        return "banned"
     if await _check_captcha(tab):
         return "captcha"
 
-    # 1. 点"聊一聊"主按钮
+    # 1. 点"聊一聊"主按钮（这一下就完成打招呼——平台自动发默认话术）
     try:
         btn = await tab.find("聊一聊", best_match=True, timeout=10)
         if not btn:
             return "captcha" if await _check_captcha(tab) else "failed: 找不到聊一聊按钮"
         await btn.click()
-        await asyncio.sleep(3)
+        await human_pause(2.0, 4.0)
     except Exception as e:  # noqa: BLE001
         return f"failed: 点聊一聊异常 {e}"
 
@@ -379,7 +517,12 @@ async def click_chat_and_send(tab: uc.Tab, greeting: str) -> str:
     if await _check_limit_alert(tab):
         return "limit"
 
-    # 2. 找输入框，填招呼语
+    # 2. 默认路径：只点击（平台已自动发默认招呼），等对话稳定即完成
+    if _message_sending_disabled():
+        await human_pause(1.0, 2.0)
+        return "sent"
+
+    # 3.（紧急回退：LIEPIN_CLICK_ONLY=0）手发模式——找输入框逐字符输入
     try:
         box = await tab.find("请输入文字", best_match=True, timeout=10)
         if not box:
@@ -388,14 +531,13 @@ async def click_chat_and_send(tab: uc.Tab, greeting: str) -> str:
         if not box:
             return "captcha" if await _check_captcha(tab) else "failed: 找不到聊天输入框"
         await box.click()
-        await asyncio.sleep(1)
-        # nodriver 输入：send_keys
-        await box.send_keys(greeting)
-        await asyncio.sleep(1)
+        await human_pause(0.4, 1.0)
+        await _type_human(box, greeting)
+        await human_pause(0.5, 1.2)
     except Exception as e:  # noqa: BLE001
         return f"failed: 输入招呼语异常 {e}"
 
-    # 3. 点"发送"按钮
+    # 4.（手发模式）点"发送"按钮
     try:
         send = await tab.find("发送", best_match=True, timeout=8)
         if not send:
@@ -403,11 +545,11 @@ async def click_chat_and_send(tab: uc.Tab, greeting: str) -> str:
         if not send:
             return "failed: 找不到发送按钮"
         await send.click()
-        await asyncio.sleep(2)
+        await human_pause(1.5, 3.0)
     except Exception as e:  # noqa: BLE001
         return f"failed: 点发送异常 {e}"
 
-    # 3.5 发送后二次检查平台限额提示（防止某些版本在点击发送后才弹限额气泡）
+    # 4.5（手发模式）发送后二次检查平台限额提示（防止点击发送后才弹限额气泡）
     if await _check_limit_alert(tab):
         return "limit"
 

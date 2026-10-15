@@ -139,7 +139,7 @@ def test_liepin_company_dedup_survives_shadow_fix(isolated_ledger_logs, monkeypa
 
     sent_titles: list[str] = []
 
-    async def fake_click_chat_and_send(tab, greeting):
+    async def fake_click_chat(tab, greeting=""):
         sent_titles.append("sent")
         return "sent"
 
@@ -152,7 +152,7 @@ def test_liepin_company_dedup_survives_shadow_fix(isolated_ledger_logs, monkeypa
     monkeypatch.setattr(liepin_driver, "open_browser", fake_open_browser)
     monkeypatch.setattr(liepin_driver, "is_logged_in", fake_is_logged_in)
     monkeypatch.setattr(liepin_driver, "goto_search", fake_goto_search)
-    monkeypatch.setattr(liepin_driver, "click_chat_and_send", fake_click_chat_and_send)
+    monkeypatch.setattr(liepin_driver, "click_chat", fake_click_chat)
     monkeypatch.setattr(liepin_driver, "open_detail", fake_open_detail)
     monkeypatch.setattr(liepin_driver, "detail_company", fake_detail_company)
     # 拟人化 40~80s 节流不能拖慢测试
@@ -197,13 +197,13 @@ def dispatch_recorder(monkeypatch):
     async def fake_run_automation(**kwargs):
         calls["boss"] += 1
 
-    async def fake_liepin_run(kws, limit, greeting):
+    async def fake_liepin_run(kws, limit, greeting, run_max=None):
         calls["liepin"] += 1
         liepin_greetings.append(greeting)
         assert kws, "猎聘关键词不能为空"
         return 0
 
-    async def fake_job51_run(kws, limit):
+    async def fake_job51_run(kws, limit, run_max=None):
         calls["job51"] += 1
         assert kws, "51job 关键词不能为空"
         return 0
@@ -270,13 +270,13 @@ def test_dispatch_injects_user_keyword_first(dispatch_recorder, monkeypatch):
     stub_liepin_run = liepin_apply.run
     stub_job51_run = job51_apply.run
 
-    async def spy_liepin_run(kws, limit, greeting):
+    async def spy_liepin_run(kws, limit, greeting, run_max=None):
         seen_kws.append(list(kws))
-        return await stub_liepin_run(kws, limit, greeting)
+        return await stub_liepin_run(kws, limit, greeting, run_max=run_max)
 
-    async def spy_job51_run(kws, limit):
+    async def spy_job51_run(kws, limit, run_max=None):
         seen_kws.append(list(kws))
-        return await stub_job51_run(kws, limit)
+        return await stub_job51_run(kws, limit, run_max=run_max)
 
     monkeypatch.setattr(liepin_apply, "run", spy_liepin_run)
     monkeypatch.setattr(job51_apply, "run", spy_job51_run)

@@ -54,6 +54,38 @@ async def _start_browser_with_retry(config: Config, attempts: int = 3) -> uc.Bro
     raise last_err
 
 
+def detach_nodriver_target_handlers(browser: uc.Browser | None) -> None:
+    """关浏览器前摘除 nodriver 的 target 事件监听（三平台 shutdown 共用）。
+
+    为什么需要（2026-10-14 用户实测 WinError 1225 刷屏）：CDP
+    ``browser.close()`` 送出后，Chrome 退出时会倾泻一串 TargetDestroyed
+    事件；nodriver 的 ``_handle_target_update`` 对每个事件派生一个
+    fire-and-forget 的 ``update_targets`` 任务，这些任务发现连接已断会
+    自动重连 ws 端口（connection.send → connect），而 Chrome 已死 →
+    ``ConnectionRefusedError: [WinError 1225]`` 连刷数条吓人红字。
+    ``Browser.stop()`` 只断连杀进程，回收不了这些任务。
+
+    唯一干净的解法是在发送 close **之前**把 4 个 target 事件 handler 从
+    ``connection.handlers`` 里 pop 掉：事件照常到达但无人认领（nodriver
+    分发前会查 ``type(event) in self.handlers``，缺 key 直接跳过），
+    任务源头归零。关浏览器后不再需要自动发现新 tab，摘除无副作用。
+    """
+    if browser is None:
+        return
+    try:
+        from nodriver import cdp
+
+        for evt in (
+            cdp.target.TargetInfoChanged,
+            cdp.target.TargetCreated,
+            cdp.target.TargetDestroyed,
+            cdp.target.TargetCrashed,
+        ):
+            browser.connection.handlers.pop(evt, None)
+    except Exception as e:  # noqa: BLE001 — 摘除失败不阻碍正常关闭
+        log.debug("摘除 nodriver target handler 失败（忽略）: %s", e)
+
+
 async def shutdown() -> None:
     """优雅关闭 Chrome 并清空模块级 ``_browser`` / ``_tab``。
 
@@ -66,6 +98,10 @@ async def shutdown() -> None:
     from boss_zhipin.website_oper import finding_jobs
 
     if finding_jobs._browser is not None:
+        # 先摘 nodriver 的 target 事件监听（2026-10-15）：否则下面 close 引发
+        # 的 TargetDestroyed 事件风暴会派生一批 update_targets 重连任务，对着
+        # 已死的端口刷 WinError 1225 红字（机制详见 helper 注释）。
+        detach_nodriver_target_handlers(finding_jobs._browser)
         try:
             from nodriver import cdp
 
@@ -140,6 +176,23 @@ async def sleep_with_browser_guard(seconds: float, chunk: float = 2.0) -> None:
             raise RuntimeError(
                 "浏览器已关闭，本轮巡航中止。可修改画像后重新点「开启巡航」。"
             )
+
+
+async def human_pause(low: float, high: float) -> None:
+    """拟人化停顿（2026-10-15 三平台封号复盘）：高斯钟形分布 + 带站岗。
+
+    调研结论（JobPilot「Human Actor」）：平台风控不止看间隔长短，还看
+    间隔的**分布形状**——真人动作间隔服从钟形（高斯）分布，均匀分布的
+    "随机"延迟同样是机器签名。取区间中点为均值、1/4 区间宽为标准差，
+    越界截断回区间（不影响"只慢不快"红线）。睡眠全程带站岗：用户手关
+    浏览器时 ~2s 内中止，不傻等。
+    """
+    import random as _random
+
+    mid = (low + high) / 2.0
+    sigma = max((high - low) / 4.0, 0.05)
+    seconds = min(high, max(low, _random.gauss(mid, sigma)))
+    await sleep_with_browser_guard(seconds)
 
 
 async def open_browser_with_options(url_target: str, browser: str) -> None:

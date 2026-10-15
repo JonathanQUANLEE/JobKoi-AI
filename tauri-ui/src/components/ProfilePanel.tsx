@@ -23,7 +23,7 @@ interface ProfilePanelProps {
   defaultResumeName: string;
   onGoToResumes: () => void;
   onBackToWorkbench: () => void;
-  onSaveConfig: () => Promise<void>;
+  onSaveConfig: () => Promise<boolean>;
   lang?: Lang;
   busy?: boolean;
 }

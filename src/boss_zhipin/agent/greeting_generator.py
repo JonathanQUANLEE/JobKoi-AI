@@ -16,7 +16,7 @@ import asyncio
 import logging
 from typing import Any
 
-from boss_zhipin.agent.config_io import read_config
+from boss_zhipin.agent.config_io import effective_config
 from boss_zhipin.agent.llm_client import (
     LLMClientError,
     chat_completion_with_retry,
@@ -50,7 +50,8 @@ async def generate_greeting(job_description: str, base_greeting: str) -> dict[st
         {"status": "ok", "greeting": "…"}          # 已过 validate_letter
         {"status": "error", "code": str, "message": str}
     """
-    config = read_config()
+    # V0.4：未配置时回落开箱默认（智谱+公共 Key），新用户开箱即用
+    config = effective_config()
     if not config.is_configured():
         return _error("not_configured", "尚未配置模型（模型设置里填写并保存）")
 

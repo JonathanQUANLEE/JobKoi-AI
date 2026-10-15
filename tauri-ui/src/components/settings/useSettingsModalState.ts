@@ -7,7 +7,7 @@ interface UseSettingsModalStateProps {
   isOpen: boolean;
   initialTab?: SettingsTab;
   onClose: () => void;
-  onSaveConfig: () => Promise<void>;
+  onSaveConfig: () => Promise<boolean>;
 }
 
 export function useSettingsModalState({
@@ -85,11 +85,13 @@ export function useSettingsModalState({
         apiKeyInput.trim(),
         modelInput.trim(),
       );
-      if (res.status === "ok") {
+      // 后端成功返回 status="saved"（出错抛异常走 catch）；老代码只认 "ok"，
+      // 成功时反而弹出"保存提示: saved"误导用户（2026-10-14 修复，双兼容）。
+      if (res.status === "saved" || res.status === "ok") {
         setModelStatusMsg("AI 模型配置已成功保存！");
         setTimeout(() => setModelStatusMsg(null), 3000);
       } else {
-        setModelStatusMsg(`保存提示: ${res.status}`);
+        setModelStatusMsg(`保存失败: ${res.status}`);
       }
     } catch (err) {
       setModelStatusMsg(`保存失败: ${String(err)}`);
