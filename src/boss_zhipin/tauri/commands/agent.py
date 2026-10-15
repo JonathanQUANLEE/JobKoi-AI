@@ -45,10 +45,10 @@ async def agent_chat(body: _AgentChatBody) -> dict:
 @commands.command()
 async def get_llm_config() -> dict:
     """读 LLM 端点配置（api_key 脱敏）+ 免费模型预置列表。"""
-    from boss_zhipin.agent.config_io import mask_key, read_config
+    from boss_zhipin.agent.config_io import mask_key, effective_config
     from boss_zhipin.agent.presets import LLM_PRESETS
 
-    config = read_config()
+    config = effective_config()
     return {
         "base_url": config.base_url,
         "api_key": mask_key(config.api_key),
@@ -63,13 +63,13 @@ async def save_llm_config(body: _SaveLLMConfigBody) -> dict:
     """保存 LLM 端点配置。api_key 提交空串/掩码 = 保留旧值。"""
     from boss_zhipin.agent.config_io import (
         AgentConfig,
+        effective_config,
         mask_key,
         merge_saved_key,
-        read_config,
         write_config,
     )
 
-    existing = read_config()
+    existing = effective_config()
     config = AgentConfig(
         base_url=body.base_url.strip(),
         api_key=merge_saved_key(body.api_key, existing.api_key),

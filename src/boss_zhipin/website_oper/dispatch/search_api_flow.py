@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import random
 import time
 from pathlib import Path
@@ -38,11 +39,22 @@ from boss_zhipin.website_oper.dispatch.history_logger import (
 
 log = logging.getLogger(__name__)
 
-# 每城最多翻多少页（2026-10-12 实测：热门城连续翻 15 页触发 wapi 风控
-# code=37；且热门城会吃光风控额度让后续城市全部饿死——违背用户「每个
-# 城市都投到」的核心诉求）。10 页 = 单城 300 岗的投递面，主动停在风控
-# 线之前，翻完即推进下一城。收紧行为（只慢不快），不碰反爬红线。
+# 每城**每词**最多翻多少页（2026-10-12 实测：热门城连续翻 15 页触发 wapi
+# 风控 code=37；且热门城会吃光风控额度让后续城市全部饿死——违背用户
+# 「每个城市都投到」的核心诉求）。10 页 = 单城单岗位词 300 岗的投递面，
+# 主动停在风控线之前，翻完即推进下一词/下一城。收紧行为（只慢不快），
+# 不碰反爬红线。
 BOSS_MAX_PAGES_PER_CITY = 10
+
+
+def _keyword_from_url(url: str) -> str:
+    """从搜索页 URL 提取用户搜索词（query 参数，已解码）。"""
+    from urllib.parse import parse_qsl, urlsplit
+
+    for key, value in parse_qsl(urlsplit(url or "").query, keep_blank_values=True):
+        if key == "query":
+            return value
+    return ""
 
 _DETAIL_JD_SELECTORS = (
     ".job-sec-text",
@@ -80,6 +92,7 @@ def _can_prescreen_by_title(filters: dict[str, Any]) -> bool:
 
 async def _open_job_detail_page(url: str, timeout: float = 30) -> bool:
     from boss_zhipin.website_oper import finding_jobs
+    from boss_zhipin.website_oper.core.browser_session import human_pause
 
     tab = finding_jobs.get_tab()
     if tab is None or not url:
@@ -89,7 +102,10 @@ async def _open_job_detail_page(url: str, timeout: float = 30) -> bool:
     except Exception as e:
         log.warning("打开详情页失败 %s: %s", url, e)
         return False
-    await asyncio.sleep(2)
+    # 拟人化"阅读"停顿（2026-10-15 三平台封号复盘：JobPilot——人类在
+    # 新页面行动前有 reading pause；ApplyGoat——人扫一个岗 30s、细读
+    # 3min）。旧固定 sleep(2) 秒开秒关详情页是高频访问画像的直接来源。
+    await human_pause(6.0, 15.0)
     return True
 
 
@@ -123,7 +139,10 @@ async def _send_greeting_on_detail_page(greeting: str) -> str:
     contact_xpath = "//a[contains(@class, 'btn-startchat')]"
     if not await finding_jobs.click_by_xpath(contact_xpath, timeout=10):
         return "no_button"
-    await asyncio.sleep(1)
+    # 拟人化：点完"立即沟通"稍作停顿再检查限额/处理弹窗（固定 1s 是机器签名）
+    from boss_zhipin.website_oper.core.browser_session import human_pause
+
+    await human_pause(0.8, 2.0)
     try:
         await check_platform_limit()
     except PlatformLimitReached:
@@ -369,10 +388,12 @@ async def _process_single_api_job(
         if status == "already_contacted":
             log.info("⏭️ [api-flow] 该岗位此前已沟通过，跳过：%s", job.title)
 
-    # 带站岗的节流睡眠：用户中途手关浏览器时 ~2s 内中止，不傻等满 10-30s
-    from boss_zhipin.website_oper.core.browser_session import sleep_with_browser_guard
+    # 带站岗的节流睡眠：用户中途手关浏览器时 ~2s 内中止，不傻等满 10-30s。
+    # 2026-10-15 封号复盘：均匀分布的随机延迟同样是机器签名，改高斯钟形
+    # （human_pause，调研依据见 browser_session 注释）。
+    from boss_zhipin.website_oper.core.browser_session import human_pause
 
-    await sleep_with_browser_guard(random.uniform(delay_min, delay_max))
+    await human_pause(delay_min, delay_max)
     return status, sent_count, daily_sent_count
 
 
@@ -431,6 +452,15 @@ async def _run_search_api_flow(
     )
 
     page = 1
+    # 连续秒过页计数（2026-10-15 阶梯节流）：连续越多页 <3s 秒过，说明陷
+    # 历史已投区越深，页间隔要越慢（用法见下方页间节流处注释）。
+    consecutive_fast_pages = 0
+    # 拟人化批次休息（2026-10-15 三平台封号复盘调研：影刀 RPA 社区实测
+    # 连投 20~30 份必触发风控；Apply4Me 安全清单：每 5~8 个动作后休息
+    # 一段）。一口气匀速跑到日限是最典型的机器画像——每连投 5~8 个
+    # （随机）休 3~8 分钟，带站岗（用户手关浏览器 ~2s 内中止）。
+    sends_since_break = 0
+    break_after = random.randint(5, 8)
     # 跳过分类计数（2026-10-12 用户实测：150 岗全部秒跳、0 投递且无任何
     # 解释，用户以为巡航卡死——结束时必须把"为什么没投"说清楚）。
     skipped_duplicates = 0
@@ -516,9 +546,25 @@ async def _run_search_api_flow(
         )
         log.info("[api-flow] 结束（%s）：%s", stop, message)
 
-    # 城市逐城推进外层循环：当前城**自然扫完**→ 推进到洗牌序列的下一城继续投
-    # （每个城市都要投到，用户 2026-10-12 拍板）；风控/限额/验证码/手动停止等
-    # 全局停止条件一律不换城。
+    # 岗位关键词轮换表（2026-10-15 用户需求"多写岗位换着投"）：入口 URL
+    # 的搜索词排第一（与首屏一致），再拼接 BOSS_LABEL 里切分出的多岗位词
+    # （split_search_keywords：中文逗号/顿号/分号/换行切分，不切空格与
+    # 斜杠）。去重保序；只有一个词时表长为 1，轮换逻辑零介入，行为与
+    # 旧版完全一致（零回归设计）。
+    from boss_zhipin.config.query_fission import split_search_keywords
+
+    rotation_keywords: list[str] = []
+    for _kw in [_keyword_from_url(url), *split_search_keywords(os.getenv("BOSS_LABEL", ""))]:
+        if _kw and _kw not in rotation_keywords:
+            rotation_keywords.append(_kw)
+    if not rotation_keywords:
+        rotation_keywords = [""]
+    kw_index = 0
+
+    # 城市逐城推进外层循环：当前城**自然扫完**→ 先轮换下一个岗位词，词全
+    # 扫完再推进洗牌序列的下一城（每个城市×每个词都要投到，用户 2026-10-12
+    # 拍板城市全覆盖、2026-10-15 拍板多词轮换）；风控/限额/验证码/手动停止
+    # 等全局停止条件一律不换词不换城。
     while True:
         halt_flow: str | None = None  # "captcha" | "platform_limit"（全局停机）
         while page <= BOSS_MAX_PAGES_PER_CITY:
@@ -543,24 +589,40 @@ async def _run_search_api_flow(
                 api_jobs = await job_api.fetch_search_page(tab, query, page)
             except RuntimeError as e:
                 # code=37 = 请求过于频繁（2026-10-13 实测：全跳过页秒翻 6 次
-                # 后触发）。尊重风控信号冷却退避一次再试，而不是立刻硬停
-                # 浪费整轮巡航；重试仍被限制才优雅结束。
+                # 后触发）。尊重风控信号：冷却退避 + 刷新页面后重试一次，
+                # 而不是立刻硬停浪费整轮巡航；重试仍被限制才优雅结束。
+                # 2026-10-15 加固：① 45s 实测不够（冷却后重试照样 37），
+                # 提到 90s；② 重试前 Page.reload 重建页面上下文——wapi 的
+                # 环境校验依赖页面加载时生成的风控令牌，高频 XHR 后旧令牌
+                # 可能已失效，原地重试大概率还是 37；③ 明确不轮换关键词/
+                # 城市硬闯：会话已风控发热，换词只是换个姿势打同一接口，
+                # 只会叠加风险信号，熔断保号优先。
                 if "code=37" in str(e):
                     events.emit(
                         "api_flow_error",
                         page=page,
-                        message=f"触发 BOSS 频率限制（{e}），冷却 45 秒后自动重试第 {page} 页…",
+                        message=f"触发 BOSS 频率限制（{e}），冷却 90 秒后刷新页面自动重试第 {page} 页…",
                     )
-                    log.warning("[api-flow] code=37 频率限制，冷却 45s 后重试第 %d 页", page)
-                    await asyncio.sleep(45)
+                    log.warning(
+                        "[api-flow] code=37 频率限制，冷却 90s 后刷新重试第 %d 页", page
+                    )
+                    from boss_zhipin.website_oper.core.browser_session import (
+                        reload_current_page,
+                        sleep_with_browser_guard,
+                    )
+
+                    # 带站岗冷却：用户中途手关浏览器时 ~2s 内中止，不傻等满 90s
+                    await sleep_with_browser_guard(90)
+                    # 重试前刷新页面，重建风控令牌（见上方注释②）
+                    await reload_current_page()
                     try:
                         api_jobs = await job_api.fetch_search_page(tab, query, page)
                     except RuntimeError as e2:
-                        log.warning("冷却后第 %d 页仍被限制，结束：%s", page, e2)
+                        log.warning("冷却刷新后第 %d 页仍被限制，结束：%s", page, e2)
                         events.emit(
                             "api_flow_error",
                             page=page,
-                            message="冷却后仍触发频率限制，本轮安全结束。建议等待 10 分钟后再试，或换个搜索词。",
+                            message="冷却并刷新后仍触发频率限制，本轮安全结束。建议等待 10 分钟后再试，或换个搜索词。",
                         )
                         stop_reason = "api_error"
                         break
@@ -606,6 +668,8 @@ async def _run_search_api_flow(
                     skipped_already += 1
                 elif status == "failed":
                     failed_count += 1
+                elif status == "sent":
+                    sends_since_break += 1
                 if status == "captcha":
                     halt_flow = "captcha"
                     break
@@ -624,6 +688,23 @@ async def _run_search_api_flow(
                 stop_reason = halt_flow
                 break
 
+            # 拟人化批次休息（见上方初始化处注释）：连投若干个后歇一会儿，
+            # 模拟真人"投几个歇一会儿"的节奏结构。
+            if sends_since_break >= break_after:
+                rest = random.uniform(180, 480)
+                log.info(
+                    "[api-flow] ⏸️ 拟人化休息 %ds（已连投 %d 个，模拟真人歇一会儿再继续）",
+                    int(rest),
+                    sends_since_break,
+                )
+                from boss_zhipin.website_oper.core.browser_session import (
+                    sleep_with_browser_guard,
+                )
+
+                await sleep_with_browser_guard(rest)
+                sends_since_break = 0
+                break_after = random.randint(5, 8)
+
             log.info(
                 "[api-flow] 第 %d 页处理完成（本页 %d 个岗位），本轮累计发送 %d",
                 page,
@@ -636,12 +717,65 @@ async def _run_search_api_flow(
             # 2026-10-13 加固（自适应上浮）：本页 <3s 秒过 = 全是已投/规则
             # 不匹配、一个详情页都没开——正在穿越历史已投区，纯接口高频
             # 翻页最容易触发频率限制。此时把页间停顿上浮到 4~6.5s，
-            # 只慢不快（开过详情页的正常页维持 2.5s 基线）。
+            # 只慢不快（开过详情页的正常页维持基线）。
+            # 2026-10-15 加固（阶梯上浮）：实测 4~6.5s 仍不够——上一轮巡航
+            # 已把会话风控额度烧热时，28s 连翻 5 页照样在第 6 页吃 code=37。
+            # 连续秒过页越多 = 陷历史已投区越深：第 3 个连续快页起上浮到
+            # 9~15s，把翻页节奏压回人类水平；出现正常页（开过详情页）即
+            # 复位。城市推进时故意不复位（只慢不快：上一城若是纯已投区，
+            # 会话热度会带进下一城）。
+            # 2026-10-15 封号复盘：均匀分布改高斯钟形分布（human_pause）。
+            from boss_zhipin.website_oper.core.browser_session import human_pause
+
             page_elapsed = time.monotonic() - page_started
             if page_elapsed < 3.0:
-                await asyncio.sleep(random.uniform(4.0, 6.5))
+                consecutive_fast_pages += 1
+                if consecutive_fast_pages >= 3:
+                    await human_pause(9.0, 15.0)
+                else:
+                    await human_pause(4.0, 6.5)
             else:
-                await asyncio.sleep(2.5)
+                consecutive_fast_pages = 0
+                await human_pause(3.0, 6.5)
+
+        # 关键词推进判定（2026-10-15 多词轮换）：当前词在该城自然扫完且
+        # 轮换表还有下一个词 → 切换搜索词、翻回第 1 页重扫。与城市推进
+        # 同一铁律：只有"自然扫完"（stop_reason 仍为 completed、无全局
+        # 停机）才换词；风控/限额/验证码触发的结束一律不换词硬闯。
+        # consecutive_fast_pages 故意不复位（只慢不快：换词前的会话热度
+        # 会带进新词的翻页节奏）。
+        if (
+            not halt_flow
+            and stop_reason == "completed"
+            and kw_index < len(rotation_keywords) - 1
+        ):
+            next_kw = rotation_keywords[kw_index + 1]
+            rotated_kw = await finding_jobs.rotate_to_keyword(
+                next_kw,
+                emit_event=lambda payload: events.emit("page_filter", **payload),
+            )
+            if rotated_kw:
+                kw_index += 1
+                page = 1
+                # 词间节流（拟人化，红线：只慢不快）。2026-10-15 封号复盘：
+                # 旧 3s 匀速换词太快——真人换个搜索词会先看看结果缓一缓，
+                # 上浮到 15~40s 高斯停顿。
+                from boss_zhipin.website_oper.core.browser_session import human_pause
+
+                await human_pause(15.0, 40.0)
+                query = job_api.search_query_from_url(finding_jobs.get_current_url())
+                tab = finding_jobs.get_tab()
+                if tab is None:
+                    stop_reason = "api_error"
+                    break
+                log.info(
+                    "[api-flow] 岗位关键词推进 %d/%d：%s",
+                    kw_index + 1,
+                    len(rotation_keywords),
+                    next_kw,
+                )
+                continue  # 复用外层城市循环，重启页循环扫下一个词
+            log.info("[api-flow] 关键词推进失败（%s），转入城市推进", next_kw)
 
         # 城市推进判定：只有"自然扫完"才推进下一城
         if halt_flow:
@@ -657,9 +791,22 @@ async def _run_search_api_flow(
             break
         cities_done += 1
         page = 1
-        # 城间节流（拟人化，红线：只慢不快）
-        await asyncio.sleep(3)
+        # 城间节流（拟人化，红线：只慢不快）。2026-10-15 封号复盘：旧 3s
+        # 匀速换城太快，上浮到 15~40s 高斯停顿（与词间同款）。
+        from boss_zhipin.website_oper.core.browser_session import human_pause
+
+        await human_pause(15.0, 40.0)
+        # 换城后关键词复位（2026-10-15 多词轮换）：新城市从轮换表第一个
+        # 词重新扫起，保证"每城×每词"全覆盖；kw_index 按轮换后的 URL 实词
+        # 对齐——轮换失败时以 URL 实际词为准（可能仍是上个词），不丢状态。
+        if len(rotation_keywords) > 1:
+            await finding_jobs.rotate_to_keyword(
+                rotation_keywords[0],
+                emit_event=lambda payload: events.emit("page_filter", **payload),
+            )
         actual_url = finding_jobs.get_current_url()
+        cur_kw = _keyword_from_url(actual_url)
+        kw_index = rotation_keywords.index(cur_kw) if cur_kw in rotation_keywords else 0
         query = job_api.search_query_from_url(actual_url)
         tab = finding_jobs.get_tab()
         if tab is None:

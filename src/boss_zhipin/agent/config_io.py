@@ -55,6 +55,31 @@ def read_config(path: Path | None = None) -> AgentConfig:
     )
 
 
+def default_config() -> AgentConfig:
+    """开箱默认配置（智谱 GLM-4-Flash）。
+    若配置了公共体验 Key（如安装包环境注入），则开箱即用。"""
+    from boss_zhipin.agent.presets import DEFAULT_PRESET_ID, LLM_PRESETS, get_public_api_key
+
+    preset = next((p for p in LLM_PRESETS if p.get("id") == DEFAULT_PRESET_ID), None)
+    if not preset:
+        return AgentConfig()
+    api_key = str(preset.get("default_api_key") or get_public_api_key()).strip()
+    return AgentConfig(
+        base_url=str(preset.get("base_url") or "").strip(),
+        api_key=api_key,
+        model=str(preset.get("default_model") or "").strip(),
+    )
+
+
+def effective_config(path: Path | None = None) -> AgentConfig:
+    """生效配置：用户自己保存过的配置优先；未配置（文件缺失/空）时回落
+    开箱默认（智谱 + 公共 Key）。所有 AI 运行时与 IPC 读取一律走这里。"""
+    cfg = read_config(path)
+    if cfg.is_configured():
+        return cfg
+    return default_config()
+
+
 def write_config(config: AgentConfig, path: Path | None = None) -> None:
     config_path = path or DEFAULT_CONFIG_PATH
     config_path.write_text(

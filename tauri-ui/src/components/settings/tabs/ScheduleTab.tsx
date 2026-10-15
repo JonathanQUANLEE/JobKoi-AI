@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Clock, Calendar, Check, Save, Bell, Power, Sparkles, RefreshCw } from "lucide-react";
+import { Clock, Calendar, Check, Save, Bell, Power, Sparkles, RefreshCw, ShieldCheck } from "lucide-react";
 import {
   type PetScheduleConfig,
   DEFAULT_SCHEDULE_CONFIG,
@@ -28,6 +28,15 @@ const WEEKDAYS = [
 export default function ScheduleTab({ isMonochrome, busy = false }: ScheduleTabProps) {
   const [config, setConfig] = useState<PetScheduleConfig>(loadScheduleConfig);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  // 新号保护模式接管状态（2026-10-15）：激活时单一闹钟不生效
+  const [protectionActive, setProtectionActive] = useState(false);
+
+  useEffect(() => {
+    ipc
+      .getProtectionMode()
+      .then((res) => setProtectionActive(res.enabled))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     setConfig(loadScheduleConfig());
@@ -85,6 +94,20 @@ export default function ScheduleTab({ isMonochrome, busy = false }: ScheduleTabP
 
   return (
     <div className="space-y-5">
+      {/* 新号保护模式接管横幅（2026-10-15） */}
+      {protectionActive && (
+        <div className="p-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 flex items-start gap-3">
+          <ShieldCheck className="size-4 text-amber-400 mt-0.5 shrink-0" />
+          <div className="text-xs leading-relaxed">
+            <span className="font-bold text-amber-300">新号保护模式接管中</span>
+            <span className="text-stone-400">
+              ：每日三个时段自动巡航并按份额分配日限额，此处单一闹钟暂不生效
+              （可在「拟人风控与策略」页停用保护模式后恢复）。
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* 头部状态概览卡片 */}
       <div
         className={`p-4 rounded-2xl border transition-all ${

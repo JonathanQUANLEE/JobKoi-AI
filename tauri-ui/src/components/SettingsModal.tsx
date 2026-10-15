@@ -43,7 +43,7 @@ interface SettingsModalProps {
   label: string;
   defaultResumeName: string;
   onGoToResumes: () => void;
-  onSaveConfig: () => Promise<void>;
+  onSaveConfig: () => Promise<boolean>;
   busy?: boolean;
 }
 
@@ -311,7 +311,7 @@ export default function SettingsModal({
             )}
 
             {activeTab === "about" && (
-              <AboutTab isMonochrome={isMonochrome} />
+              <AboutTab isMonochrome={isMonochrome} onClose={onClose} />
             )}
           </div>
         </main>

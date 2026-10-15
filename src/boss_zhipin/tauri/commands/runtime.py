@@ -77,6 +77,13 @@ def _build_main_loop_factory(config: RunConfig):
         if not platforms:
             platforms = ["boss"]
 
+        # 新号保护模式（2026-10-15）：开启则手动巡航同样受保护包络约束
+        # （BOSS 单轮/日额 env 钳制 + 猎聘/51Job 日额与单轮上限）。
+        from boss_zhipin.config.protection import apply_protection_env
+
+        if apply_protection_env(environ):
+            log.info("[protection] 新号保护模式生效：本轮手动巡航按保护额度执行")
+
         if platforms == ["boss"]:
             await run_automation(
                 usr_name=config.usr_name,
@@ -140,12 +147,16 @@ def _build_main_loop_factory(config: RunConfig):
         # 关键词裂变（2026-10-13 三阶段引擎·机制一）：把用户当天的搜索
         # 意图裂变成 精准/技术栈/泛生态 三桶变体（每轮洗牌轮转），猎聘/
         # 51job 的搜索词从"1 个用户词 + 静态默认表"升级为"意图感知的
-        # 动态列表。未收录方向安全降级为 [user_kw]，与旧行为一致。
+        # 动态列表"。未收录方向安全降级为 [user_kw]，与旧行为一致。
+        # 2026-10-15：多岗位输入（"A, B"）先切分再逐词裂变——旧逻辑拿
+        # 逗号整串当基准词，两个平台的第一搜都是搜不出东西的垃圾串。
         fission_kws: list[str] = []
         if user_kw:
-            from boss_zhipin.config.query_fission import generate_fission_keywords
+            from boss_zhipin.config.query_fission import (
+                generate_fission_keywords_for_label,
+            )
 
-            fission_kws = generate_fission_keywords(user_kw)
+            fission_kws = generate_fission_keywords_for_label(user_kw)
 
         def _with_fission(defaults: list[str]) -> list[str]:
             """裂变词在前（意图优先消耗当日额度），静态默认表兜底在后。"""
@@ -157,24 +168,43 @@ def _build_main_loop_factory(config: RunConfig):
             from liepin import apply as liepin_apply
             from liepin import driver as liepin_driver
 
-            liepin_limit = int(environ.get("LIEPIN_DAILY_LIMIT", "100"))
+            # 默认值走 limits.py 单一真相（2026-10-15 封号复盘：猎聘 100→50）
+            from boss_zhipin.platforms.limits import (
+                DEFAULT_DAILY_LIMITS,
+                env_run_max,
+            )
+
+            liepin_limit = int(
+                environ.get(
+                    "LIEPIN_DAILY_LIMIT", str(DEFAULT_DAILY_LIMITS["liepin"])
+                )
+            )
+            # 单轮上限（2026-10-15 用户拍板"一次巡航投多少就停"）：保护模式
+            # 注入的份额优先，未注入时回退保守默认 15。
+            liepin_run_max = env_run_max("LIEPIN_RUN_MAX", "liepin")
             liepin_kws = _with_fission(list(liepin_apply.DEFAULT_KEYWORDS))
             liepin_coro = liepin_apply.run(
                 liepin_kws,
                 liepin_limit,
                 liepin_driver._greeting_text(),
+                run_max=liepin_run_max,
             )
             tasks.append(_asyncio.create_task(_wrap_platform("liepin", liepin_coro)))
 
         if "job51" in platforms:
             from job51 import apply as job51_apply
+            from boss_zhipin.platforms.limits import env_run_max
 
             job51_limit = int(environ.get("JOB51_DAILY_LIMIT", "40"))
+            # 单轮上限（2026-10-15 用户拍板"一次巡航投多少就停"）：保护模式
+            # 注入的份额优先，未注入时回退保守默认 10。
+            job51_run_max = env_run_max("JOB51_RUN_MAX", "job51")
             job51_kws = _with_fission(list(job51_apply.DEFAULT_KEYWORDS))
             tasks.append(
                 _asyncio.create_task(
                     _wrap_platform(
-                        "job51", job51_apply.run(job51_kws, job51_limit)
+                        "job51",
+                        job51_apply.run(job51_kws, job51_limit, run_max=job51_run_max),
                     )
                 )
             )

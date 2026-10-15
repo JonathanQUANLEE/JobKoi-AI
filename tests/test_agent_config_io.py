@@ -5,6 +5,8 @@ import json
 
 from boss_zhipin.agent.config_io import (
     AgentConfig,
+    default_config,
+    effective_config,
     is_masked,
     mask_key,
     merge_saved_key,
@@ -17,6 +19,45 @@ def test_read_missing_file_returns_default(tmp_path):
     cfg = read_config(tmp_path / "nope.json")
     assert cfg == AgentConfig()
     assert not cfg.is_configured()
+
+
+def test_default_config_is_zhipu(monkeypatch):
+    """开箱默认 = 智谱 GLM-4-Flash 端点。"""
+    cfg = default_config()
+    assert cfg.base_url == "https://open.bigmodel.cn/api/paas/v4"
+    assert cfg.model == "glm-4-flash"
+
+    # 若注入了公共 Key，则处于已配置状态
+    monkeypatch.setenv("ZHIPU_PUBLIC_API_KEY", "test-public-key")
+    preset_cfg = default_config()
+    assert preset_cfg.api_key == "test-public-key"
+    assert preset_cfg.is_configured()
+
+
+def test_effective_config_falls_back_to_default(tmp_path, monkeypatch):
+    """用户没保存过配置（文件缺失/空配置）→ 回落智谱开箱默认。"""
+    monkeypatch.setenv("ZHIPU_PUBLIC_API_KEY", "test-public-key")
+
+    cfg = effective_config(tmp_path / "nope.json")
+    assert cfg.is_configured()
+    assert cfg.base_url == "https://open.bigmodel.cn/api/paas/v4"
+
+    empty_path = tmp_path / "empty.json"
+    write_config(AgentConfig(base_url="", api_key="", model=""), empty_path)
+    assert effective_config(empty_path).is_configured()
+
+
+def test_effective_config_user_config_wins(tmp_path):
+    """用户自己保存过的配置优先于开箱默认。"""
+    path = tmp_path / "agent_config.json"
+    write_config(
+        AgentConfig(base_url="https://x.test/v1", api_key="k-1234567890", model="my-model"),
+        path,
+    )
+    cfg = effective_config(path)
+    assert cfg.base_url == "https://x.test/v1"
+    assert cfg.api_key == "k-1234567890"
+    assert cfg.model == "my-model"
 
 
 def test_write_then_read_roundtrip(tmp_path):

@@ -14,6 +14,8 @@ interface GlobalUsagiPetProps {
   onOpenSettingsModal?: (tab?: string) => void;
   lang?: string;
   sidebarCollapsed?: boolean;
+  /** 首次与本兔交互（按下即算，含拖拽）：新手引导用它弹"宠物管家"介绍卡。 */
+  onFirstInteract?: () => void;
 }
 
 const STORAGE_POS_KEY = "jobhunter_usagi_floating_pos";
@@ -41,6 +43,7 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
   onOpenSettingsModal,
   lang = "zh",
   sidebarCollapsed = false,
+  onFirstInteract,
 }) => {
   const isMonochrome = useRunStore((s) => s.theme === "monochrome");
   const notify = useRunStore((s) => s.notify);
@@ -110,9 +113,14 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
   }, []);
 
   // 3. 全局拖拽逻辑（方案 A：无死角全窗口随意拖拽、松手定格停靠）
+  const firstInteractFiredRef = useRef(false);
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!firstInteractFiredRef.current) {
+      firstInteractFiredRef.current = true;
+      onFirstInteract?.();
+    }
     dragStartRef.current = {
       startX: e.clientX,
       startY: e.clientY,
@@ -121,7 +129,7 @@ export const GlobalUsagiPet: FC<GlobalUsagiPetProps> = ({
       moved: false,
     };
     setIsDragging(true);
-  }, [pos.x, pos.y]);
+  }, [pos.x, pos.y, onFirstInteract]);
 
   useEffect(() => {
     if (!isDragging) return;

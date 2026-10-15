@@ -13,7 +13,7 @@ import asyncio
 import logging
 from typing import Any
 
-from boss_zhipin.agent.config_io import read_config
+from boss_zhipin.agent.config_io import effective_config
 from boss_zhipin.agent.llm_client import (
     LLMClientError,
     chat_completion_with_retry,
@@ -114,7 +114,8 @@ async def diagnose_and_polish(
         "> 提供 2~3 条可直接粘进简历的完美经历描述（动词加粗，数据醒目）。"
     )
 
-    config = read_config()
+    # V0.4：未配置时回落开箱默认（智谱+公共 Key），新用户开箱即用
+    config = effective_config()
     if not config.is_configured():
         # 未配置 API 时给出离线专业诊断总结
         fallback_advice = (

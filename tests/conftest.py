@@ -47,6 +47,10 @@ _PROJECT_ENV_VARS = (
     "BOSS_SEND_RESUME_AFTER_GREETING", "BOSS_AUTO_RESUME_ON_REPLY", "BOSS_AI_GREETING",
     # standalone 模式开关 + 数据目录覆盖（paths.py 读）
     "BOSS_TAURI_STANDALONE", "BOSS_APP_DATA_DIR",
+    # 新号保护模式的 env 包络（2026-10-15：三时段配额调度）
+    "JOBHUNTER_WINDOW_MAX_SENT", "JOBHUNTER_PROTECTION_DAILY",
+    "LIEPIN_DAILY_LIMIT", "JOB51_DAILY_LIMIT",
+    "LIEPIN_RUN_MAX", "JOB51_RUN_MAX",
 )
 for _key in _PROJECT_ENV_VARS:
     os.environ.pop(_key, None)

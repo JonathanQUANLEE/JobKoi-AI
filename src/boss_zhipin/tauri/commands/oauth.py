@@ -41,14 +41,11 @@ from boss_zhipin.tauri.commands._registry import commands
 #      Homepage URL 填 https://github.com/JonathanQUANLEE/JobKoi-AI
 #      Authorization callback URL 必须精确填：http://127.0.0.1:17891/callback
 #   3. 创建后复制 Client ID 填到下面即可（Client Secret 留空不用，PKCE 无需）
-# 未配置（空串）时前端自动隐藏"一键登录"按钮，回退旧登录方式，零破坏。
-GITHUB_OAUTH_CLIENT_ID = "Ov23liyAFaO5CV36g3Ac"
-# Client Secret：GitHub OAuth App 的令牌交换【强制要求】——即使已用 PKCE 也
-# 不能省略（2026-10-14 实测：无 secret 时 GitHub 报
-# "The client_id and/or client_secret passed are incorrect"）。
-# 获取：OAuth App 详情页 → Client secrets → Generate a new client secret。
-# 注：secret 打包进桌面 EXE 是 GitHub 官方对原生应用的已知妥协，风险可接受。
-GITHUB_OAUTH_CLIENT_SECRET = "8c1d86b21b08b31964436d44fde699250583d7d6"
+import os
+
+GITHUB_OAUTH_CLIENT_ID = os.getenv("GITHUB_OAUTH_CLIENT_ID", "Ov23liyAFaO5CV36g3Ac")
+# Client Secret：GitHub OAuth App 令牌交换密钥（开源代码库脱敏留空，避免被 GitHub 泄露检测自动注销）
+GITHUB_OAUTH_CLIENT_SECRET = os.getenv("GITHUB_OAUTH_CLIENT_SECRET", "")
 
 GITHUB_REPO_OWNER = "JonathanQUANLEE"
 GITHUB_REPO_NAME = "JobKoi-AI"

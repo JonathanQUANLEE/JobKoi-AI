@@ -82,7 +82,7 @@ export interface UseProfileFormStateReturn {
   loadProfile: (name: string) => Promise<void>;
   hydrateFromProfile: (profile: LoadedProfile) => void;
   currentProfileData: () => ProfileData;
-  saveConfig: () => Promise<void>;
+  saveConfig: () => Promise<boolean>;
   validateBeforeRun: () => string | null;
 }
 
@@ -287,7 +287,9 @@ export function useProfileFormState({
     aiGreeting,
   ]);
 
-  const saveConfig = useCallback(async () => {
+  // 返回 boolean：保存成功 true / 失败 false（新手引导用它点亮"画像已保存"一步；
+  // 其余调用方（MistSettingsModal 等）原先就不消费返回值，行为零变化）。
+  const saveConfig = useCallback(async (): Promise<boolean> => {
     setBusy(true);
     setMessage(null);
     try {
@@ -304,8 +306,10 @@ export function useProfileFormState({
       await ipc.saveProfile(savedName, data);
       await refreshProfiles(savedName);
       setMessage(t("message.saved"));
+      return true;
     } catch (err) {
       setMessage(t("message.saveFailed", { error: String(err) }));
+      return false;
     } finally {
       setBusy(false);
     }

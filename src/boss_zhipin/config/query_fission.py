@@ -23,6 +23,7 @@ Python / 软件开发……），与用户当天的求职意图无关。用户�
 from __future__ import annotations
 
 import random
+import re
 
 from boss_zhipin.config.intent_lexicon import parse_intent
 
@@ -97,4 +98,48 @@ def generate_fission_keywords(
     return final_list
 
 
-__all__ = ["generate_fission_keywords"]
+# 多岗位输入的合法分隔符（2026-10-15）：GUI「目标职位」允许一次输入多个
+# 岗位（"AI应用工程师, AI agent实习"）。刻意**不含空格/斜杠/竖线**——
+# "AI agent 实习"、"AI/算法工程师" 这类单岗位名内部就带这些字符，按它们
+# 切割会把一个好关键词撕成碎片（用户实测事故：整串带逗号直接进
+# query 参数，BOSS 按全文匹配搜出的岗位与画像完全无关）。
+_LABEL_SEPARATORS_RE = re.compile(r"[,，、;；\n]+")
+
+
+def split_search_keywords(raw: str) -> list[str]:
+    """把「目标职位」输入切分成关键词列表（纯函数）。
+
+    - "AI应用工程师, AI agent实习," → ["AI应用工程师", "AI agent实习"]
+    - "AI应用工程师、大模型；NLP" → 三词（支持中文顿号/分号）
+    - 单关键词（内部含空格/斜杠）原样返回：["AI agent 实习"]
+    - 空串/全分隔符 → []
+    """
+    parts = [p.strip() for p in _LABEL_SEPARATORS_RE.split((raw or "").strip())]
+    return [p for p in parts if p]
+
+
+def generate_fission_keywords_for_label(
+    raw: str, *, max_terms_per_kw: int = 8, rng: random.Random | None = None
+) -> list[str]:
+    """多岗位输入的裂变入口：先切分、逐词裂变、合并去重（保序）。
+
+    旧逻辑把整串（含逗号）当基准词：猎聘/51job 的裂变基准被污染，
+    第一个搜索词就是搜不出东西的垃圾串。这里每个岗位词独立裂变
+    （各自享受 tier1/tech/pan 三桶扩展）；单关键词输入与直接调
+    ``generate_fission_keywords`` 完全等价（零回归）。
+    """
+    merged: list[str] = []
+    for kw in split_search_keywords(raw):
+        for term in generate_fission_keywords(
+            kw, max_terms=max_terms_per_kw, rng=rng
+        ):
+            if term not in merged:
+                merged.append(term)
+    return merged
+
+
+__all__ = [
+    "generate_fission_keywords",
+    "generate_fission_keywords_for_label",
+    "split_search_keywords",
+]

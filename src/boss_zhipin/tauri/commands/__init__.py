@@ -4,7 +4,7 @@ import 本包即完成全部命令注册——各域模块的 ``@commands.comman
 装饰器挂在共享 registry（``_registry.commands``）上；``tauri/__init__.py``
 import 本包后 main() 用同一实例 generate_handler。
 
-七个域模块：
+九个域模块：
 - runtime   运行控制（start/stop/浏览器/审核/状态）
 - profile   求职画像与招呼语
 - resume    简历库管理
@@ -12,8 +12,9 @@ import 本包后 main() 用同一实例 generate_handler。
 - platform  多平台中心（登录态/投递历史）
 - window    窗口控制
 - schedule  定时巡航闹钟
+- protection 新号保护模式（三时段配额调度）
 
-IPC 契约（38 个命令名）由 tests/test_tauri_ipc_contract.py 守门。
+IPC 契约（40 个命令名）由 tests/test_tauri_ipc_contract.py 守门。
 """
 
 from boss_zhipin.tauri.commands._registry import commands
@@ -23,6 +24,7 @@ from boss_zhipin.tauri.commands import (  # noqa: F401 —— import 即注册
     oauth,
     platform,
     profile,
+    protection,
     resume,
     runtime,
     schedule,

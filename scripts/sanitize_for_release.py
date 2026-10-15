@@ -65,9 +65,11 @@ def sensitive_patterns() -> list[tuple[re.Pattern, str]]:
     return patterns
 
 CLEAN_AGENT_CONFIG = {
-    "base_url": "https://openrouter.ai/api/v1",
+    # V0.4：默认智谱 GLM-4-Flash；api_key 留空 = 未配置，
+    # 引导用户在界面配置个人 API Key 或任意 OpenAI 兼容端点。
+    "base_url": "https://open.bigmodel.cn/api/paas/v4",
     "api_key": "",
-    "model": "nvidia/nemotron-3.5-lightning:free",
+    "model": "glm-4-flash",
 }
 
 CLEAN_ENV_CONTENT = """# JobHunter 生产环境配置模板

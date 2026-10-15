@@ -174,7 +174,14 @@ async def send_job_descriptions_to_chat(
     seen_job_keys: set[str] = _read_seen_job_keys(cfg.seen_jobs_path)
 
     if _should_select_label(label, url, use_current_page):
-        await finding_jobs.select_dropdown_option(label)
+        # 多岗位输入时下拉只选第一个词（2026-10-15）：整串带逗号在 BOSS
+        # 岗位标签下拉里永远匹配不到任何选项，等于白选。
+        from boss_zhipin.config.query_fission import split_search_keywords
+
+        dropdown_kws = split_search_keywords(label)
+        await finding_jobs.select_dropdown_option(
+            dropdown_kws[0] if dropdown_kws else label
+        )
     elif label:
         log.info(
             "检测到当前页/起始 URL 已指定，跳过岗位标签选择：%r，避免覆盖手动筛选页面",

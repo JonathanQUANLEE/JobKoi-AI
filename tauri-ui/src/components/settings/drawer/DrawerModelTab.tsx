@@ -38,6 +38,8 @@ export default function DrawerModelTab() {
     if (!preset) return;
     setBaseUrl(preset.base_url);
     setModel(preset.default_model);
+    // V0.4：带公共 Key 的预置（智谱）一键填入；其余清空让用户自己填
+    setApiKey(preset.default_api_key || "");
   }
 
   async function handleSaveModel() {

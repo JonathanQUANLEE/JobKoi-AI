@@ -78,6 +78,9 @@ def test_tauri_ipc_commands_match_gui_v02_contract():
         "get_schedule_status",
         "save_schedule",
         "cancel_schedule",
+        # 新号保护模式（每日三时段自动分配日限额，2026-10-15）
+        "get_protection_mode",
+        "save_protection_mode",
         # 简历扩展
         "open_resume_native",
         "diagnose_resume",

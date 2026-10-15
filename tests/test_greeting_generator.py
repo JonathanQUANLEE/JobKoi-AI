@@ -18,7 +18,7 @@ GOOD_GREETING = (
 def _configured(monkeypatch) -> None:
     monkeypatch.setattr(
         gg,
-        "read_config",
+        "effective_config",
         lambda: AgentConfig(
             base_url="https://example.test/v1", api_key="sk-test", model="m1"
         ),
@@ -52,7 +52,7 @@ def test_generate_greeting_strips_quotes(monkeypatch):
 
 
 def test_generate_greeting_not_configured(monkeypatch):
-    monkeypatch.setattr(gg, "read_config", lambda: AgentConfig())
+    monkeypatch.setattr(gg, "effective_config", lambda: AgentConfig())
     result = asyncio.run(gg.generate_greeting("JD", "基准"))
     assert result["status"] == "error"
     assert result["code"] == "not_configured"

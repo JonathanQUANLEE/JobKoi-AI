@@ -16,8 +16,9 @@ from boss_zhipin.platforms.limits import BOSS_DELAY_RANGE_SECONDS, DEFAULT_DAILY
 
 
 def test_default_daily_limits_values():
-    # 用户要求：BOSS 150（与 profiles/0my.yml 一致）/ 猎聘 100 / 51job 40
-    assert DEFAULT_DAILY_LIMITS == {"boss": 150, "liepin": 100, "job51": 40}
+    # BOSS 100（2026-10-15 保号拍板：调研实证平台主动沟通上限 100/天）/
+    # 猎聘 50 / 51job 40（封号复盘：安全量级 20~50/天）。
+    assert DEFAULT_DAILY_LIMITS == {"boss": 100, "liepin": 50, "job51": 40}
 
 
 def test_stats_io_limits_come_from_single_source():

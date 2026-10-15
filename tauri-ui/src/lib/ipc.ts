@@ -147,6 +147,10 @@ export type LLMPreset = {
   base_url: string;
   default_model: string;
   signup_hint: string;
+  /** V0.4：预置公共体验 Key（智谱开箱即用）；空串 = 用户需自填。 */
+  default_api_key?: string;
+  /** 标记推荐默认项（智谱）。 */
+  recommended?: boolean;
 };
 
 export type LLMConfig = {
@@ -439,4 +443,26 @@ export const ipc = {
       },
     ),
   cancelSchedule: () => pyInvoke<{ status: string }>("cancel_schedule", {}),
+  // 新号保护模式（每日三时段自动分配日限额，2026-10-15）
+  getProtectionMode: () =>
+    pyInvoke<{
+      enabled: boolean;
+      times: string[];
+      bossDaily?: number;
+      liepinDaily?: number;
+      job51Daily?: number;
+      tasks?: { exists?: Record<string, boolean>; count?: number };
+    }>("get_protection_mode", {}),
+  saveProtectionMode: (config: { enabled: boolean; times: string[] }) =>
+    pyInvoke<{
+      status: string;
+      enabled?: boolean;
+      tasks?: Array<string | undefined>;
+      times?: string[];
+      deleted?: string[];
+      message?: string;
+    }>("save_protection_mode", {
+      enabled: config.enabled,
+      times: config.times,
+    }),
 };

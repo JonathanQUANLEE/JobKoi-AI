@@ -41,11 +41,16 @@ def _cruise_command() -> str:
 
 
 def create_scheduled_task(
-    *, time: str, repeat_days: list[int], command: str | None = None
+    *,
+    time: str,
+    repeat_days: list[int],
+    command: str | None = None,
+    task_name: str = TASK_NAME,
 ) -> dict:
-    """创建/覆盖每天的定时巡航计划任务。``time`` 形如 ``HH:MM``。
+    """创建/覆盖定时巡航计划任务。``time`` 形如 ``HH:MM``。
 
     ``repeat_days`` 为空或 7 天 → 每天（DAILY）；否则按星期（WEEKLY）。
+    ``task_name`` 供新号保护模式注册多任务复用（默认单一闹钟，零回归）。
     """
     if not _SAFE_TIME.match(time or ""):
         raise ValueError(f"时间格式必须是 HH:MM（24 小时制），收到: {time!r}")
@@ -55,7 +60,7 @@ def create_scheduled_task(
     if not days or len(days) >= 7:
         args = [
             "schtasks", "/Create", "/F",
-            "/TN", TASK_NAME,
+            "/TN", task_name,
             "/SC", "DAILY",
             "/ST", time,
             "/TR", trigger_cmd,
@@ -65,7 +70,7 @@ def create_scheduled_task(
         day_codes = ",".join(_WEEKDAY_CODES[day] for day in days)
         args = [
             "schtasks", "/Create", "/F",
-            "/TN", TASK_NAME,
+            "/TN", task_name,
             "/SC", "WEEKLY",
             "/D", day_codes,
             "/ST", time,
@@ -81,8 +86,8 @@ def create_scheduled_task(
         message = (result.stderr or result.stdout or "").strip()[-300:]
         log.warning("schtasks 返回 %s: %s", result.returncode, message)
         return {"status": "error", "message": message}
-    log.info("计划任务已创建：%s 每天 %s，%s", TASK_NAME, time, scope)
-    return {"status": "ok", "task": TASK_NAME, "time": time, "scope": scope}
+    log.info("计划任务已创建：%s 每天 %s，%s", task_name, time, scope)
+    return {"status": "ok", "task": task_name, "time": time, "scope": scope}
 
 
 def delete_scheduled_task() -> dict:
@@ -112,3 +117,74 @@ def get_scheduled_task_status() -> dict:
         return {"exists": False, "error": str(e)}
     exists = result.returncode == 0 and TASK_NAME in result.stdout
     return {"exists": exists, "raw": result.stdout[:200]}
+
+
+# ---------------------------------------------------------------------------
+# 新号保护模式：每日三时段计划任务（2026-10-15）
+#
+# 三个任务执行**同一条命令**（scheduled_cruise.py 自己读保护配置算份额），
+# 区别只在 /ST 触发时间。任务名独立于单一闹钟（JobHunter定时巡航），
+# 互不干扰；保护模式开启时由 IPC 层负责删掉单一闹钟（接管语义）。
+# ---------------------------------------------------------------------------
+
+PROTECTION_TASK_PREFIX = "JobHunter新号保护巡航"
+
+
+def _protection_task_name(index: int) -> str:
+    return f"{PROTECTION_TASK_PREFIX}-{index}"
+
+
+def create_protection_tasks(times: list[str]) -> list[dict]:
+    """按时段列表创建保护巡航任务（每天重复，覆盖式 /F）。
+
+    ``times`` 已由上层 validate_times 校验；这里再过一道 _SAFE_TIME
+    （纵深防御：本模块是 schtasks 的唯一拼装点）。
+    """
+    results: list[dict] = []
+    for index, time in enumerate(times, start=1):
+        results.append(
+            create_scheduled_task(
+                time=time,
+                repeat_days=[],  # 空 = DAILY（每天）
+                task_name=_protection_task_name(index),
+            )
+        )
+    return results
+
+
+def delete_protection_tasks() -> dict:
+    """删除全部保护巡航任务（不存在也返回 ok，幂等）。"""
+    deleted: list[str] = []
+    for index in range(1, 4):  # 上限 3 个时段
+        name = _protection_task_name(index)
+        try:
+            result = subprocess.run(
+                ["schtasks", "/Delete", "/TN", name, "/F"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        except (OSError, subprocess.SubprocessError) as e:
+            log.warning("删除保护任务 %s 失败: %s", name, e)
+            continue
+        if result.returncode == 0:
+            deleted.append(name)
+    return {"status": "ok", "deleted": deleted}
+
+
+def get_protection_tasks_status() -> dict:
+    """查询保护任务落盘状态（逐个查存在性，供前端展示）。"""
+    statuses: dict[str, bool] = {}
+    for index in range(1, 4):
+        name = _protection_task_name(index)
+        try:
+            result = subprocess.run(
+                ["schtasks", "/Query", "/TN", name, "/FO", "CSV", "/NH"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            statuses[name] = result.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            statuses[name] = False
+    return {"exists": statuses, "count": sum(statuses.values())}

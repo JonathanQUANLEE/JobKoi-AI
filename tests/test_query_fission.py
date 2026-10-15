@@ -1,9 +1,13 @@
-"""关键词裂变轮转测试（2026-10-13 三阶段引擎·机制一）。"""
+"""关键词裂变轮转测试（2026-10-13 三阶段引擎·机制一 + 2026-10-15 多岗位切分）。"""
 from __future__ import annotations
 
 import random
 
-from boss_zhipin.config.query_fission import generate_fission_keywords
+from boss_zhipin.config.query_fission import (
+    generate_fission_keywords,
+    generate_fission_keywords_for_label,
+    split_search_keywords,
+)
 
 
 def test_empty_base_returns_empty():
@@ -66,3 +70,62 @@ def test_plain_ai_direction_also_fissions():
     assert kws[0] == "AI 实习"
     assert len(kws) >= 3
     assert "机器学习 实习" in kws
+
+
+# ---------- 多岗位输入切分（2026-10-15：目标职位一次输入多个岗位） ----------
+
+
+def test_split_search_keywords_basic_comma():
+    assert split_search_keywords("AI应用工程师, AI agent实习,") == [
+        "AI应用工程师",
+        "AI agent实习",
+    ]
+
+
+def test_split_search_keywords_chinese_separators():
+    """顿号/分号/换行都是合法分隔符（中文输入习惯）。"""
+    assert split_search_keywords("AI应用工程师、大模型；NLP\nRAG") == [
+        "AI应用工程师",
+        "大模型",
+        "NLP",
+        "RAG",
+    ]
+
+
+def test_split_search_keywords_keeps_single_keyword_intact():
+    """单关键词内部的空格/斜杠绝不能切开（"AI agent 实习" 是一个岗位名）。"""
+    assert split_search_keywords("AI agent 实习") == ["AI agent 实习"]
+    assert split_search_keywords("AI/算法工程师") == ["AI/算法工程师"]
+
+
+def test_split_search_keywords_empty_and_garbage():
+    assert split_search_keywords("") == []
+    assert split_search_keywords(",, 、；") == []
+
+
+def test_fission_for_label_splits_and_fissions_each():
+    """多岗位逐词裂变：两个基准词都保留，各自带变体，无逗号整串残留。"""
+    kws = generate_fission_keywords_for_label(
+        "AI agent 实习, 水利水电实习", rng=random.Random(42)
+    )
+    assert "AI agent 实习" in kws
+    assert "水利水电实习" in kws  # 未收录方向安全降级为只搜原词
+    assert len(kws) >= 3  # 已收录方向带出变体
+    assert all("," not in kw for kw in kws)
+
+
+def test_fission_for_label_single_keyword_equals_legacy():
+    """零回归：单关键词输入与旧 generate_fission_keywords 完全等价。"""
+    raw = "AI agent 实习"
+    legacy = generate_fission_keywords(raw, rng=random.Random(7))
+    new = generate_fission_keywords_for_label(raw, rng=random.Random(7))
+    assert new == legacy
+
+
+def test_fission_for_label_dedupes_across_keywords():
+    """同族关键词的裂变变体去重（"AI agent" 与 "AI" 的 pan 桶大量重叠）。"""
+    kws = generate_fission_keywords_for_label(
+        "AI agent 实习, AI 实习", rng=random.Random(1)
+    )
+    assert len(kws) == len(set(kws))
+    assert "AI agent 实习" in kws and "AI 实习" in kws

@@ -21,6 +21,17 @@ import { useHeroChat } from "../hooks/useHeroChat";
 import { useRunStore, useT } from "../store";
 
 import { type GithubUser } from "../lib/githubAuth";
+import GuidedTour from "../components/onboarding/GuidedTour";
+import ModuleIntroCard from "../components/onboarding/ModuleIntroCard";
+import { useOnboardingTour } from "../hooks/useOnboardingTour";
+import {
+  currentIntroModule,
+  loadIntroShown,
+  markIntroShown,
+  saveIntroShown,
+  shouldShowIntro,
+  type IntroModuleId,
+} from "../lib/onboarding";
 
 interface DashboardProps {
   githubUser?: GithubUser | null;
@@ -40,6 +51,9 @@ export default function Dashboard({ githubUser, onLogout }: DashboardProps = {})
   const setPendingResumePolish = useRunStore((s) => s.setPendingResumePolish);
   const limitNotice = useRunStore((s) => s.limitNotice);
   const setLimitNotice = useRunStore((s) => s.setLimitNotice);
+  const startConfirm = useRunStore((s) => s.startConfirm);
+  const loginOverlay = useRunStore((s) => s.loginOverlay);
+  const cruiseEndNotice = useRunStore((s) => s.cruiseEndNotice);
 
   const [selectedPlatform, setSelectedPlatform] = useState<string>("boss");
   const [message, setMessage] = useState<string | null>(null);
@@ -62,6 +76,10 @@ export default function Dashboard({ githubUser, onLogout }: DashboardProps = {})
       return false;
     }
   });
+
+  // 新手引导 + 模块首次打开介绍（2026-10-14 用户需求）
+  const [petFirstOpen, setPetFirstOpen] = useState(false);
+  const [introCard, setIntroCard] = useState<IntroModuleId | null>(null);
 
   // 1. 求职画像表单与持久化 Hook
   const profileForm = useProfileFormState({
@@ -199,6 +217,67 @@ export default function Dashboard({ githubUser, onLogout }: DashboardProps = {})
     isChattingOrHasHistory: heroChat.isChattingOrHasHistory,
     activeNav,
   });
+
+  // 5. 新手引导（三步：AI 模型 → 画像 → 平台巡航；可跳过、断点续播、信号自动点亮）
+  // blocked：任何全屏级弹窗打开时收起引导卡，关闭后自动回来（互斥优先于 z-index 抢屏）。
+  const hardOverlayOpen =
+    settingsModalOpen || startConfirm !== null || loginOverlay !== null || cruiseEndNotice !== null;
+  const tour = useOnboardingTour({
+    t,
+    // 引导按账号隔离：换 GitHub 账号登录会重新弹一遍（2026-10-14 用户需求）
+    login: githubUser?.login || "default",
+    running: botRuntime.running,
+    blocked: hardOverlayOpen || mistModalType !== null || drawerOpen,
+    actions: {
+      model: () => setMistModalType("model"),
+      profile: () => {
+        setActiveNav("workbench");
+        wheel.scrollToRingStage(0, true);
+      },
+      cruise: () => {
+        setActiveNav("workbench");
+        wheel.scrollToRingStage(1, true);
+      },
+    },
+  });
+
+  // 5.5 模块首次打开介绍卡：首次进入模块/首次打开设置弹窗时弹一次说明，看过永不复弹。
+  // 引导进行中全部抑制（宠物 flag 保留，引导结束立刻补弹）；已有介绍卡展示中排队等关闭。
+  useEffect(() => {
+    if (petFirstOpen && loadIntroShown().includes("pet")) {
+      setPetFirstOpen(false); // 老用户：直接消费 flag，别挡住导航页介绍
+      return;
+    }
+    if (tour.active || introCard) return;
+    const module = currentIntroModule({
+      activeNav,
+      mistModalType,
+      drawerOpen,
+      drawerTab,
+      petFirstOpen,
+    });
+    if (!module) return;
+    // 设置类模块（rules/policy/model）的介绍卡压在雾化弹窗/抽屉上方展示，只被
+    // 更硬的浮层（系统设置/扫码登录/巡航结束/启动确认）阻塞；导航页/宠物模块
+    // 则要求弹窗抽屉全关才弹。
+    const fromSettings = module === "rules" || module === "policy" || module === "model";
+    const introBlocked =
+      hardOverlayOpen || (!fromSettings && (mistModalType !== null || drawerOpen));
+    if (
+      !shouldShowIntro({ module, shown: loadIntroShown(), tourActive: tour.active, blocked: introBlocked })
+    ) {
+      return;
+    }
+    setIntroCard(module);
+  }, [activeNav, mistModalType, drawerOpen, drawerTab, petFirstOpen, tour.active, introCard, hardOverlayOpen]);
+
+  const dismissIntroCard = useCallback(() => {
+    const current = introCard;
+    if (!current) return;
+    saveIntroShown(markIntroShown(loadIntroShown(), current));
+    if (current === "pet") setPetFirstOpen(false);
+    setIntroCard(null);
+  }, [introCard]);
 
   const toggleSidebar = () => {
     setSidebarCollapsed((prev) => {
@@ -418,7 +497,12 @@ export default function Dashboard({ githubUser, onLogout }: DashboardProps = {})
                 setActiveNav("workbench");
                 wheel.scrollToRingStage(2, true);
               }}
-              onSaveConfig={profileForm.saveConfig}
+              onSaveConfig={async () => {
+                // 包装画像保存：成功时点亮新手引导第二步（未开引导时无副作用）
+                const ok = await profileForm.saveConfig();
+                if (ok) tour.markProfileSaved();
+                return ok;
+              }}
               lang={lang}
               busy={busy}
             />
@@ -523,7 +607,26 @@ export default function Dashboard({ githubUser, onLogout }: DashboardProps = {})
         setMistModalType={setMistModalType}
         botRuntime={botRuntime}
         sidebarCollapsed={sidebarCollapsed}
+        onPetFirstInteract={() => setPetFirstOpen(true)}
       />
+
+      {/* 新手引导三步卡（弹窗打开时自动隐藏，关闭后回来） */}
+      {tour.visible && tour.step && (
+        <GuidedTour
+          step={tour.step}
+          stepIndex={tour.stepIndex}
+          total={tour.total}
+          t={t}
+          onStart={tour.start}
+          onAction={tour.act}
+          onPrev={tour.prevStep}
+          onNext={tour.next}
+          onSkip={tour.skip}
+        />
+      )}
+
+      {/* 模块首次打开介绍卡（压在雾化弹窗之上，看过永不复弹） */}
+      {introCard && <ModuleIntroCard module={introCard} t={t} onClose={dismissIntroCard} />}
     </div>
   );
 }

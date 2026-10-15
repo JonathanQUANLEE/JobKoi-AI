@@ -26,11 +26,25 @@ async def get_schedule_status() -> dict:
 
 @commands.command()
 async def save_schedule(body: _SaveScheduleBody) -> dict:
-    """保存闹钟：启用则创建/覆盖 Windows 计划任务，停用则删除。"""
+    """保存闹钟：启用则创建/覆盖 Windows 计划任务，停用则删除。
+
+    守卫（2026-10-15）：新号保护模式开启中，单一闹钟被三时段保护任务
+    接管——这里直接跳过创建（防宠物 popover 等入口复注册导致双倍投递），
+    返回 superseded 让前端能识别「不是失败，是被接管」。
+    """
+    from boss_zhipin.config.protection import load_protection_config
     from boss_zhipin.gui.scheduler import (
         create_scheduled_task,
         delete_scheduled_task,
     )
+
+    protection = load_protection_config()
+    if protection and bool(protection.get("enabled")):
+        return {
+            "status": "ok",
+            "superseded": True,
+            "message": "新号保护模式接管中，单一闹钟暂不生效。",
+        }
 
     if not body.enabled or not body.auto_run:
         return delete_scheduled_task()

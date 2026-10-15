@@ -295,3 +295,61 @@ def test_dom_loop_aborts_when_browser_dies_mid_run(monkeypatch):
             )
 
     asyncio.run(scenario())
+
+
+# ---------- 关浏览器前摘除 nodriver target 监听（WinError 1225 刷屏修复） ----------
+
+
+def test_detach_nodriver_target_handlers_pops_all_four():
+    """摘除必须精准移除 4 个 target 事件监听，且不动其他 handler。
+
+    背景（2026-10-14 用户实测）：CDP browser.close() 后 Chrome 倾泻
+    TargetDestroyed 事件 → nodriver 派生 update_targets 重连任务 → 对死端口
+    刷 ConnectionRefusedError [WinError 1225]。修复 = close 前把 4 个
+    target 事件 handler 从 connection.handlers 里 pop 掉（源头归零）。
+    """
+    from nodriver import cdp
+
+    from boss_zhipin.website_oper.core.browser_session import (
+        detach_nodriver_target_handlers,
+    )
+
+    class _FakeConn:
+        def __init__(self):
+            self.handlers = {
+                cdp.target.TargetInfoChanged: [object()],
+                cdp.target.TargetCreated: [object()],
+                cdp.target.TargetDestroyed: [object()],
+                cdp.target.TargetCrashed: [object()],
+                "其他监听": [object()],
+            }
+
+    class _FakeBrowserWithConn:
+        connection = _FakeConn()
+
+    browser = _FakeBrowserWithConn()
+    detach_nodriver_target_handlers(browser)
+
+    for evt in (
+        cdp.target.TargetInfoChanged,
+        cdp.target.TargetCreated,
+        cdp.target.TargetDestroyed,
+        cdp.target.TargetCrashed,
+    ):
+        assert evt not in browser.connection.handlers
+    # 无关 handler 不受牵连
+    assert "其他监听" in browser.connection.handlers
+
+
+def test_detach_nodriver_target_handlers_tolerates_bad_input():
+    """None / 缺 connection 的假 browser：静默跳过，绝不能阻碍正常关闭。"""
+    from boss_zhipin.website_oper.core.browser_session import (
+        detach_nodriver_target_handlers,
+    )
+
+    detach_nodriver_target_handlers(None)  # 无 browser：直接返回
+
+    class _Bare:
+        pass
+
+    detach_nodriver_target_handlers(_Bare())  # 无 connection 属性：吞掉不炸

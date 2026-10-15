@@ -213,15 +213,37 @@ def _scan_max_jobs() -> int:
     return _int_env("BOSS_SCAN_MAX_JOBS", 50, minimum=1)
 
 
+def _protection_cap(value: int, env_name: str) -> int:
+    """新号保护模式的 env 上限钳制（2026-10-15）：只收紧、不放宽。
+
+    画像 env 会被 apply_profile_to_env 无条件覆盖，所以保护包络走独立
+    env 名（JOBHUNTER_WINDOW_MAX_SENT / JOBHUNTER_PROTECTION_DAILY，由
+    scheduled_cruise / runtime factory 注入），在这里取 min——用户没保存
+    画像也照样受保护。非法/未设值原样返回。
+    """
+    raw = os.getenv(env_name, "").strip()
+    if raw.isdigit() and int(raw) > 0:
+        return max(1, min(value, int(raw)))
+    return value
+
+
 def _auto_send_max_sent() -> int:
-    return _int_env("BOSS_AUTO_SEND_MAX_SENT", 50, minimum=1)
+    value = _int_env("BOSS_AUTO_SEND_MAX_SENT", 50, minimum=1)
+    return _protection_cap(value, "JOBHUNTER_WINDOW_MAX_SENT")
 
 
 def _auto_send_daily_limit() -> int | None:
     raw = os.getenv("BOSS_AUTO_SEND_DAILY_LIMIT", "").strip()
     if not raw:
-        return None
-    return _int_env("BOSS_AUTO_SEND_DAILY_LIMIT", 80, minimum=1)
+        raw_limit = None
+    else:
+        raw_limit = _int_env("BOSS_AUTO_SEND_DAILY_LIMIT", 80, minimum=1)
+    # 画像没设日限时，保护模式的日额仍然要生效（否则保护日额形同虚设）
+    protection_raw = os.getenv("JOBHUNTER_PROTECTION_DAILY", "").strip()
+    if protection_raw.isdigit() and int(protection_raw) > 0:
+        protection = max(1, int(protection_raw))
+        return protection if raw_limit is None else min(raw_limit, protection)
+    return raw_limit
 
 
 def _stop_on_captcha_enabled() -> bool:

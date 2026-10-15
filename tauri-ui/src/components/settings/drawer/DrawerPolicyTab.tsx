@@ -1,5 +1,8 @@
+import { useEffect, useRef, useState } from "react";
+import { Clock, Power, ShieldCheck } from "lucide-react";
 import { useT } from "../../../store";
 import { DELAY_PRESETS, isPresetActive, isFollowGeneric } from "../../../lib/platformDelays";
+import { ipc } from "../../../lib/ipc";
 
 interface DrawerPolicyTabProps {
   delayMin: string;
@@ -64,6 +67,195 @@ function PresetButton({
   );
 }
 
+/** 新号保护模式卡片（2026-10-15）：三时段配额调度的本地状态与 IPC 同步。 */
+function ProtectionCard({
+  setDelayMin,
+  setDelayMax,
+  setLiepinDelayMin,
+  setLiepinDelayMax,
+  setJob51DelayMin,
+  setJob51DelayMax,
+  setMaxSent,
+  setDailyLimit,
+}: {
+  setDelayMin: (v: string) => void;
+  setDelayMax: (v: string) => void;
+  setLiepinDelayMin: (v: string) => void;
+  setLiepinDelayMax: (v: string) => void;
+  setJob51DelayMin: (v: string) => void;
+  setJob51DelayMax: (v: string) => void;
+  setMaxSent: (v: string) => void;
+  setDailyLimit: (v: string) => void;
+}) {
+  // 与后端 PROTECTION_PRESET 保持一致的展示口径（单一真源头在
+  // boss_zhipin/config/protection.py，前端仅用于额度分配文案）
+  const BOSS_DAILY = 30;
+  const LIEPIN_DAILY = 15;
+  const JOB51_DAILY = 10;
+  const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+  const [enabled, setEnabled] = useState(false);
+  const [times, setTimes] = useState<string[]>(["10:00", "15:00", "20:00"]);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const savedTimesRef = useRef<string>("");
+
+  useEffect(() => {
+    ipc
+      .getProtectionMode()
+      .then((res) => {
+        setEnabled(res.enabled);
+        const slots = ["", "", ""];
+        (res.times || []).slice(0, 3).forEach((t, i) => {
+          slots[i] = t;
+        });
+        setTimes(slots);
+        savedTimesRef.current = slots.join(",");
+      })
+      .catch(() => {});
+  }, []);
+
+  const filled = times.filter((t) => TIME_RE.test(t));
+  const windows = Math.max(1, filled.length);
+  const bossShare = Math.ceil(BOSS_DAILY / windows);
+  const liepinShare = Math.ceil(LIEPIN_DAILY / windows);
+  const job51Share = Math.ceil(JOB51_DAILY / windows);
+
+  const applyPresetToForm = () => {
+    // 保护预设：稳健节奏 30-45s（三平台统一，猎聘/51Job 跟随通用）+
+    // 日限额 30、单轮上限 10（= 三时段份额）。与手动点稳健档同一路径，
+    // 用户可随时再改——预设只是起点，不是锁死。
+    setDelayMin("30");
+    setDelayMax("45");
+    setLiepinDelayMin("");
+    setLiepinDelayMax("");
+    setJob51DelayMin("");
+    setJob51DelayMax("");
+    setMaxSent(String(bossShare));
+    setDailyLimit(String(BOSS_DAILY));
+  };
+
+  const handleToggle = async () => {
+    const next = !enabled;
+    if (next && filled.length === 0) {
+      setStatusMsg("请先填好至少一个时段（HH:MM）再开启");
+      return;
+    }
+    setStatusMsg(next ? "正在注册保护任务…" : "正在移除保护任务…");
+    try {
+      const res = await ipc.saveProtectionMode({ enabled: next, times: filled });
+      if (res.status !== "ok") {
+        setStatusMsg(`保存失败：${res.message || "未知错误"}`);
+        return;
+      }
+      setEnabled(next);
+      if (next) {
+        savedTimesRef.current = filled.join(",");
+        applyPresetToForm();
+        setStatusMsg(
+          "保护模式已开启：已接管定时巡航（单一闹钟暂停），表单已同步稳健节奏与保护限额，记得点底部「保存并应用此配置」",
+        );
+      } else {
+        setStatusMsg("保护模式已关闭：三时段任务已移除，可到「定时巡航」页重新启用单一闹钟");
+      }
+    } catch (err) {
+      setStatusMsg(`保存失败：${String(err)}`);
+    }
+  };
+
+  const handleTimeChange = (index: number, value: string) => {
+    const next = [...times];
+    next[index] = value;
+    setTimes(next);
+    if (!enabled) return;
+    // 全部时段时间合法、且与已保存版本不同才重新注册（防逐键重建任务）
+    const valid = next.filter((t) => TIME_RE.test(t));
+    if (valid.length === 0 || next.some((t) => t && !TIME_RE.test(t))) return;
+    const key = valid.join(",");
+    if (key === savedTimesRef.current) return;
+    ipc
+      .saveProtectionMode({ enabled: true, times: valid })
+      .then((res) => {
+        if (res.status === "ok") {
+          savedTimesRef.current = key;
+          setStatusMsg("时段已更新，计划任务已同步");
+        } else {
+          setStatusMsg(`时段更新失败：${res.message || "未知错误"}`);
+        }
+      })
+      .catch((err) => setStatusMsg(`时段更新失败：${String(err)}`));
+  };
+
+  return (
+    <div
+      className={`rounded-xl border p-4 space-y-3 transition-all ${
+        enabled
+          ? "border-amber-500/40 bg-amber-500/5"
+          : "border-[var(--grid)] bg-[var(--panel-2)]"
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="size-4 text-amber-400" />
+          <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400">
+            新号保护模式
+          </h3>
+          {enabled && (
+            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              守护中
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={handleToggle}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+            enabled
+              ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30"
+              : "bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-600"
+          }`}
+        >
+          <Power className="size-3.5" />
+          <span>{enabled ? "点击停用" : "点击开启"}</span>
+        </button>
+      </div>
+
+      <p className="text-[11px] leading-relaxed text-stone-500">
+        新账号首周防风控专用：开启后接管定时巡航，每日三个时段自动出航并把日限额按份额分配
+        （模拟真人「分时段逛」）；节奏锁定稳健档、限额收紧，手动巡航同样受保护额度约束。
+      </p>
+
+      {enabled && (
+        <div className="space-y-2 pt-1 border-t border-[var(--grid)]">
+          <label className="text-xs font-semibold text-stone-300 flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Clock className="size-4 text-amber-400" />
+              <span>三个巡航时段（24 小时制，建议 09:00-21:00）</span>
+            </span>
+            <span className="text-[11px] text-stone-500">每天重复，改动即同步计划任务</span>
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            {times.map((time, index) => (
+              <input
+                key={index}
+                type="time"
+                value={time}
+                onChange={(e) => handleTimeChange(index, e.target.value)}
+                className="px-3 py-2 rounded-xl border text-sm font-mono font-bold bg-stone-900 border-[var(--grid)] text-amber-300 focus:border-amber-500"
+              />
+            ))}
+          </div>
+          <p className="text-[11px] text-stone-400">
+            额度分配：BOSS {bossShare}/时段 · 猎聘 {liepinShare}/时段 · 前程无忧 {job51Share}/时段
+            （每日上限 {BOSS_DAILY}/{LIEPIN_DAILY}/{JOB51_DAILY}，稳健节奏 30-45s）
+          </p>
+        </div>
+      )}
+
+      {statusMsg && <p className="text-[11px] leading-snug text-amber-300">{statusMsg}</p>}
+    </div>
+  );
+}
+
 export default function DrawerPolicyTab({
   delayMin,
   setDelayMin,
@@ -92,6 +284,18 @@ export default function DrawerPolicyTab({
 
   return (
     <div className="space-y-5">
+      {/* 新号保护模式（2026-10-15）：置于策略区顶部——开启会同步下方节奏/限额 */}
+      <ProtectionCard
+        setDelayMin={setDelayMin}
+        setDelayMax={setDelayMax}
+        setLiepinDelayMin={setLiepinDelayMin}
+        setLiepinDelayMax={setLiepinDelayMax}
+        setJob51DelayMin={setJob51DelayMin}
+        setJob51DelayMax={setJob51DelayMax}
+        setMaxSent={setMaxSent}
+        setDailyLimit={setDailyLimit}
+      />
+
       <div className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-4 space-y-4">
         <div>
           <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400">

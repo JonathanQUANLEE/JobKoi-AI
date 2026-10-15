@@ -40,7 +40,7 @@ interface GithubAuthGateProps {
  * 极简登录门禁（2026-10-14 用户反馈重设计）：
  * - GitHub 登录（OAuth 一键，浏览器授权软件自动识别）
  * - 新用户注册（一键打开 GitHub 注册页）
- * - 游客模式（测试阶段保留）
+ * - 游客模式（仅开发模式：发布版剥离，本地 dev 保留——2026-10-14 用户要求）
  * 旧的 Token 切换 / 邮箱登录 / 注册指引 Tab 全部移除。
  * OAuth 未配置 client_id 时降级显示用户名输入框（过渡期，配置后自动消失）。
  */
@@ -308,16 +308,20 @@ export default function GithubAuthGate({ onLoginSuccess }: GithubAuthGateProps) 
             </div>
           )}
 
-          {/* 游客模式（弱入口，测试阶段保留） */}
-          <div className="pt-1 border-t border-stone-800/80 flex items-center justify-center">
-            <button
-              type="button"
-              onClick={handleDemoLogin}
-              className="text-xs text-stone-500 hover:text-stone-300 underline underline-offset-4 transition-colors cursor-pointer"
-            >
-              游客模式直接体验
-            </button>
-          </div>
+          {/* 游客模式——仅开发模式显示（2026-10-14 用户要求：发布版只允许 GitHub
+              登录；本地 pnpm dev 照常可用，代码保留不删，import.meta.env.DEV
+              在 vite build 生产构建时被静态替换为 false，整块从 bundle 剥离） */}
+          {import.meta.env.DEV && (
+            <div className="pt-1 border-t border-stone-800/80 flex items-center justify-center">
+              <button
+                type="button"
+                onClick={handleDemoLogin}
+                className="text-xs text-stone-500 hover:text-stone-300 underline underline-offset-4 transition-colors cursor-pointer"
+              >
+                游客模式直接体验
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
