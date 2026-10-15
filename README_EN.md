@@ -21,8 +21,8 @@ It no longer provides LLM-generated greetings, resume parsing, RAG, vector store
 ## Quick Start
 
 ```bash
-git clone https://github.com/4evour/Bosszhipin-job-bot.git
-cd Bosszhipin-job-bot
+git clone https://github.com/JonathanQUANLEE/JobKoi-AI.git
+cd JobKoi-AI
 uv sync
 cp .env.example .env
 uv run python -m boss_zhipin.tauri

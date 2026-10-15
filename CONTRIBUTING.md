@@ -144,7 +144,7 @@ PR 合并前必须满足：
 ## 维护者联系
 
 - GitHub issue：日常问题首选
-- @longsizhuo / @TinyAlmond：长期维护人
+- @JonathanQUANLEE：项目维护人
 
 ---
 

@@ -2,7 +2,7 @@
 
 - **状态**：设计定稿
 - **日期**：2026-06-29
-- **目标仓库**：`4evour/Bosszhipin-job-bot`
+- **目标仓库**：`JonathanQUANLEE/JobKoi-AI`
 
 ## 项目定位
 
