@@ -123,4 +123,3 @@ while True:
 - [ADR-002](adr/002-three-providers.md) —— 旧 provider 设计，0.2 已废弃
 - [ADR-004](adr/004-persistent-chrome-profile.md) —— 持久化 Chrome profile
 - [ADR-005](adr/005-pytauri-standalone.md) —— PyTauri standalone
-- [GUI v0.2 设计](designs/gui-v0.2.md) —— 0.2 收敛方向

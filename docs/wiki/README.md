@@ -21,5 +21,5 @@
 
 - 第一次看本项目 → `architecture.md`
 - 跑起来卡住 → `troubleshooting.md`
-- 想动代码前 → 主目录 [CLAUDE.md](../../CLAUDE.md) + [CONTRIBUTING.md](../../CONTRIBUTING.md)
+- 想动代码前 → 主目录 [CLAUDE.md](../../CLAUDE.md)
 - 觉得某个设计奇怪 → 对应 ADR
