@@ -9,7 +9,7 @@ outerHTML，好让我们看清哪种能拿到干净正文、该用哪个选择�
 
 跑法（复用桌面 App 已登录的 profile，先把 App 关掉再跑，避免 profile 被占）：
 
-    BOSS_CHROME_PROFILE="$HOME/Library/Application Support/com.longsizhuo.boss-zhipin/chrome_profile" \
+    BOSS_CHROME_PROFILE="$HOME/Library/Application Support/com.jonathanquanlee.jobkoi-ai/chrome_profile" \
         uv run python scripts/probe_jd_extract.py
 
 或用 repo 本地 profile（会要你重新扫码登录一次）：

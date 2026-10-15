@@ -435,17 +435,17 @@ v0.1 设计要求自动加载更多岗位，并配合去重避免一页岗位不
 ### 影响范围
 - 仅影响文档和示例说明，不改变运行时代码。
 
-## 2026-06-30 00:53 - Rename project metadata for 4evour repository
+## 2026-06-30 00:53 - Rename project metadata for JobKoi-AI repository
 
 ### 变更内容
-- 修改 `README.md`，将项目标题、clone 地址和贡献者图链接指向 `4evour/Bosszhipin-job-bot`，并保留原项目来源说明。
-- 修改 `pyproject.toml`，将包名改为 `bosszhipin-job-bot`，作者改为 `4evour`，描述改为 profile 驱动工具定位。
-- 修改 `src/boss_zhipin/gui/updates.py`，将 GUI 更新检查仓库改为 `4evour/Bosszhipin-job-bot`，并同步包元数据名称。
+- 修改 `README.md`，将项目标题、clone 地址和贡献者图链接指向 `JonathanQUANLEE/JobKoi-AI`，并保留原项目来源说明。
+- 修改 `pyproject.toml`，将包名改为 `bosszhipin-job-bot`，作者改为 `JonathanQUANLEE`，描述改为 profile 驱动工具定位。
+- 修改 `src/boss_zhipin/gui/updates.py`，将 GUI 更新检查仓库改为 `JonathanQUANLEE/JobKoi-AI`，并同步包元数据名称。
 - 修改 `tests/test_updates.py`，更新 release URL 断言。
 - 更新 `uv.lock`，同步新的项目包名。
 
 ### 原因
-用户希望将工具沉淀并上传到自己的 GitHub 仓库 `4evour/Bosszhipin-job-bot`，公开文档和包元数据需要与目标仓库一致。
+用户希望将工具沉淀并上传到自己的 GitHub 仓库 `JonathanQUANLEE/JobKoi-AI`，公开文档和包元数据需要与目标仓库一致。
 
 ### 影响范围
 - 影响 README 安装入口、包元数据和 GUI 更新检查目标仓库。
@@ -454,12 +454,12 @@ v0.1 设计要求自动加载更多岗位，并配合去重避免一页岗位不
 ## 2026-06-30 00:58 - Merge target repository initial files
 
 ### 变更内容
-- 修改 `LICENSE`，合并远端初始仓库的 `4evour` 版权声明与原项目版权声明。
+- 修改 `LICENSE`，更新 `JonathanQUANLEE` 版权声明。
 - 修改 `README.md`，解决与远端初始 README 的合并冲突，保留完整 profile 驱动使用教程。
 - 修改 `CHANGELOG.md`，记录上传目标仓库前的冲突处理。
 
 ### 原因
-目标仓库 `4evour/Bosszhipin-job-bot` 已有初始提交；推送前需要非强制合并远端历史，避免覆盖用户仓库已有内容。
+目标仓库 `JonathanQUANLEE/JobKoi-AI` 已有初始提交；推送前需要非强制合并远端历史，避免覆盖用户仓库已有内容。
 
 ### 影响范围
 - 影响许可证版权声明和 README 合并结果。
@@ -497,7 +497,7 @@ v0.1 设计要求使用多个可继承 profile 驱动 CLI 配置，后续标题�
 ## 2026-06-29 23:20 - Document profile-driven CLI v0.1 design
 
 ### 变更内容
-- 新增 `docs/wiki/designs/profile-driven-cli-v0.1.md`，记录 `4evour/Bosszhipin-job-bot` v0.1 的 profile 驱动 CLI 设计。
+- 新增 `docs/wiki/designs/profile-driven-cli-v0.1.md`，记录 `JonathanQUANLEE/JobKoi-AI` v0.1 的 profile 驱动 CLI 设计。
 - 文档明确多 profile 继承、显式 `enabled` 规则开关、`contains/regex/exact` 匹配、默认 `title` 作用域、页面筛选失败 warning 后继续、本地规则兜底、招呼语文件、随机发送等待范围、自动滚动加载更多、岗位去重和日志拆分。
 
 ### 原因

@@ -2,10 +2,8 @@
 
 - **状态**：已采纳
 - **日期**：2026-05-11
-- **决策人**：longsizhuo
-- **相关 commit**：[`e83e314`](https://github.com/longsizhuo/BossZhiPin_Job_Search/commit/e83e314)
-  (langchain 移除) + [`eda7af4`](https://github.com/longsizhuo/BossZhiPin_Job_Search/commit/eda7af4)
-  (Selenium → nodriver)
+- **决策人**：JonathanQUANLEE
+- **相关 commit**：nodriver 自动化架构重构
 
 ## 背景
 
@@ -56,11 +54,8 @@
    认真用过。
 3. **`new_window=True` 是必须的**。持久化 profile 启动时 Chrome 会恢复上次的
    tab，控制 tab 容易被淹没。开新窗口能保证 caller 总是能拿到那个 tab 的引用。
-   见 commit [`7dbdf37`](https://github.com/longsizhuo/BossZhiPin_Job_Search/commit/7dbdf37)。
 4. **某些 nodriver API 的 timeout 行为不可靠**。比如 `tab.select(sel, timeout=0)`
-   会无限阻塞而不是立即返回（见 commit
-   [`cde78b2`](https://github.com/longsizhuo/BossZhiPin_Job_Search/commit/cde78b2)）。
-   我们的 `_xpath_safe` 包了 `asyncio.wait_for` 兜底。
+   会无限阻塞而不是立即返回。我们的 `_xpath_safe` 包了 `asyncio.wait_for` 兜底。
 
 ## 验证
 
