@@ -12,9 +12,11 @@ import 本包后 main() 用同一实例 generate_handler。
 - platform  多平台中心（登录态/投递历史）
 - window    窗口控制
 - schedule  定时巡航闹钟
+- oauth     GitHub OAuth 一键登录与点星检测
 - protection 新号保护模式（三时段配额调度）
 
-IPC 契约（40 个命令名）由 tests/test_tauri_ipc_contract.py 守门。
+IPC 契约由 tests/test_tauri_ipc_contract.py 守门（当前断言 45 个命令名，
+增删命令须同步该测试）。
 """
 
 from boss_zhipin.tauri.commands._registry import commands

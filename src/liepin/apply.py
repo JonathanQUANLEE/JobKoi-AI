@@ -266,7 +266,24 @@ async def run(
                 return sent_this_run
             if result == "captcha":
                 _log("[liepin] 🛑 触发风控验证码，立即停止本轮（避免封号）")
-                events.emit("captcha_stopped", platform="liepin", title=title)
+                # 2026-10-18 用户需求：强提醒——强制前置浏览器 + 保留窗口
+                # 等用户完成验证（runner 收尾据此跳过自动关浏览器）。
+                from boss_zhipin.gui import browser_retention
+                from boss_zhipin.website_oper.core.window_focus import focus_platform_browser
+
+                browser_retention.request_keep_open("liepin")
+                await focus_platform_browser("liepin")
+                events.emit(
+                    "captcha_stopped",
+                    platform="liepin",
+                    title=title,
+                    needs_user_action=True,
+                    message=(
+                        "猎聘触发验证码/安全验证，巡航已安全停止。"
+                        "受控浏览器窗口已强制前置——请立即在浏览器中完成验证；"
+                        "窗口会保持打开，验证完成后可重新启动巡航。"
+                    ),
+                )
                 append_jsonl(SEEN_LOG, {"ts": datetime.now().isoformat(), "job_id": job_id, "title": title, "company": company, "salary": salary, "location": location, "reason": "captcha"})
                 return sent_this_run
             if result == "limit":

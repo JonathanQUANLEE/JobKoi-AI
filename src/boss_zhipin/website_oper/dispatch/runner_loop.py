@@ -18,6 +18,8 @@ from boss_zhipin.website_oper.dispatch.job_evaluator import evaluate_job_match
 from boss_zhipin.website_oper.dispatch.loop_actions import (
     click_contact_and_send_response,
     compose_greeting,
+    is_apply_online_button,
+    probe_apply_online_button,
     send_response_and_go_back,
 )
 from boss_zhipin.website_oper.dispatch.loop_config import (
@@ -77,6 +79,14 @@ async def send_job_descriptions_to_chat(
     if use_current_page or finding_jobs.get_tab() is not None:
         if finding_jobs.is_browser_alive():
             await finding_jobs.ensure_current_tab()
+            # 验证码保留窗口的会话复用保护（2026-10-18 审查）：验证码停机时
+            # 我们故意不关浏览器（让用户完成验证），但用户可能没验证就直接
+            # 又点启动——此时旧页面仍是验证码页，直接复用会立刻再次停机。
+            # 探测命中即丢弃会话、全新启动（等价于旧版"关掉重开"语义）。
+            if await finding_jobs.captcha_visible():
+                log.warning("复用的页面仍在验证码/安全验证状态，关闭会话后重新启动浏览器")
+                await finding_jobs.shutdown()
+                await finding_jobs.open_browser_with_options(url, browser_type)
         else:
             log.warning("受控浏览器已关闭（或进程不存在），清理残留会话后全新启动")
             await finding_jobs.shutdown()
@@ -143,6 +153,23 @@ async def send_job_descriptions_to_chat(
         return
 
     if cfg.stop_on_captcha and await finding_jobs.captcha_visible():
+        # 2026-10-18 用户需求：验证码必须"强提醒"——强制前置浏览器窗口 +
+        # 保留窗口等用户完成验证（runner 收尾据此跳过自动关浏览器）。
+        from boss_zhipin.gui import browser_retention
+        from boss_zhipin.website_oper.core.window_focus import focus_platform_browser
+
+        browser_retention.request_keep_open("boss")
+        await focus_platform_browser("boss")
+        events.emit(
+            "captcha_stopped",
+            platform="boss",
+            needs_user_action=True,
+            message=(
+                "BOSS 触发验证码/安全验证，巡航已安全停止。"
+                "受控浏览器窗口已强制前置——请立即在浏览器中完成验证；"
+                "窗口会保持打开，验证完成后可重新启动巡航。"
+            ),
+        )
         raise RuntimeError("检测到验证码/安全验证，已按 BOSS_STOP_ON_CAPTCHA 停止")
 
     start_job_index = (
@@ -322,6 +349,51 @@ async def send_job_descriptions_to_chat(
                 element = await finding_jobs.get_text_by_css(".op-btn.op-btn-chat")
                 log.info("chat 按钮文字: %r", element)
                 button_text = (element or "").strip()
+                if not button_text:
+                    # 沟通按钮读不到：探测网申形态按钮（不同类名），日志更精准
+                    button_text = await probe_apply_online_button()
+                if is_apply_online_button(button_text):
+                    # 网申/外链岗位（2026-10-17 用户实测痛点）：按钮为「立即网申」
+                    # 等外部投递入口，不能走站内直聊——守护 Agent 记录并平滑跳过，
+                    # 主循环绝不因单个岗位的异态中断。
+                    detail = (
+                        f"BOSS 按钮为「{button_text}」，该岗位需外部系统网申，暂不支持站内直聊"
+                    )
+                    log.info("⏭️ [网申岗位跳过 #%d] %s", job_index, detail)
+                    _log_skipped(
+                        cfg.skipped_log_path,
+                        job=job,
+                        job_key=dedupe_key,
+                        send_mode=cfg.send_mode,
+                        reason="apply_online",
+                        details={
+                            "stage": "contact_status",
+                            "reason": detail,
+                            "button_text": button_text,
+                        },
+                    )
+                    events.emit(
+                        "job_skipped",
+                        platform="boss",
+                        index=job_index,
+                        reason="apply_online",
+                        detail=detail,
+                        title=job_title,
+                    )
+                    events.emit(
+                        "agent_intervene",
+                        platform="boss",
+                        level="info",
+                        title=job_title,
+                        action="安全跳过",
+                        detail=(
+                            f"识别到「{button_text}」岗位：需外部系统投递，暂不支持站内直聊。"
+                            "已记录并平滑推进下一岗位，主流程未受阻"
+                        ),
+                    )
+                    advance_position()
+                    await asyncio.sleep(3)
+                    continue
                 if button_text != "立即沟通":
                     already_contacted = "沟通" in button_text
                     skip_reason = (

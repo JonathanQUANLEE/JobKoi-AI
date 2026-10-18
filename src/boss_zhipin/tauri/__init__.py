@@ -22,12 +22,12 @@
 - 主循环还是 ``website_oper.write_response.send_job_descriptions_to_chat``
 
 **命令层按业务域拆分至 ``boss_zhipin.tauri.commands`` 包**（P2-5，2026-10）：
-runtime/profile/resume/agent/platform/window/schedule 七个域模块 +
-``_registry``（共享 Commands 实例）+ ``_base``（camelCase 模型基类）。
+runtime/profile/resume/agent/platform/window/schedule/oauth/protection 九个
+域模块 + ``_registry``（共享 Commands 实例）+ ``_base``（camelCase 模型基类）。
 本模块保留：env 初始化、全部命令与 body 模型的**兼容 re-export**（老消费者
 ``__main__`` / ``scripts/agent_smoke.py`` / ``tests/test_preview.py`` 不破）、
-``main()`` 入口。IPC 契约（38 个命令名）由
-``tests/test_tauri_ipc_contract.py`` 守门（扫描本文件 + ``commands/*.py``）。
+``main()`` 入口。IPC 契约由 ``tests/test_tauri_ipc_contract.py`` 守门（扫描
+本文件 + ``commands/*.py``；当前 45 个命令名，增删命令须同步该测试断言）。
 
 **关键约束**（见 project memory）：
 - `start_blocking_portal("asyncio")` —— 不能默认 trio/uvloop，否则 nodriver

@@ -68,3 +68,71 @@ async def compose_greeting(job_description: str, fixed_greeting: str) -> tuple[s
             "AI 招呼语不可用，降级固定招呼语: %s", result.get("message", "未知原因")
         )
     return fixed_greeting, "fixed"
+
+
+# ---------------------------------------------------------------------------
+# 网申/外链岗位识别与聊天链路自愈（2026-10-17 用户实测痛点）
+#
+# BOSS 上部分大厂/校招岗的动作按钮不是「立即沟通」而是「立即网申」「前往
+# 官网投递」——点击不会进入聊天页。旧流程对此毫无感知：API 流把
+# btn-startchat 类名的网申按钮当沟通按钮点下去（假报 sent + 网申弹窗残留
+# 阻塞后续岗位），DOM 流则硬等 #chat-input 50s 超时后抛 RuntimeError 直接
+# 中断整轮巡航。守护 Agent 的职责：识别 → 记录 → 平滑跳过，主循环绝不因
+# 单个岗位的异态停机。
+# ---------------------------------------------------------------------------
+
+# 网申/外链按钮的文案特征（保守匹配：宁漏勿误——漏判退化为旧的
+# contact_unavailable/no_button 跳过路径，误判会白白放弃可直聊的岗位）。
+_APPLY_ONLINE_BUTTON_PATTERNS = ("网申", "官网投递")
+
+
+def is_apply_online_button(button_text: str) -> bool:
+    """判定按钮文案是否为网申/外部投递入口（不能走站内直聊）。纯函数便于单测。"""
+    text = (button_text or "").strip()
+    if not text:
+        return False
+    return any(pattern in text for pattern in _APPLY_ONLINE_BUTTON_PATTERNS)
+
+
+async def probe_apply_online_button(timeout: float = 1.5) -> str:
+    """当常规沟通按钮读不到时，探测页面上是否存在网申形态的动作按钮。
+
+    覆盖「网申按钮与沟通按钮不同类名」的形态：btn-startchat / op-btn-chat
+    都找不到时，直接按文案搜网申按钮。命中返回按钮文案，否则返回空串。
+    只在按钮缺失的异常态调用（正常岗位零成本）。
+    """
+    from boss_zhipin.website_oper import finding_jobs
+
+    for xpath in (
+        "//a[contains(normalize-space(text()), '网申')]",
+        "//*[contains(@class, 'op-btn') and contains(normalize-space(text()), '网申')]",
+    ):
+        try:
+            els = await finding_jobs._xpath_safe(xpath, timeout=timeout)
+        except Exception:  # noqa: BLE001
+            els = []
+        if els:
+            return (els[0].text or "").strip()
+    return ""
+
+
+async def recover_from_chat_failure() -> bool:
+    """聊天链路异常后的守护 Agent 自愈：清理弹窗并尽力回到岗位列表。
+
+    返回 True = 已恢复（调用方记跳过、继续下一岗位）；False = 回不去
+    （调用方让原异常继续传播——真·浏览器级故障的停机是正确行为）。
+    先探测是否仍在列表页（按钮未找到但页面没动过的场景，无需导航），
+    再做弹窗清理 + 回退重试。
+    """
+    from boss_zhipin.website_oper import finding_jobs
+
+    try:
+        # 仍在岗位列表页（.job-card-box 在 DOM 里）：页面状态未漂移，直接恢复
+        if await finding_jobs.wait_for_css(".job-card-box", timeout=3):
+            return True
+        await finding_jobs.click_stay_on_page_if_present(timeout=2)
+        await finding_jobs.dismiss_greeting_dialog(timeout=2)
+        return await finding_jobs.return_to_job_list()
+    except Exception as e:  # noqa: BLE001
+        log.warning("聊天链路自愈过程自身异常：%s", e)
+        return False

@@ -328,6 +328,22 @@ export function useJobBotRuntime({
             duration: 12000,
           });
         }
+        // 验证码强提醒（2026-10-18 用户需求）：窗口已被后端强制前置，
+        // 前端同步弹一条长停留通知，把"需要你现在去验证"说清楚——否则
+        // 用户只看到巡航莫名结束，不知道要处理浏览器里的验证码。
+        if (ev.kind === "captcha_stopped") {
+          const p = ev.payload as Record<string, unknown>;
+          const platformName =
+            p.platform === "liepin" ? "猎聘" : p.platform === "job51" ? "前程无忧" : "BOSS 直聘";
+          useRunStore.getState().notify({
+            type: "error",
+            text:
+              (typeof p.message === "string" && p.message) ||
+              `${platformName}触发验证码/安全验证，巡航已停止。请立即在已弹出的浏览器窗口中完成验证。`,
+            source: "需要你处理",
+            duration: 60000,
+          });
+        }
       });
       const logChannel = new Channel<string>((line) => pushLog(`${formatLocalTime()} ${line}`));
       const config: RunConfig = {

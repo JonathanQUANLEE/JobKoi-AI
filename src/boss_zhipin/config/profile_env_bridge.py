@@ -42,6 +42,19 @@ def apply_profile_to_env(
     set_env_if_present("BOSS_AUTO_SEND_DELAY_MAX", send_config, "delay_max")
     set_env_if_present("BOSS_AUTO_SEND_MAX_SENT", send_config, "max_sent")
     set_env_if_present("BOSS_AUTO_SEND_DAILY_LIMIT", send_config, "daily_sent_limit")
+    # 分平台单轮上限（2026-10-17 用户需求"三个平台都应该能设"）：GUI 弹窗
+    # 三平台单轮输入落盘 liepin_run_max / job51_run_max，经此映射到运行时
+    # env（runtime.py 手动巡航的 env_run_max 读取；保护模式注入的更小份额
+    # 仍由 limits.env_run_max 的 min 逻辑优先）。
+    set_env_if_present("LIEPIN_RUN_MAX", send_config, "liepin_run_max")
+    set_env_if_present("JOB51_RUN_MAX", send_config, "job51_run_max")
+    # 分平台每日投递上限（2026-10-18 三路审查发现的严重缺陷修复）：
+    # 「投递安全与防风控保护」弹窗里猎聘/前程的"次/天"输入此前只写
+    # localStorage、后端从不读取——用户调低日限想保号实际不生效，仍按
+    # limits.py 默认 50/40 投。补齐 profile 字段 → env 映射，与 BOSS 的
+    # daily_sent_limit 同款语义；runtime.py / apply.py 已从这两个 env 读取。
+    set_env_if_present("LIEPIN_DAILY_LIMIT", send_config, "liepin_daily_limit")
+    set_env_if_present("JOB51_DAILY_LIMIT", send_config, "job51_daily_limit")
     set_env_if_present("BOSS_STOP_ON_CAPTCHA", send_config, "stop_on_captcha")
     set_env_if_present(
         "BOSS_SEND_RESUME_AFTER_GREETING", send_config, "send_resume_after_greeting"
@@ -100,6 +113,12 @@ def apply_profile_to_env(
 
 
 def clear_profile_mode_env() -> None:
+    """清空上一份 profile 注入的全部 env（切换画像时防状态残留）。
+
+    2026-10-18 三路审查发现：旧列表漏清单轮上限 / 日限 / 延时系列，
+    先跑 A 画像再跑 B（B 无这些字段）时，B 会沿用 A 的设置——例如 A
+    设了猎聘日限 20，切到没设该字段的 B 后仍按 20 投，而不是回退默认 50。
+    """
     for name in (
         "BOSS_AUTO_SEND_FIXED_GREETING",
         "BOSS_REVIEW_BEFORE_SEND",
@@ -116,6 +135,22 @@ def clear_profile_mode_env() -> None:
         "BOSS_SEND_RESUME_AFTER_GREETING",
         "BOSS_AUTO_RESUME_ON_REPLY",
         "BOSS_AI_GREETING",
+        # 2026-10-18 补齐（审查发现的残留缺陷）
+        "BOSS_AUTO_SEND_MAX_SENT",
+        "BOSS_AUTO_SEND_DELAY_MIN",
+        "BOSS_AUTO_SEND_DELAY_MAX",
+        "LIEPIN_RUN_MAX",
+        "JOB51_RUN_MAX",
+        "LIEPIN_DAILY_LIMIT",
+        "JOB51_DAILY_LIMIT",
+        "LIEPIN_DELAY_MIN",
+        "LIEPIN_DELAY_MAX",
+        "JOB51_DELAY_MIN",
+        "JOB51_DELAY_MAX",
+        # 搜索目标（2026-10-18 质检补充：先跑 A 画像（带搜索词）再切 B
+        # （无 query）时沿用 A 的搜索词，目标错乱——与上面限额系列同款残留）
+        "BOSS_LABEL",
+        "BOSS_START_URL",
     ):
         os.environ.pop(name, None)
 

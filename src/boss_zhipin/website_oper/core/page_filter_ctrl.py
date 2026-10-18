@@ -32,6 +32,37 @@ _BOSS_ACTIVE_PATTERNS = (
 
 BOSS_MAX_CITIES_PER_BATCH = 4  # 兼容保留：BOSS 网页 UI 单次勾选上限（wapi 已实证只收单城）
 
+# 「全国」意向的热门城市展开序列（2026-10-17 用户痛点）：BOSS 的全国代码
+# 100010000 只会按 IP 属地/泛热度返回混合流，用户感知"只搜了本地，完全
+# 没覆盖全国"。选"全国"时自动展开为核心 Top 城市走多城轮换——每个城市
+# 都真实投到，而不是一个 IP 属地混合流糊弄。全部城市均在 BOSS_CITY_CODES
+# 代码表内（URL 直填可靠）。
+NATIONWIDE_DEFAULT_CITIES: tuple[str, ...] = (
+    "北京", "上海", "广州", "深圳", "杭州",
+    "成都", "武汉", "南京", "西安", "苏州",
+)
+
+
+def expand_nationwide_cities(values: list[str]) -> list[str]:
+    """把「全国」意向展开为核心热门城市序列（保序去重，纯函数）。
+
+    - ["全国"] → 10 个 Top 城市（北上广深杭+成都武汉南京西安苏州）
+    - ["全国", "北京"] → 10 城（北京去重，不重复出现）
+    - 不含"全国" → 原样返回（零介入）
+    展开结果交给上层洗牌轮换——"全国"从此等于"每个核心城市都投到"。
+    """
+    if not any(v == "全国" for v in values):
+        return list(values)
+    expanded: list[str] = []
+    for value in values:
+        if value == "全国":
+            for city in NATIONWIDE_DEFAULT_CITIES:
+                if city not in expanded:
+                    expanded.append(city)
+        elif value and value not in expanded:
+            expanded.append(value)
+    return expanded
+
 # BOSS 城市代码表（城市名 → URL city 参数代码）。
 # 为什么改走 URL：2026-10-12 probe（scripts/probe/probe_city_panel.py）实锤
 # DOM 点击城市 chip 不可行——城市面板里的 chips 不是可 find 的文本节点，
@@ -330,6 +361,7 @@ async def rotate_next_city_batch(
     if not isinstance(city_cfg, dict) or not bool(city_cfg.get("enabled", True)):
         return False
     raw_cities = [str(item).strip() for item in city_cfg.get("values") or [] if str(item).strip()]
+    raw_cities = expand_nationwide_cities(raw_cities)  # 「全国」→ 核心城市序列
     if len(raw_cities) < 2:
         return False  # 单城无需推进
 
@@ -393,6 +425,45 @@ async def rotate_next_city_batch(
     return True
 
 
+async def restart_city_rotation_round(
+    filters: dict | None,
+    emit_event: Callable[[dict], None] | None = None,
+) -> bool:
+    """一轮城市序列全部走完后，重洗序列开启下一轮全覆盖（2026-10-17 公平轮换）。
+
+    单元配额轮换的续航引擎：配额触发轮换后，一轮城市×岗位词矩阵走完时
+    若仍有单元有存量（页面没扫完），重洗城市序列（新的随机顺序，拟人化：
+    每轮访问模式都不同）并把游标拨回 -1，随后调 ``rotate_next_city_batch``
+    会从新序列的第 1 城继续。返回 False = 无法重开（非多城配置/城市未启用）。
+    """
+    if not isinstance(filters, dict):
+        return False
+    city_cfg = filters.get("city")
+    if not isinstance(city_cfg, dict) or not bool(city_cfg.get("enabled", True)):
+        return False
+    raw_cities = [str(item).strip() for item in city_cfg.get("values") or [] if str(item).strip()]
+    raw_cities = expand_nationwide_cities(raw_cities)
+    if len(raw_cities) < 2:
+        return False
+    _city_rotation_state["city_sequence"] = build_shuffled_city_sequence(raw_cities)
+    _city_rotation_state["city_cursor"] = -1
+    log.info(
+        "【城市随机推进】一轮城市已走完，重洗序列开启下一轮：[%s]",
+        ", ".join(_city_rotation_state["city_sequence"]),
+    )
+    if emit_event:
+        emit_event(
+            {
+                "group": "city_rotation",
+                "status": "restarted",
+                "message": (
+                    "城市×岗位词矩阵一轮走完但仍有存量，重洗城市顺序开启下一轮全覆盖"
+                ),
+            }
+        )
+    return True
+
+
 async def apply_page_filters(
     filters: dict | None,
     *,
@@ -415,6 +486,27 @@ async def apply_page_filters(
     city_cfg = filters.get("city")
     if isinstance(city_cfg, dict) and bool(city_cfg.get("enabled", True)):
         raw_values = [str(item).strip() for item in city_cfg.get("values") or [] if str(item).strip()]
+        # 「全国」→ 核心城市序列（2026-10-17）：全国代码只会返回 IP 属地混合流，
+        # 展开后走多城随机轮换，每个核心城市都真实投到。
+        expanded_values = expand_nationwide_cities(raw_values)
+        if expanded_values != raw_values:
+            log.info(
+                "意向城市为「全国」，自动展开为核心城市交错巡航序列：%s",
+                ", ".join(expanded_values),
+            )
+            if emit_event:
+                emit_event(
+                    {
+                        "group": "city",
+                        "value": "全国",
+                        "status": "expanded",
+                        "message": (
+                            f"「全国」已展开为 {len(expanded_values)} 个核心城市"
+                            f"（{', '.join(expanded_values)}），将按随机顺序逐城投递，每个城市都投到"
+                        ),
+                    }
+                )
+        raw_values = expanded_values
         if raw_values:
             if len(raw_values) >= 2:
                 # ≥2 城：Fisher-Yates 洗牌出随机访问顺序，逐城推进

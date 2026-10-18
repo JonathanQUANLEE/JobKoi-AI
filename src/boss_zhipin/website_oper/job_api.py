@@ -124,20 +124,59 @@ def to_job_posting(job: ApiJob, description: str = "") -> finding_jobs.JobPostin
 
 
 def _search_api_js(query: str, page: int) -> str:
-    """页面上下文里同步 XHR 搜索接口（自动带登录 cookie），返回 JSON 文本。"""
+    """页面上下文里同步 XHR 搜索接口（自动带登录 cookie），返回 JSON 文本。
+
+    2026-10-17 二次实测加固：同步 XHR 在网络层被拒（风控掐连接）时会抛
+    JS 异常，nodriver evaluate 把异常吞成 None——上层只能看到含糊的
+    「无有效响应」，无法定位平台到底做了什么。这里 try/catch 包住，
+    异常与 HTTP 状态码都以结构化 JSON 带回（code=xhr_error / http_XXX），
+    下次再被拒日志会显示真实原因。
+    """
     return (
-        "(() => { const x = new XMLHttpRequest();"
+        "(() => { try {"
+        " const x = new XMLHttpRequest();"
         f" x.open('GET', '{SEARCH_API_PATH}?{query}&page={page}&pageSize={PAGE_SIZE}', false);"
-        " x.send(); return x.responseText; })()"
+        " x.send();"
+        " if (x.status !== 200)"
+        "   return JSON.stringify({code: 'http_' + x.status, message: 'HTTP 状态码异常'});"
+        " return x.responseText;"
+        " } catch (e) {"
+        " return JSON.stringify({code: 'xhr_error', message: String(e),"
+        " status: (typeof x !== 'undefined' && x) ? x.status : 0});"
+        " } })()"
     )
 
 
 async def fetch_search_page(tab: uc.Tab, query: str, page: int) -> list[ApiJob]:
-    """拉搜索结果第 ``page`` 页。接口异常/风控时抛 RuntimeError。"""
-    # 同步 XHR 会冻结页面主线程，BOSS 限流时可能长时间不返回，包超时兜底。
-    raw = await asyncio.wait_for(
-        tab.evaluate(_search_api_js(query, page)), timeout=30
-    )
+    """拉搜索结果第 ``page`` 页。接口异常/风控时抛 RuntimeError。
+
+    2026-10-18 事故修复（三路审查）：本函数 docstring 承诺"接口异常抛
+    RuntimeError"，但 ``asyncio.wait_for`` 超时抛的是 ``asyncio.TimeoutError``、
+    浏览器断开抛的是 ``OSError``（ConnectionRefused 等）——两者都不是
+    RuntimeError，调用方 ``search_api_flow`` 只 ``except RuntimeError``，
+    于是直接穿透到 ``runner._wrap`` 把整轮巡航打死（与 16:00 详情页 JD
+    超时同款事故，这是搜索页这个漏修的入口）。
+
+    这里在源头把两类异常收敛成 RuntimeError（契约兑现）：
+    - 超时 → 文案含「无有效响应」，走调用方既有的"冷却+刷新+重试一次"自愈；
+    - 连接断开 → 文案不含该关键词，走调用方的优雅停机分支（浏览器都关了，
+      重试没有意义）。
+    """
+    try:
+        # 同步 XHR 会冻结页面主线程，BOSS 限流时可能长时间不返回，包超时兜底。
+        raw = await asyncio.wait_for(
+            tab.evaluate(_search_api_js(query, page)), timeout=30
+        )
+    except asyncio.TimeoutError as e:
+        raise RuntimeError(
+            "搜索接口无有效响应（请求超时 30s，页面可能被验证码/风控 JS 卡住，可刷新重试）"
+        ) from e
+    except OSError as e:
+        # 注意：Python 3.11+ 的 asyncio.TimeoutError 也是 OSError 子类，
+        # 所以上面必须先捕 TimeoutError，再捕 OSError（顺序不能反）。
+        raise RuntimeError(
+            f"浏览器连接已断开（{type(e).__name__}: {e}），本轮巡航中止"
+        ) from e
     if isinstance(raw, str):
         try:
             data: object = json.loads(raw)
@@ -146,7 +185,13 @@ async def fetch_search_page(tab: uc.Tab, query: str, page: int) -> list[ApiJob]:
     else:
         data = raw
     if not isinstance(data, dict) or data.get("code") != 0:
-        code = data.get("code") if isinstance(data, dict) else "?"
+        if not isinstance(data, dict):
+            # evaluate 没有返回可解析对象（2026-10-17 实测事故：单元轮换整页
+            # 导航后首个 wapi XHR 偶发拿到空值——页面执行上下文/风控令牌未
+            # 就绪）。独立错误签名让上层能识别这种"可刷新自愈"的异常，
+            # 与平台语义错误（code=37/19…）区分：前者重试有意义，后者没有。
+            raise RuntimeError("搜索接口无有效响应（页面上下文可能未就绪，可刷新重试）")
+        code = data.get("code")
         # 透传平台返回的人话原因（2026-10-13：code=37 限流时用户只看到
         # 冰冷代号，不知道是"请求过于频繁"——把 message 带上）
         detail = ""

@@ -410,7 +410,33 @@ async def open_detail(tab: uc.Tab, href: str) -> None:
 
 
 async def detail_company(tab: uc.Tab) -> str:
-    """从详情页抓公司名（去重用）。"""
+    """从详情页抓公司名（去重用）。
+
+    2026-10-18 审查加固：旧版只靠两 fragile 正则（依赖"已认证·X"特定格式），
+    失败则 company=""，公司维度去重静默失效 → 同公司多岗重复投递。
+    现在 DOM 结构化提取优先（猎聘详情页公司名常见于 .company-name /
+    [class*=company] 等节点），innerText 正则做兜底，最后 document.title
+    （页面标题通常含公司名）做最终兜底——三层保证尽量拿到公司名。
+    """
+    # ① DOM 结构化提取（最稳）
+    try:
+        raw = await asyncio.wait_for(
+            tab.evaluate(
+                "(() => {"
+                " const el = document.querySelector("
+                "   '.company-name, [class*=company-name], [class*=companyName]',"
+                " );"
+                " if (el) return (el.textContent || '').trim().slice(0, 60);"
+                " return '';"
+                "})()"
+            ),
+            timeout=5,
+        )
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip()
+    except Exception:  # noqa: BLE001
+        pass
+    # ② innerText 正则（旧逻辑兜底）
     try:
         txt = await tab.evaluate(
             "(document.body && document.body.innerText || '').slice(0, 800)"

@@ -13,6 +13,11 @@ from boss_zhipin.audit import validate_letter
 from boss_zhipin.config.filter_rules import match_posting
 from boss_zhipin.gui import events
 from boss_zhipin.platforms.platform_limits import PlatformLimitReached
+from boss_zhipin.website_oper.dispatch.loop_actions import (
+    is_apply_online_button,
+    probe_apply_online_button,
+)
+from boss_zhipin.website_oper.core.page_filter_ctrl import expand_nationwide_cities
 from boss_zhipin.website_oper.dispatch.env_config import (
     _auto_send_daily_limit,
     _auto_send_delay_range,
@@ -55,6 +60,50 @@ def _keyword_from_url(url: str) -> str:
         if key == "query":
             return value
     return ""
+
+
+def _current_city_name() -> str:
+    """从当前 URL 的 city 代码反查城市名（单元身份的地面真相）。
+
+    城市轮换原语（apply_page_filters / rotate_next_city_batch）都以 URL 直填
+    方式应用城市，URL 的 city 参数就是"当前正在投哪个城"的唯一事实源。
+    解析失败返回空串（单元键退化为 ("", 词)，不炸流程）。
+    """
+    from urllib.parse import parse_qsl, urlsplit
+
+    from boss_zhipin.website_oper import finding_jobs
+    from boss_zhipin.website_oper.core.page_filter_ctrl import BOSS_CITY_CODES
+
+    code_to_name = {code: name for name, code in BOSS_CITY_CODES.items()}
+    url = finding_jobs.get_current_url()
+    for key, value in parse_qsl(urlsplit(url or "").query, keep_blank_values=True):
+        if key == "city" and value in code_to_name:
+            return code_to_name[value]
+    return ""
+
+
+def _unit_quotas() -> tuple[int, int]:
+    """(城市×岗位词) 单元配额：(扫描新岗位数, 投出数)，带下限钳制。
+
+    默认扫 12 个新岗位或投 5 份即轮换（2026-10-17 用户实测调整：投出配额
+    2 太激进——画像过滤宽时约 90 秒就整页导航换城，轮换开销与风控压力
+    偏大；5 份让单元驻留更久、节奏更平缓）。钳制下限防误配成 0（配额
+    永不触发=公平轮换失效）。
+    """
+    try:
+        scan_quota = max(5, int(os.getenv("BOSS_UNIT_SCAN_QUOTA", "12")))
+    except ValueError:
+        scan_quota = 12
+    try:
+        sent_quota = max(1, int(os.getenv("BOSS_UNIT_SENT_QUOTA", "5")))
+    except ValueError:
+        sent_quota = 5
+    return scan_quota, sent_quota
+
+
+# 单元轮换的最大轮数护栏：防 URL 城市解析异常等病态状态下 ③ 分支无限重启。
+# 正常场景一轮访问全部单元一次，12 轮 ≈ 数百次单元访问，远超任何单日预算。
+MAX_ROTATION_ROUNDS = 12
 
 _DETAIL_JD_SELECTORS = (
     ".job-sec-text",
@@ -136,6 +185,14 @@ async def _send_greeting_on_detail_page(greeting: str) -> str:
     ).strip()
     if "继续沟通" in button_text or "继续聊天" in button_text:
         return "already_contacted"
+    if is_apply_online_button(button_text):
+        # 网申按钮与沟通按钮同类名（btn-startchat）的形态：点击前的最后防线。
+        return "apply_online"
+    if not button_text:
+        # 沟通按钮读不到：探测是否有网申形态的按钮（不同类名），避免误当 no_button
+        button_text = await probe_apply_online_button()
+        if is_apply_online_button(button_text):
+            return "apply_online"
     contact_xpath = "//a[contains(@class, 'btn-startchat')]"
     if not await finding_jobs.click_by_xpath(contact_xpath, timeout=10):
         return "no_button"
@@ -152,6 +209,37 @@ async def _send_greeting_on_detail_page(greeting: str) -> str:
     if finding_jobs.send_resume_after_greeting_enabled():
         await finding_jobs.click_send_resume(timeout=5)
     return "sent"
+
+
+async def _notify_captcha_needs_user(title: str = "") -> None:
+    """验证码/安全验证检出后的统一处置（2026-10-18 用户需求）。
+
+    三件事，缺一不可：
+    1. **强制前置受控浏览器窗口**——用户可能正在干别的事、浏览器被盖住
+       或最小化，必须"突然弹出来"提醒；
+    2. **登记保留窗口**——runner 收尾时不再自动关浏览器，否则用户还没
+       看清验证码窗口就被关掉了（旧版实测痛点）；
+    3. 广播 ``captcha_stopped`` 事件，前端弹强提醒通知。
+
+    顺序很重要：先弹窗（同步的 Win32 调用，to_thread）再 emit，保证用户
+    看到窗口时前端通知也同步到达。
+    """
+    from boss_zhipin.gui import browser_retention
+    from boss_zhipin.website_oper.core.window_focus import focus_platform_browser
+
+    browser_retention.request_keep_open("boss")
+    await focus_platform_browser("boss")
+    events.emit(
+        "captcha_stopped",
+        platform="boss",
+        title=title,
+        needs_user_action=True,
+        message=(
+            "BOSS 触发验证码/安全验证，巡航已安全停止。"
+            "受控浏览器窗口已强制前置——请立即在浏览器中完成验证；"
+            "窗口会保持打开，验证完成后可重新启动巡航。"
+        ),
+    )
 
 
 async def _process_single_api_job(
@@ -171,12 +259,19 @@ async def _process_single_api_job(
     daily_sent_count: int,
     delay_min: float,
     delay_max: float,
+    jd_health: dict[str, int] | None = None,
 ) -> tuple[str, int, int]:
     """处理 API 搜索结果中的单个岗位。
 
     返回值：(status, sent_count, daily_sent_count)
     status 可取值: 'seen', 'captcha', 'filtered',
-                   'already_contacted', 'dry_run', 'sent', 'failed'
+                   'already_contacted', 'dry_run', 'sent', 'failed',
+                   'apply_online', 'page_degraded'
+
+    ``jd_health``：详情页健康度跟踪（2026-10-17 二次实测事故：连续 5 个
+    详情页取不到 JD = 会话被风控降级的强信号——详情页已在返回无内容页面，
+    继续硬扫每个空烧 ~90s 且给风控升温）。3 连续失效探测验证码页（命中即
+    停），5 连续失效按「风控降级」停止；成功取到 JD 即复位计数。
     """
     from boss_zhipin.website_oper import finding_jobs, job_api
 
@@ -204,8 +299,11 @@ async def _process_single_api_job(
         )
         return "seen", sent_count, daily_sent_count
 
+    # 内存级去重（2026-10-18 审查修复）：同轮防重复照旧立即标记；但**永久
+    # 落盘**（_log_seen）推迟到详情页打开成功之后——旧版打开失败的岗位
+    # 也被记入已见，下一轮按 duplicate 跳过不再重试，瞬时网络故障会
+    # "烧掉"岗位。打开失败的岗位还要从内存集合回滚，本轮后续也不再误跳。
     seen_job_keys.add(dedupe_key)
-    _log_seen(seen_jobs_path, job=job, job_key=dedupe_key, send_mode="auto")
 
     # 企业级去重已按用户规格移除（2026-10-11）：同一企业常有多个岗位，
     # 不能因为投过该企业就跳过它的其他岗位；去重只按岗位（dedupe_key）。
@@ -253,16 +351,68 @@ async def _process_single_api_job(
             reason="detail_open_failed",
             details={"stage": "detail_page", "job_title": job.title},
         )
+        # 回滚内存标记（2026-10-18）：打开失败≠已处理，下一轮应重试
+        # （永久 seen 落盘已推迟到打开成功之后，这里只需回滚内存集合）。
+        seen_job_keys.discard(dedupe_key)
         return "failed", sent_count, daily_sent_count
+
+    # 详情页打开成功：此刻才把岗位永久记入已见（2026-10-18 审查修复——
+    # 打开失败的岗位不再被"烧掉"，见上方内存级去重注释）。
+    _log_seen(seen_jobs_path, job=job, job_key=dedupe_key, send_mode="auto")
 
     if stop_on_captcha and await finding_jobs.captcha_visible():
         log.warning("详情页检测到验证码/安全验证，按 BOSS_STOP_ON_CAPTCHA 停止")
-        events.emit("captcha_stopped", title=job.title)
+        await _notify_captcha_needs_user(job.title)
         return "captcha", sent_count, daily_sent_count
 
-    jd_text = await asyncio.wait_for(_extract_detail_jd(), timeout=20)
+    # 2026-10-18 事故加固：详情页主线程被验证码/风控 JS 卡住时，
+    # tab.select 的 CDP 调用会挂死——旧版外层 wait_for 抛的 TimeoutError
+    # 直接穿透到 runner._wrap，把整轮巡航打死（日志实锤：evaluate 5s 超时
+    # 后 20s 整轮崩）。改为：超时 = 本岗位 JD 取不到 → 按标题筛选继续，
+    # 与「JD 未取到」同一降级路径；jd_health 计数照常推进（连续失效仍会
+    # 触发风控降级停机）。
+    try:
+        jd_text = await asyncio.wait_for(_extract_detail_jd(), timeout=20)
+    except asyncio.TimeoutError:
+        log.warning(
+            "详情页 JD 提取超时（20s，页面疑似被验证码/风控 JS 卡住），按标题筛选继续：%s",
+            job.title,
+        )
+        jd_text = ""
     if not jd_text:
         log.info("详情页 JD 未取到，按标题筛选：%s", job.title)
+        if jd_health is not None:
+            # 页面降级探测（2026-10-17 二次实测事故）：连续详情页无内容
+            # = 会话被风控降级的强信号（发生于换城轮换之前 7 分钟——不是
+            # 轮换的锅，是账号/会话级风控）。保号优先：宁可早停，绝不空烧。
+            jd_health["consecutive_missing"] = jd_health.get("consecutive_missing", 0) + 1
+            missing = jd_health["consecutive_missing"]
+            if missing >= 3 and await finding_jobs.captcha_visible():
+                # 只读 DOM 探测命中验证码页（不受 BOSS_STOP_ON_CAPTCHA 门控——
+                # 这是探测到实锤风控页后的安全停机，与开关联人的"预防性检测"不同）
+                log.warning(
+                    "连续 %d 个详情页无 JD 且检测到验证码/安全验证页，停止巡航保号", missing
+                )
+                await _notify_captcha_needs_user(job.title)
+                return "captcha", sent_count, daily_sent_count
+            if missing >= 5:
+                log.warning(
+                    "连续 %d 个详情页取不到 JD（疑似风控降级/页面异常），停止巡航保号", missing
+                )
+                events.emit(
+                    "agent_intervene",
+                    platform="boss",
+                    level="warn",
+                    title=job.title,
+                    action="风控降级停止",
+                    detail=(
+                        f"连续 {missing} 个详情页取不到内容（疑似平台风控降级），"
+                        "已提前停止巡航保号；建议到浏览器完成验证或 1~2 小时后再试"
+                    ),
+                )
+                return "page_degraded", sent_count, daily_sent_count
+    elif jd_health is not None:
+        jd_health["consecutive_missing"] = 0
 
     job = _job_with_derived_fields(
         job_api.to_job_posting(api_job, description=jd_text), jd_text
@@ -313,6 +463,51 @@ async def _process_single_api_job(
             },
         )
         return "already_contacted", sent_count, daily_sent_count
+
+    if not button_text:
+        # 沟通按钮读不到：探测网申形态按钮（不同类名），避免误判 no_button
+        button_text = await probe_apply_online_button()
+    if is_apply_online_button(button_text):
+        # 网申/外链岗位（2026-10-17 用户实测痛点）：按钮为「立即网申」等外部
+        # 投递入口，点击不会进聊天页——旧流程会把 btn-startchat 类名的网申
+        # 按钮当「立即沟通」点下去（假报 sent + 网申弹窗残留阻塞后续岗位）。
+        # 守护 Agent 研判：需外部系统投递，站内直聊不可用 → 记录并平滑跳过，
+        # 绝不让单个岗位的异态炸掉整轮巡航。
+        detail = (
+            f"BOSS 按钮为「{button_text}」，该岗位需外部系统网申，暂不支持站内直聊"
+        )
+        log.info("⏭️ [api-flow] 网申岗位跳过：%s（%s）", job.title, button_text)
+        _log_skipped(
+            skipped_log_path,
+            job=job,
+            job_key=dedupe_key,
+            send_mode="auto",
+            reason="apply_online",
+            details={
+                "stage": "contact_status",
+                "button_text": button_text,
+                "job_title": job.title,
+            },
+        )
+        events.emit(
+            "job_skipped",
+            platform="boss",
+            title=job.title,
+            reason="apply_online",
+            detail=detail,
+        )
+        events.emit(
+            "agent_intervene",
+            platform="boss",
+            level="info",
+            title=job.title,
+            action="安全跳过",
+            detail=(
+                f"识别到「{button_text}」岗位：需外部系统投递，暂不支持站内直聊。"
+                "已记录并平滑推进下一岗位，主流程未受阻"
+            ),
+        )
+        return "apply_online", sent_count, daily_sent_count
 
     if scan_only or dry_run:
         _log_sent(
@@ -372,7 +567,19 @@ async def _process_single_api_job(
             job.company,
         )
     else:
-        reason = "already_contacted" if status == "already_contacted" else "send_failed"
+        if status == "apply_online":
+            # 点击瞬间按钮文案才渲染成网申的罕见形态：与点击前识别同语义处理
+            reason = "apply_online"
+            events.emit(
+                "agent_intervene",
+                platform="boss",
+                level="info",
+                title=job.title,
+                action="安全跳过",
+                detail="点击时才发现该岗位为网申入口，已放弃点击动作并平滑推进下一岗位",
+            )
+        else:
+            reason = "already_contacted" if status == "already_contacted" else "send_failed"
         _log_skipped(
             skipped_log_path,
             job=job,
@@ -427,6 +634,13 @@ async def _run_search_api_flow(
     delay_min, delay_max = _auto_send_delay_range()
     max_sent = _auto_send_max_sent()
     daily_limit = _auto_send_daily_limit()
+    # scan_only 的扫描上限（2026-10-18 审查修复）：搜索页 API 流此前按
+    # auto 的 max_sent 停（dry-run 计数），用户设的 BOSS_SCAN_MAX_JOBS
+    # 在搜索页失效——与 DOM 流 loop_config 的停止语义对齐。
+    if scan_only:
+        from boss_zhipin.website_oper.dispatch.env_config import _scan_max_jobs
+
+        max_sent = _scan_max_jobs()
     sent_count = 0
     daily_sent_count = _sent_today_count(
         sent_log_path, profile=_profile_name()
@@ -466,8 +680,19 @@ async def _run_search_api_flow(
     skipped_duplicates = 0
     skipped_filtered = 0
     skipped_already = 0
+    # 网申岗位跳过数（2026-10-17 守护 Agent）：独立分类，让用户清楚这些
+    # 岗位不是"失败"而是平台形态不支持站内直聊。
+    skipped_apply_online = 0
     failed_count = 0
     scanned_count = 0
+    # 详情页健康度（2026-10-17 二次实测）：连续详情页取不到 JD = 会话被
+    # 风控降级的强信号——_process_single_api_job 内计数与探测，达阈值
+    # 返回 page_degraded/captcha 触发保号停机（详见其 docstring）。
+    jd_health: dict[str, int] = {}
+    # 连续失败熔断计数（2026-10-18 审查修复：旧版在每页循环内重置，跨页的
+    # 间歇性失败（每页 2-3 个）永远凑不满 5，熔断保护被削弱。移到单元
+    # 循环外初始化——跨页累计，任一成功/网申识别到按钮即复位（见下方）。
+    consecutive_failures = 0
     # 按城市维度统计（2026-10-12 用户追问"郑州为什么不去投"：多城市是混合
     # 搜索，郑州岗位其实扫过——必须按城市拆开汇报，才能让用户看明白）。
     city_stats: dict[str, dict[str, int]] = {}
@@ -488,6 +713,10 @@ async def _run_search_api_flow(
         if isinstance(city_cfg, dict) and bool(city_cfg.get("enabled", True))
         else []
     )
+    # 「全国」展开（2026-10-17）：与入口 apply_page_filters / rotate_next_city_batch
+    # 同一套 expand_nationwide_cities——全国代码只是 IP 属地混合流，展开后每个
+    # 核心城市都进轮换矩阵、都被真实投到。
+    all_cities = expand_nationwide_cities(all_cities)
     total_cities = max(1, len(all_cities))
     cities_done = 1 if len(all_cities) >= 1 else 0  # 第 1 城（随机）入口已应用
 
@@ -498,7 +727,7 @@ async def _run_search_api_flow(
         bucket["scanned"] += 1
         if status == "sent":
             bucket["sent"] += 1
-        elif status in ("seen", "filtered", "already_contacted", "failed"):
+        elif status in ("seen", "filtered", "already_contacted", "failed", "apply_online"):
             bucket["skipped"] += 1
 
     def _emit_flow_summary(stop: str) -> None:
@@ -506,7 +735,8 @@ async def _run_search_api_flow(
         message = (
             f"本轮扫描 {scanned} 个岗位：新投递 {sent_count}、"
             f"已投过跳过 {skipped_duplicates}、规则不匹配 {skipped_filtered}、"
-            f"此前已沟通 {skipped_already}、打开失败 {failed_count}。"
+            f"此前已沟通 {skipped_already}、网申岗位跳过 {skipped_apply_online}、"
+            f"打开失败 {failed_count}。"
         )
         if sent_count == 0:
             if skipped_duplicates >= scanned > 0 and scanned_count > 0:
@@ -517,6 +747,11 @@ async def _run_search_api_flow(
                 message += "本轮没有可投递的新岗位。"
         if stop == "captcha":
             message += "（触发验证码已安全停止）"
+        elif stop == "page_degraded":
+            message += (
+                "（连续多个详情页取不到内容，疑似平台风控降级——已提前停止保号；"
+                "建议打开浏览器确认是否需要完成验证，或 1~2 小时后再巡航）"
+            )
         elif stop == "platform_limit":
             message += "（平台提示今日上限已安全停止）"
         elif stop == "api_error":
@@ -531,12 +766,17 @@ async def _run_search_api_flow(
         )
         events.emit(
             "api_flow_finished",
+            # platform 字段（2026-10-18 审查修复）：多平台并发巡航时前端用
+            # 它找 BOSS 的汇总——此前只有猎聘/51job 带，前端 find(platform
+            # === "boss") 恒 undefined，结束弹窗会错误显示其他平台的统计。
+            platform="boss",
             total=sent_count,
             page=page,
             scanned=scanned,
             skipped_duplicates=skipped_duplicates,
             skipped_filtered=skipped_filtered,
             skipped_already_contacted=skipped_already,
+            skipped_apply_online=skipped_apply_online,
             failed=failed_count,
             stop_reason=stop,
             per_city=per_city,
@@ -561,12 +801,40 @@ async def _run_search_api_flow(
         rotation_keywords = [""]
     kw_index = 0
 
-    # 城市逐城推进外层循环：当前城**自然扫完**→ 先轮换下一个岗位词，词全
-    # 扫完再推进洗牌序列的下一城（每个城市×每个词都要投到，用户 2026-10-12
-    # 拍板城市全覆盖、2026-10-15 拍板多词轮换）；风控/限额/验证码/手动停止
-    # 等全局停止条件一律不换词不换城。
+    # ---- (城市×岗位词) 单元配额状态（2026-10-17 公平轮换） ----
+    # 痛点：旧机制"单城词表耗尽才换城"是深度优先——北上广的无限推荐流让
+    # 第 1 城吃光全局日限，选 7 城 = 连续几天只投第 1 城。新机制广度优先：
+    # 每个 (城, 词) 单元每次访问扫够配额（新岗位数 / 投出数，先到先轮换）
+    # 就主动轮换到下一单元，长尾城市与岗位词雨露均沾。
+    # - unit_pages: 单元 → 下次要取的页码（配额中断不推进页码：重取本页，
+    #   已扫岗位靠 seen 去重——全盘覆盖且有限终止两不误）
+    # - unit_exhausted: 自然扫完（空页/超页上限）的单元集合
+    # - 配额只数"新岗位"（status != seen）：纯重复页不占配额，单元每轮
+    #   必有进展（页面推进或新岗位被消耗），杜绝"配额卡死在同一页"死循环
+    scan_quota, sent_quota = _unit_quotas()
+    unit_pages: dict[tuple[str, str], int] = {}
+    unit_exhausted: set[tuple[str, str]] = set()
+    total_units = max(1, len(all_cities)) * len(rotation_keywords)
+    multi_unit = total_units > 1  # 单单元零介入：行为与旧版完全一致（零回归）
+    rotation_round = 1
+
+    # 单元轮换外层循环（2026-10-17 公平轮换）：每个 (城×词) 单元扫够配额
+    # 或自然耗尽就轮换——城市优先（北京×AI → 上海×AI，PRD 主路径），城尽
+    # 换词，词尽仍有存量则重洗城市序列开新一轮；风控/限额/验证码/手动停止
+    # 等全局停止条件一律不轮换硬闯（保号优先，与旧机制同一铁律）。
     while True:
         halt_flow: str | None = None  # "captcha" | "platform_limit"（全局停机）
+        quota_hit = False
+        current_city = _current_city_name()
+        unit_key = (current_city, rotation_keywords[kw_index])
+        unit_scanned = 0
+        unit_sent = 0
+        # 单元的下次页码；已耗尽/超页上限的单元跳过页循环直接走推进
+        page = unit_pages.get(unit_key, 1)
+        if page > BOSS_MAX_PAGES_PER_CITY:
+            unit_exhausted.add(unit_key)
+        if unit_key in unit_exhausted:
+            page = BOSS_MAX_PAGES_PER_CITY + 1
         while page <= BOSS_MAX_PAGES_PER_CITY:
             if max_sent is not None and sent_count >= max_sent:
                 stop_reason = "max_sent"
@@ -627,14 +895,68 @@ async def _run_search_api_flow(
                         stop_reason = "api_error"
                         break
                 else:
-                    log.warning("第 %d 页搜索接口失败，结束：%s", page, e)
-                    events.emit("api_flow_error", page=page, message=str(e))
-                    stop_reason = "api_error"
-                    break
+                    if "无有效响应" in str(e):
+                        # 页面上下文失效（2026-10-17 实测事故：单元轮换整页导航
+                        # 后首个 wapi XHR 偶发拿到空值——旧版对这种非 37 异常
+                        # 一律直接放弃整轮巡航）。守护 Agent 处置：短冷却 +
+                        # Page.reload 重建页面上下文/风控令牌 + 重试一次；再失败
+                        # 才优雅收尾（保号优先，绝不硬闯——与 code=37 同款哲学）。
+                        events.emit(
+                            "api_flow_error",
+                            page=page,
+                            message=f"搜索接口暂无响应（{e}），30 秒后刷新页面自动重试…",
+                        )
+                        events.emit(
+                            "agent_intervene",
+                            platform="boss",
+                            level="warn",
+                            title=f"第 {page} 页搜索接口",
+                            action="自愈重试",
+                            detail="接口无有效响应（页面上下文可能未就绪），冷却 30 秒并刷新页面后自动重试一次",
+                        )
+                        log.warning(
+                            "[api-flow] 搜索接口无有效响应，冷却 30s 后刷新重试第 %d 页", page
+                        )
+                        from boss_zhipin.website_oper.core.browser_session import (
+                            reload_current_page,
+                            sleep_with_browser_guard,
+                        )
+
+                        await sleep_with_browser_guard(30)
+                        await reload_current_page()
+                        try:
+                            api_jobs = await job_api.fetch_search_page(tab, query, page)
+                        except RuntimeError as e2:
+                            log.warning("刷新后第 %d 页仍无响应，结束：%s", page, e2)
+                            events.emit(
+                                "api_flow_error",
+                                page=page,
+                                message="刷新页面后接口仍无响应，本轮安全结束。建议稍后重新发起巡航。",
+                            )
+                            stop_reason = "api_error"
+                            break
+                        events.emit(
+                            "agent_intervene",
+                            platform="boss",
+                            level="recovered",
+                            title=f"第 {page} 页搜索接口",
+                            action="已恢复",
+                            detail="刷新页面重建上下文后接口已恢复，继续扫描",
+                        )
+                    else:
+                        log.warning("第 %d 页搜索接口失败，结束：%s", page, e)
+                        events.emit("api_flow_error", page=page, message=str(e))
+                        stop_reason = "api_error"
+                        break
             if not api_jobs:
                 log.info("第 %d 页没有岗位，搜索结果已全部取完", page)
+                unit_exhausted.add(unit_key)  # 单元自然耗尽
                 break
 
+            # 连续失败熔断（2026-10-16 实测事故：20 个详情页连续 30s 超时，
+            # 白等 10 分钟才崩。浏览器标签页卡死/风控限制时连续 failed，
+            # 连续 5 个即提前收工，避免整轮巡航空耗在超时上）。
+            # 2026-10-18 修复：计数初始化已移到单元循环外（跨页累计）。
             for api_job in api_jobs:
                 if max_sent is not None and sent_count >= max_sent:
                     break
@@ -657,6 +979,7 @@ async def _run_search_api_flow(
                     daily_sent_count=daily_sent_count,
                     delay_min=delay_min,
                     delay_max=delay_max,
+                    jd_health=jd_health,
                 )
                 scanned_count += 1
                 _record_city(api_job.city or "未知城市", status)
@@ -666,12 +989,39 @@ async def _run_search_api_flow(
                     skipped_filtered += 1
                 elif status == "already_contacted":
                     skipped_already += 1
+                elif status == "apply_online":
+                    # 网申跳过是守护 Agent 的主动决策而非故障：既不算 failed，
+                    # 也要打断"连续失败"计数（按钮能读到说明页面活着），
+                    # 绝不触发"连续 5 个失败提前收工"的误停机。
+                    skipped_apply_online += 1
+                    consecutive_failures = 0
                 elif status == "failed":
                     failed_count += 1
+                    consecutive_failures += 1
+                    if consecutive_failures >= 5:
+                        log.warning(
+                            "[api-flow] 🔌 连续 %d 个岗位详情页打不开（疑似浏览器卡死/网络/风控限制），"
+                            "提前结束本轮巡航以免空耗",
+                            consecutive_failures,
+                        )
+                        events.emit(
+                            "api_flow_error",
+                            page=page,
+                            message="连续 5 个岗位详情页打不开（疑似网络或风控限制），"
+                            "本轮巡航已提前停止；稍后可重新发起。",
+                        )
+                        halt_flow = "api_error"
+                        break
                 elif status == "sent":
                     sends_since_break += 1
+                    consecutive_failures = 0
                 if status == "captcha":
                     halt_flow = "captcha"
+                    break
+                if status == "page_degraded":
+                    # 详情页连续无内容（疑似风控降级）：保号优先立即停机，
+                    # 不带着被降级的会话继续硬扫（事件已由岗位层发出）。
+                    halt_flow = "page_degraded"
                     break
                 if status == "platform_limit":
                     events.emit(
@@ -684,8 +1034,32 @@ async def _run_search_api_flow(
                     halt_flow = "platform_limit"
                     break
 
+                # 单元配额（2026-10-17 公平轮换）：只数新岗位（seen 是历史
+                # 重复不占配额）；扫够或投够即轮换，大城市/热门词不再吃光
+                # 全局额度，长尾城市与岗位词雨露均沾。
+                if status != "seen":
+                    unit_scanned += 1
+                    if status == "sent":
+                        unit_sent += 1
+                if multi_unit and (
+                    unit_scanned >= scan_quota or unit_sent >= sent_quota
+                ):
+                    quota_hit = True
+                    log.info(
+                        "[api-flow] 单元 [%s × %s] 配额到（新扫 %d / 投 %d），"
+                        "轮换下一单元雨露均沾",
+                        current_city,
+                        rotation_keywords[kw_index],
+                        unit_scanned,
+                        unit_sent,
+                    )
+                    break
+
             if halt_flow:
                 stop_reason = halt_flow
+                break
+            if quota_hit:
+                # 页码不推进：下次访问本单元重取本页，已扫岗位靠 seen 去重
                 break
 
             # 拟人化批次休息（见上方初始化处注释）：连投若干个后歇一会儿，
@@ -712,6 +1086,7 @@ async def _run_search_api_flow(
                 sent_count,
             )
             page += 1
+            unit_pages[unit_key] = page  # 整页扫完才推进页码（配额中断不推进）
             # 页间节流：秒翻 6 页会触发 BOSS 搜索接口风控（实测 code=37），
             # 拟人化页间停顿再翻下一页。
             # 2026-10-13 加固（自适应上浮）：本页 <3s 秒过 = 全是已投/规则
@@ -738,17 +1113,34 @@ async def _run_search_api_flow(
                 consecutive_fast_pages = 0
                 await human_pause(3.0, 6.5)
 
-        # 关键词推进判定（2026-10-15 多词轮换）：当前词在该城自然扫完且
-        # 轮换表还有下一个词 → 切换搜索词、翻回第 1 页重扫。与城市推进
-        # 同一铁律：只有"自然扫完"（stop_reason 仍为 completed、无全局
-        # 停机）才换词；风控/限额/验证码触发的结束一律不换词硬闯。
-        # consecutive_fast_pages 故意不复位（只慢不快：换词前的会话热度
-        # 会带进新词的翻页节奏）。
-        if (
-            not halt_flow
-            and stop_reason == "completed"
-            and kw_index < len(rotation_keywords) - 1
-        ):
+        # ---- 单元推进判定（2026-10-17 公平轮换）：配额到或自然扫完都触发；
+        # 风控/限额/验证码触发的结束（stop_reason != completed）一律不轮换
+        # 硬闯（保号优先，与旧机制同一铁律）。consecutive_fast_pages 故意
+        # 不复位（只慢不快：轮换前的会话热度会带进下一单元）。 ----
+        if halt_flow:
+            break
+        if stop_reason != "completed":
+            break
+        # 全部单元自然耗尽 → 圆满收工
+        if len(unit_exhausted) >= total_units:
+            log.info(
+                "[api-flow] %d 个 (城市×岗位词) 单元已全部自然扫完，本轮圆满结束",
+                total_units,
+            )
+            break
+        advanced = False
+        # ① 同词换城（PRD 主路径：北京×AI应用 → 上海×AI应用，城市优先交错）
+        if cities_done < total_cities:
+            rotated = await finding_jobs.rotate_next_city_batch(
+                _page_filters_for_click(page_filter_cfg),
+                emit_event=lambda payload: events.emit("page_filter", **payload),
+            )
+            if rotated:
+                cities_done += 1
+                advanced = True
+        # ② 本轮城走完 → 换下一个岗位词；换词后城市轮重启（新词从重洗后的
+        # 第 1 城开始，城市多样性最大化）
+        if not advanced and kw_index < len(rotation_keywords) - 1:
             next_kw = rotation_keywords[kw_index + 1]
             rotated_kw = await finding_jobs.rotate_to_keyword(
                 next_kw,
@@ -756,64 +1148,77 @@ async def _run_search_api_flow(
             )
             if rotated_kw:
                 kw_index += 1
-                page = 1
-                # 词间节流（拟人化，红线：只慢不快）。2026-10-15 封号复盘：
-                # 旧 3s 匀速换词太快——真人换个搜索词会先看看结果缓一缓，
-                # 上浮到 15~40s 高斯停顿。
-                from boss_zhipin.website_oper.core.browser_session import human_pause
-
-                await human_pause(15.0, 40.0)
-                query = job_api.search_query_from_url(finding_jobs.get_current_url())
-                tab = finding_jobs.get_tab()
-                if tab is None:
-                    stop_reason = "api_error"
-                    break
+                advanced = True
                 log.info(
                     "[api-flow] 岗位关键词推进 %d/%d：%s",
                     kw_index + 1,
                     len(rotation_keywords),
                     next_kw,
                 )
-                continue  # 复用外层城市循环，重启页循环扫下一个词
-            log.info("[api-flow] 关键词推进失败（%s），转入城市推进", next_kw)
-
-        # 城市推进判定：只有"自然扫完"才推进下一城
-        if halt_flow:
+                if len(all_cities) >= 2 and await finding_jobs.restart_city_rotation_round(
+                    _page_filters_for_click(page_filter_cfg),
+                    emit_event=lambda payload: events.emit("page_filter", **payload),
+                ):
+                    rotation_round += 1
+                    cities_done = 0
+                    if await finding_jobs.rotate_next_city_batch(
+                        _page_filters_for_click(page_filter_cfg),
+                        emit_event=lambda payload: events.emit("page_filter", **payload),
+                    ):
+                        cities_done = 1
+        # ③ 词也尽但仍有单元有存量 → 词复位 + 多城重洗序列，开启新一轮；
+        # 轮数护栏防病态状态下的无限重启
+        if (
+            not advanced
+            and len(unit_exhausted) < total_units
+            and rotation_round < MAX_ROTATION_ROUNDS
+        ):
+            if len(rotation_keywords) > 1 and await finding_jobs.rotate_to_keyword(
+                rotation_keywords[0],
+                emit_event=lambda payload: events.emit("page_filter", **payload),
+            ):
+                kw_index = 0
+                advanced = True
+                log.info("[api-flow] 词表走完仍有单元存量，岗位词复位开启新一轮")
+            if len(all_cities) >= 2 and await finding_jobs.restart_city_rotation_round(
+                _page_filters_for_click(page_filter_cfg),
+                emit_event=lambda payload: events.emit("page_filter", **payload),
+            ):
+                rotation_round += 1
+                cities_done = 0
+                if await finding_jobs.rotate_next_city_batch(
+                    _page_filters_for_click(page_filter_cfg),
+                    emit_event=lambda payload: events.emit("page_filter", **payload),
+                ):
+                    cities_done = 1
+                    advanced = True
+        if not advanced:
+            log.info("[api-flow] 轮换原语全部失败（无下一城/下一词），结束")
             break
-        if stop_reason != "completed" or cities_done >= total_cities:
-            break
-        rotated = await finding_jobs.rotate_next_city_batch(
-            _page_filters_for_click(page_filter_cfg),
-            emit_event=lambda payload: events.emit("page_filter", **payload),
-        )
-        if not rotated:
-            log.info("城市推进失败（无下一城或 URL 直填失败），结束")
-            break
-        cities_done += 1
-        page = 1
-        # 城间节流（拟人化，红线：只慢不快）。2026-10-15 封号复盘：旧 3s
-        # 匀速换城太快，上浮到 15~40s 高斯停顿（与词间同款）。
+        # 单元间节流（拟人化，红线：只慢不快）。2026-10-15 封号复盘：换城/换词
+        # 匀速太快，15~40s 高斯停顿（真人换个城市/搜索词会先看看结果缓一缓）。
         from boss_zhipin.website_oper.core.browser_session import human_pause
 
         await human_pause(15.0, 40.0)
-        # 换城后关键词复位（2026-10-15 多词轮换）：新城市从轮换表第一个
-        # 词重新扫起，保证"每城×每词"全覆盖；kw_index 按轮换后的 URL 实词
-        # 对齐——轮换失败时以 URL 实际词为准（可能仍是上个词），不丢状态。
-        if len(rotation_keywords) > 1:
-            await finding_jobs.rotate_to_keyword(
-                rotation_keywords[0],
-                emit_event=lambda payload: events.emit("page_filter", **payload),
-            )
+        # 状态 resync：kw_index 按轮换后的 URL 实词对齐（轮换失败时以 URL
+        # 实际词为准，不丢状态）；query/tab 同步刷新。
         actual_url = finding_jobs.get_current_url()
         cur_kw = _keyword_from_url(actual_url)
-        kw_index = rotation_keywords.index(cur_kw) if cur_kw in rotation_keywords else 0
+        kw_index = (
+            rotation_keywords.index(cur_kw) if cur_kw in rotation_keywords else kw_index
+        )
         query = job_api.search_query_from_url(actual_url)
         tab = finding_jobs.get_tab()
         if tab is None:
             stop_reason = "api_error"
             break
         log.info(
-            "[api-flow] 城市推进 %d/%d 启动，URL=%s", cities_done, total_cities, actual_url
+            "[api-flow] 单元推进：第 %d 轮 %d/%d 城 × 词[%s]，URL=%s",
+            rotation_round,
+            cities_done,
+            total_cities,
+            rotation_keywords[kw_index],
+            actual_url,
         )
 
     _emit_flow_summary(stop_reason)

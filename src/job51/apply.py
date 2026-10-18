@@ -190,6 +190,23 @@ async def run(
         page = 1
         while page <= 50:
             cards = await driver.parse_cards(tab)
+            # 封禁/风控拦截页（2026-10-18 审查补齐）：goto_search 返回的
+            # banned 标记被 parse_cards 覆盖后丢失，这里重新探测一次——
+            # 封禁页顶掉内容时 parse_cards 也是 0 张卡，两者一起判。
+            if not cards and await driver.check_ban_page(tab):
+                _log("[job51] 🛑 检测到「账号行为异常」封禁/风控拦截页，本轮立即停止")
+                events.emit(
+                    "agent_intervene",
+                    platform="job51",
+                    level="warn",
+                    title=kw,
+                    action="风控拦截停止",
+                    detail=(
+                        "检测到封禁/风控拦截页（通常约 2 小时自动解锁），"
+                        "已停止本轮巡航保号；建议稍后再试"
+                    ),
+                )
+                return sent_this_run
             _log(f"[job51] 关键词「{kw}」第 {page} 页 {len(cards)} 个岗位")
 
             for card in cards:
@@ -239,7 +256,24 @@ async def run(
                 result = await driver.apply_by_jobid(tab, job_id)
                 if result.get("captcha"):
                     _log("[job51] 🛑 触发风控验证码，立即停止本轮（避免封号）")
-                    events.emit("captcha_stopped", platform="job51", title=title)
+                    # 2026-10-18 用户需求：强提醒——强制前置浏览器 + 保留窗口
+                    # 等用户完成验证（runner 收尾据此跳过自动关浏览器）。
+                    from boss_zhipin.gui import browser_retention
+                    from boss_zhipin.website_oper.core.window_focus import focus_platform_browser
+
+                    browser_retention.request_keep_open("job51")
+                    await focus_platform_browser("job51")
+                    events.emit(
+                        "captcha_stopped",
+                        platform="job51",
+                        title=title,
+                        needs_user_action=True,
+                        message=(
+                            "前程无忧触发验证码/安全验证，巡航已安全停止。"
+                            "受控浏览器窗口已强制前置——请立即在浏览器中完成验证；"
+                            "窗口会保持打开，验证完成后可重新启动巡航。"
+                        ),
+                    )
                     return sent_this_run
                 if not result.get("clicked"):
                     continue
@@ -259,10 +293,26 @@ async def run(
                         message=f"前程无忧提示今日投递次数已达上限，已安全停止。本轮已投递 {sent_today} 个。",
                     )
                     return sent_this_run
-                # 成功弹窗可能还在渲染，没关掉就等 1s 再试一次
-                if await driver.dismiss_success_dialog(tab) == "none":
+                # 成功回执确认（2026-10-18 三路审查修复）：旧版 dismiss 后
+                # 无条件记账——点击未真正提交（需选简历/事件未被处理）也计
+                # "已投"，虚增数据且该公司被永久标记导致漏投。现在只有看到
+                # "投递成功"弹窗（closed/escape）才记账；两轮探测都没有则记
+                # "疑似未投"（不发 job_sent、不进 SENT_LOG、不占公司去重）。
+                dismiss_result = await driver.dismiss_success_dialog(tab)
+                if dismiss_result == "none":
+                    # 成功弹窗可能还在渲染，等 1s 再确认一次
                     await asyncio.sleep(1)
-                    await driver.dismiss_success_dialog(tab)
+                    dismiss_result = await driver.dismiss_success_dialog(tab)
+                if dismiss_result == "none":
+                    events.emit(
+                        "job_skipped",
+                        platform="job51",
+                        title=title,
+                        reason="send_failed",
+                        detail="点击投递后未出现成功弹窗（疑似未提交成功），本轮不记账，下次巡航会重试",
+                    )
+                    _log(f"[job51] ⚠️ 投递未确认（无成功弹窗），不记账：{title} @ {company}")
+                    continue
                 await asyncio.sleep(1)
 
                 sent_ids.add(job_id)

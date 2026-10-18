@@ -161,6 +161,16 @@ export default function DashboardModalLayer({
         setJob51DelayMin={profileForm.setJob51DelayMin}
         job51DelayMax={profileForm.job51DelayMax}
         setJob51DelayMax={profileForm.setJob51DelayMax}
+        maxSent={profileForm.maxSent}
+        setMaxSent={profileForm.setMaxSent}
+        liepinRunMax={profileForm.liepinRunMax}
+        setLiepinRunMax={profileForm.setLiepinRunMax}
+        job51RunMax={profileForm.job51RunMax}
+        setJob51RunMax={profileForm.setJob51RunMax}
+        liepinDailyLimit={profileForm.liepinDailyLimit}
+        setLiepinDailyLimit={profileForm.setLiepinDailyLimit}
+        job51DailyLimit={profileForm.job51DailyLimit}
+        setJob51DailyLimit={profileForm.setJob51DailyLimit}
         greeting={profileForm.greeting}
         setGreeting={profileForm.setGreeting}
         onSaveConfig={profileForm.saveConfig}

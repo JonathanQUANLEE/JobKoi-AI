@@ -422,5 +422,5 @@ def test_env_run_max_defaults_and_overrides(monkeypatch):
     assert env_run_max("LIEPIN_RUN_MAX", "liepin") == 15
     # 单一真相守卫
     assert DEFAULT_RUN_MAX_LIMITS == {"liepin": 15, "job51": 10}
-    # BOSS 日限默认 150→100（2026-10-15 保号拍板）
-    assert DEFAULT_DAILY_LIMITS["boss"] == 100
+    # BOSS 日限默认 150（2026-10-18 用户拍板：官方上限就是 150）
+    assert DEFAULT_DAILY_LIMITS["boss"] == 150

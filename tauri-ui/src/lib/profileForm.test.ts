@@ -25,7 +25,11 @@ const baseValues: ProfileFormValues = {
   job51DelayMin: "",
   job51DelayMax: "",
   maxSent: "50",
+  liepinRunMax: "",
+  job51RunMax: "",
   dailyLimit: "80",
+  liepinDailyLimit: "",
+  job51DailyLimit: "",
   stopOnCaptcha: true,
   sendResumeAfterGreeting: false,
   autoResumeOnReply: false,
@@ -79,6 +83,8 @@ describe("buildProfileData", () => {
       delayMin: "12",
       delayMax: "45",
       maxSent: "50",
+      liepinRunMax: "",
+      job51RunMax: "",
       dailyLimit: "80",
       stopOnCaptcha: true,
       sendResumeAfterGreeting: true,
@@ -165,6 +171,8 @@ describe("buildProfileData", () => {
       delayMin: "abc",
       delayMax: "60",
       maxSent: "",
+      liepinRunMax: "",
+      job51RunMax: "",
       dailyLimit: "80",
       stopOnCaptcha: false,
       sendResumeAfterGreeting: false,
@@ -215,6 +223,8 @@ describe("buildProfileData", () => {
         delayMin,
         delayMax,
         maxSent: "50",
+        liepinRunMax: "",
+        job51RunMax: "",
         dailyLimit: "80",
         stopOnCaptcha: true,
         sendResumeAfterGreeting: false,
@@ -231,6 +241,32 @@ describe("buildProfileData", () => {
     // 区间内的值原样保留
     expect(mk("15", "45").send).toMatchObject({ delay_min: 15, delay_max: 45 });
     expect(mk("30", "45").send).toMatchObject({ delay_min: 30, delay_max: 45 });
+  });
+
+  it("builds per-platform run max fields (empty = omitted, BOSS 0 kept as-is)", () => {
+    // 空串 = 未单设：不落盘 → 后端回退系统默认（猎聘 15 / 前程 10）
+    const omitted = buildProfileData({
+      ...baseValues,
+      maxSent: "30",
+      liepinRunMax: "",
+      job51RunMax: "",
+    });
+    expect(omitted.send.max_sent).toBe(30);
+    expect(omitted.send).not.toHaveProperty("liepin_run_max");
+    expect(omitted.send).not.toHaveProperty("job51_run_max");
+
+    // 非空落盘；BOSS 0（不限单轮）原样保留交由后端解释
+    const filled = buildProfileData({
+      ...baseValues,
+      maxSent: "0",
+      liepinRunMax: "20",
+      job51RunMax: "8",
+    });
+    expect(filled.send).toMatchObject({
+      max_sent: 0,
+      liepin_run_max: 20,
+      job51_run_max: 8,
+    });
   });
 
   it("stores title plus description as a reusable matching scope", () => {
@@ -255,6 +291,8 @@ describe("buildProfileData", () => {
       delayMin: "10",
       delayMax: "60",
       maxSent: "50",
+      liepinRunMax: "",
+      job51RunMax: "",
       dailyLimit: "80",
       stopOnCaptcha: true,
       sendResumeAfterGreeting: false,

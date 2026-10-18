@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ShieldCheckIcon } from "@hugeicons/core-free-icons";
 import { useT } from "../../../store";
@@ -7,6 +7,11 @@ import { DELAY_PRESETS, isPresetActive, isFollowGeneric } from "../../../lib/pla
 interface PolicySettingsViewProps {
   localDailyLimit: string;
   setLocalDailyLimit: (val: string) => void;
+  /** 分平台每日投递上限（2026-10-18 严重缺陷修复）：空串 = 未单设（回退系统默认）。 */
+  localLiepinDailyLimit: string;
+  setLocalLiepinDailyLimit: (val: string) => void;
+  localJob51DailyLimit: string;
+  setLocalJob51DailyLimit: (val: string) => void;
   localDelayMin: string;
   setLocalDelayMin: (val: string) => void;
   localDelayMax: string;
@@ -20,6 +25,13 @@ interface PolicySettingsViewProps {
   setLocalJob51DelayMin: (val: string) => void;
   localJob51DelayMax: string;
   setLocalJob51DelayMax: (val: string) => void;
+  /** 分平台单轮投递上限（2026-10-17 用户需求"三个平台都应该能设"）。 */
+  localMaxSent: string;
+  setLocalMaxSent: (val: string) => void;
+  localLiepinRunMax: string;
+  setLocalLiepinRunMax: (val: string) => void;
+  localJob51RunMax: string;
+  setLocalJob51RunMax: (val: string) => void;
   onSave: () => void;
   onClose: () => void;
 }
@@ -95,6 +107,10 @@ function PlatformDelayGroup({
 export default function PolicySettingsView({
   localDailyLimit,
   setLocalDailyLimit,
+  localLiepinDailyLimit,
+  setLocalLiepinDailyLimit,
+  localJob51DailyLimit,
+  setLocalJob51DailyLimit,
   localDelayMin,
   setLocalDelayMin,
   localDelayMax,
@@ -107,43 +123,25 @@ export default function PolicySettingsView({
   setLocalJob51DelayMin,
   localJob51DelayMax,
   setLocalJob51DelayMax,
+  localMaxSent,
+  setLocalMaxSent,
+  localLiepinRunMax,
+  setLocalLiepinRunMax,
+  localJob51RunMax,
+  setLocalJob51RunMax,
   onSave,
   onClose,
 }: PolicySettingsViewProps) {
   const t = useT();
   // 从本地读取或初始化 3 大平台各自的投递限额（默认拉满官方最大上限）
-  const [bossLimit, setBossLimit] = useState<number>(() => {
-    try {
-      const saved = localStorage.getItem("jobhunter_platform_limits");
-      if (saved) return JSON.parse(saved).boss ?? 150;
-    } catch {}
-    return Number(localDailyLimit) || 150;
-  });
-
-  const [liepinLimit, setLiepinLimit] = useState<number>(() => {
-    try {
-      const saved = localStorage.getItem("jobhunter_platform_limits");
-      if (saved) return JSON.parse(saved).liepin ?? 100;
-    } catch {}
-    return 100;
-  });
-
-  const [job51Limit, setJob51Limit] = useState<number>(() => {
-    try {
-      const saved = localStorage.getItem("jobhunter_platform_limits");
-      if (saved) return JSON.parse(saved).job51 ?? 40;
-    } catch {}
-    return 40;
-  });
-
-  const persistLimits = (b: number, l: number, j: number) => {
-    try {
-      localStorage.setItem(
-        "jobhunter_platform_limits",
-        JSON.stringify({ boss: b, liepin: l, job51: j })
-      );
-    } catch {}
-  };
+  // 三平台每日投递上限（2026-10-18 严重缺陷修复）：旧版 liepin/job51 只写
+  // localStorage（后端从不读）＝假 UI。现在直接绑定表单状态（保存时随 profile
+  // 落盘 → profile_env_bridge 映射 env → 运行时真实生效）。
+  // BOSS 上限按用户拍板 150（旧 UI 标签已写 150，后端 limits.py 亦同步改）。
+  const bossMax = 150;
+  const bossLimit = Number(localDailyLimit) || 150;
+  const liepinLimit = localLiepinDailyLimit.trim() ? Number(localLiepinDailyLimit) : 50;
+  const job51Limit = localJob51DailyLimit.trim() ? Number(localJob51DailyLimit) : 40;
 
   return (
     <div className="py-4 space-y-5">
@@ -169,14 +167,9 @@ export default function PolicySettingsView({
           <button
             type="button"
             onClick={() => {
-              setBossLimit(150);
-              setLiepinLimit(100);
-              setJob51Limit(40);
               setLocalDailyLimit("150");
-              localStorage.setItem(
-                "jobhunter_platform_limits",
-                JSON.stringify({ boss: 150, liepin: 100, job51: 40 })
-              );
+              setLocalLiepinDailyLimit("50");
+              setLocalJob51DailyLimit("40");
             }}
             className="text-[11px] px-2.5 py-1 rounded-lg bg-blue-500/15 text-blue-300 hover:bg-blue-500/25 border border-blue-500/30 transition-all cursor-pointer font-medium"
           >
@@ -200,13 +193,11 @@ export default function PolicySettingsView({
               <input
                 type="number"
                 min="10"
-                max="150"
+                max={bossMax}
                 value={bossLimit}
                 onChange={(e) => {
-                  const val = Math.min(150, Math.max(1, Number(e.target.value) || 1));
-                  setBossLimit(val);
+                  const val = Math.min(bossMax, Math.max(1, Number(e.target.value) || 1));
                   setLocalDailyLimit(String(val));
-                  persistLimits(val, liepinLimit, job51Limit);
                 }}
                 className="mist-input text-xs font-mono w-full"
               />
@@ -228,13 +219,12 @@ export default function PolicySettingsView({
             <div className="flex items-center gap-2">
               <input
                 type="number"
-                min="10"
+                min="5"
                 max="100"
                 value={liepinLimit}
                 onChange={(e) => {
                   const val = Math.min(100, Math.max(1, Number(e.target.value) || 1));
-                  setLiepinLimit(val);
-                  persistLimits(bossLimit, val, job51Limit);
+                  setLocalLiepinDailyLimit(String(val));
                 }}
                 className="mist-input text-xs font-mono w-full"
               />
@@ -261,13 +251,104 @@ export default function PolicySettingsView({
                 value={job51Limit}
                 onChange={(e) => {
                   const val = Math.min(40, Math.max(1, Number(e.target.value) || 1));
-                  setJob51Limit(val);
-                  persistLimits(bossLimit, liepinLimit, val);
+                  setLocalJob51DailyLimit(String(val));
                 }}
                 className="mist-input text-xs font-mono w-full"
               />
               <span className="text-xs text-stone-400 shrink-0">次/天</span>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 各平台单轮投递上限（2026-10-17 用户需求"三个平台都应该能设"：
+          单轮=一次巡航最多投多少份，与上方"每日上限"是两个不同的量；
+          BOSS 填 0 = 不限单轮，跑满每日上限或岗位扫完才停（巡航中自动
+          分批轮换城市与岗位词）。 */}
+      <div className="space-y-3">
+        <div>
+          <label className="text-xs font-semibold text-stone-200 block">
+            各平台单轮投递上限 (每次巡航最多投多少份)
+          </label>
+          <p className="text-[11px] text-stone-400">
+            与「每日上限」相互独立：单轮管一次巡航的量，投满即安全收工，可随时再启动下一轮
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* BOSS 直聘 */}
+          <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10 hover:border-[#00bebd]/40 transition-colors">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-bold text-[#00bebd] flex items-center gap-1.5">
+                <span className="size-2 rounded-full bg-[#00bebd]" />
+                BOSS 直聘
+              </span>
+              <span className="text-[10px] text-blue-300 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/25">
+                0 = 不限单轮
+              </span>
+            </div>
+            <input
+              type="number"
+              min="0"
+              max="50"
+              value={localMaxSent}
+              onChange={(e) => setLocalMaxSent(e.target.value)}
+              placeholder="50"
+              className="mist-input text-xs font-mono w-full"
+            />
+            <p className="mt-1 text-[10px] text-stone-500 leading-relaxed">
+              填 0 跑满每日上限（150）才停；正数 = 单轮投满即停
+            </p>
+          </div>
+
+          {/* 猎聘 */}
+          <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10 hover:border-[#ff7033]/40 transition-colors">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-bold text-[#ff7033] flex items-center gap-1.5">
+                <span className="size-2 rounded-full bg-[#ff7033]" />
+                猎聘 Liepin
+              </span>
+              <span className="text-[10px] text-stone-400 bg-white/5 px-1.5 py-0.5 rounded">
+                默认 15
+              </span>
+            </div>
+            <input
+              type="number"
+              min="1"
+              max="50"
+              value={localLiepinRunMax}
+              onChange={(e) => setLocalLiepinRunMax(e.target.value)}
+              placeholder="15"
+              className="mist-input text-xs font-mono w-full"
+            />
+            <p className="mt-1 text-[10px] text-stone-500 leading-relaxed">
+              留空 = 系统默认 15 份/轮；新号保护模式会自动改小
+            </p>
+          </div>
+
+          {/* 前程无忧 */}
+          <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10 hover:border-[#ff5000]/40 transition-colors">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-bold text-[#ff5000] flex items-center gap-1.5">
+                <span className="size-2 rounded-full bg-[#ff5000]" />
+                前程无忧 51job
+              </span>
+              <span className="text-[10px] text-stone-400 bg-white/5 px-1.5 py-0.5 rounded">
+                默认 10
+              </span>
+            </div>
+            <input
+              type="number"
+              min="1"
+              max="20"
+              value={localJob51RunMax}
+              onChange={(e) => setLocalJob51RunMax(e.target.value)}
+              placeholder="10"
+              className="mist-input text-xs font-mono w-full"
+            />
+            <p className="mt-1 text-[10px] text-stone-500 leading-relaxed">
+              留空 = 系统默认 10 份/轮（范围 1~20）
+            </p>
           </div>
         </div>
       </div>

@@ -33,7 +33,14 @@ export type ProfileFormValues = {
   job51DelayMin: string;
   job51DelayMax: string;
   maxSent: string;
+  /** 分平台单轮上限（2026-10-17）：空串 = 未单设，运行时回退系统默认（猎聘 15 / 前程 10）。 */
+  liepinRunMax: string;
+  job51RunMax: string;
   dailyLimit: string;
+  /** 分平台每日投递上限（2026-10-18 严重缺陷修复）：空串 = 未单设，运行时回退系统默认（猎聘 50 / 前程 40）。
+   * 修复前这两个数字只写 localStorage、后端从不读取——用户调低日限保号实际不生效。 */
+  liepinDailyLimit: string;
+  job51DailyLimit: string;
   stopOnCaptcha: boolean;
   /** F2：BOSS 打招呼后自动点“发简历”（默认关，opt-in）。 */
   sendResumeAfterGreeting: boolean;
@@ -79,7 +86,11 @@ export type BuiltProfileData = {
     job51_delay_min?: number;
     job51_delay_max?: number;
     max_sent: number;
+    liepin_run_max?: number;
+    job51_run_max?: number;
     daily_sent_limit: number;
+    liepin_daily_limit?: number;
+    job51_daily_limit?: number;
     stop_on_captcha: boolean;
     send_resume_after_greeting: boolean;
     auto_send_resume_on_reply: boolean;
@@ -137,7 +148,14 @@ export function buildProfileData(values: ProfileFormValues): BuiltProfileData {
       ...(values.job51DelayMin.trim() ? { job51_delay_min: clampDelayOrDefault(values.job51DelayMin, 20) } : {}),
       ...(values.job51DelayMax.trim() ? { job51_delay_max: clampDelayOrDefault(values.job51DelayMax, 40) } : {}),
       max_sent: numberOrDefault(values.maxSent, 50),
+      // 分平台单轮上限（可选字段：空串不落盘 → 后端回退系统默认 猎聘 15 / 前程 10）
+      ...(values.liepinRunMax.trim() ? { liepin_run_max: numberOrDefault(values.liepinRunMax, 15) } : {}),
+      ...(values.job51RunMax.trim() ? { job51_run_max: numberOrDefault(values.job51RunMax, 10) } : {}),
       daily_sent_limit: numberOrDefault(values.dailyLimit, 80),
+      // 分平台日限（2026-10-18 修复）：空串不落盘 → 运行时回退系统默认（猎聘 50 / 前程 40），
+      // 与既有分平台字段的"未单设"语义一致。
+      ...(values.liepinDailyLimit.trim() ? { liepin_daily_limit: numberOrDefault(values.liepinDailyLimit, 50) } : {}),
+      ...(values.job51DailyLimit.trim() ? { job51_daily_limit: numberOrDefault(values.job51DailyLimit, 40) } : {}),
       stop_on_captcha: values.stopOnCaptcha,
       send_resume_after_greeting: values.sendResumeAfterGreeting,
       auto_send_resume_on_reply: values.autoResumeOnReply,

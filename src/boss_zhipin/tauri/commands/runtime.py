@@ -37,6 +37,44 @@ class StartRunBody(_CamelModel):
     log_channel: JavaScriptChannelId[str]
 
 
+async def close_platform_browser(name: str) -> None:
+    """该平台链结束就关它的受控浏览器（2026-10-13 用户实测）。
+
+    多平台并发时，先干完活的平台（如 51job 满额/扫完秒退）如果等整轮
+    巡航结束才关窗，用户会看到一个开着的窗口一动不动。这里在各链
+    finally 里优雅关闭（CDP browser.close 保 cookie 落盘）；幂等——
+    浏览器没开就是空操作，runner 结束时还有一道全平台兜底关闭。
+
+    2026-10-18（审查发现的严重缺陷）：猎聘/51job 只走多平台分支，这里
+    不查 ``browser_retention`` 的话，验证码强提醒对它们完全无效——窗口
+    会在用户完成验证前被立即关掉。放在模块级是为了可被单测直接调用。
+    """
+    from boss_zhipin.gui import browser_retention
+
+    if browser_retention.should_keep_open(name):
+        log.info(
+            "[multi-platform] %s 检测到验证码停机，保留浏览器窗口等待用户验证",
+            name,
+        )
+        return
+    try:
+        if name == "boss":
+            from boss_zhipin.website_oper import finding_jobs
+
+            if finding_jobs._browser is not None:
+                log.info("[multi-platform] BOSS 链结束，自动关闭其浏览器")
+                await finding_jobs.shutdown()
+            return
+        import importlib
+
+        module = importlib.import_module(f"{name}.driver")
+        if getattr(module, "_browser", None) is not None:
+            log.info("[multi-platform] %s 链结束，自动关闭其浏览器", name)
+            await module.shutdown()
+    except Exception as e:  # noqa: BLE001 — 关窗失败不影响状态复位
+        log.debug("[multi-platform] 关闭 %s 浏览器跳过：%s", name, e)
+
+
 def _build_main_loop_factory(config: RunConfig):
     """把 RunConfig + env var 折叠成一个无参的 coroutine 工厂。
 
@@ -99,30 +137,8 @@ def _build_main_loop_factory(config: RunConfig):
         import asyncio as _asyncio
 
         async def _close_platform_browser(name: str) -> None:
-            """该平台链结束就关它的受控浏览器（2026-10-13 用户实测）。
-
-            多平台并发时，先干完活的平台（如 51job 满额/扫完秒退）如果
-            等整轮巡航结束才关窗，用户会看到一个开着的窗口一动不动。
-            这里在各链 finally 里优雅关闭（CDP browser.close 保 cookie
-            落盘）；幂等——浏览器没开就是空操作，runner 结束时还有一道
-            全平台兜底关闭。
-            """
-            try:
-                if name == "boss":
-                    from boss_zhipin.website_oper import finding_jobs
-
-                    if finding_jobs._browser is not None:
-                        log.info("[multi-platform] BOSS 链结束，自动关闭其浏览器")
-                        await finding_jobs.shutdown()
-                    return
-                import importlib
-
-                module = importlib.import_module(f"{name}.driver")
-                if getattr(module, "_browser", None) is not None:
-                    log.info("[multi-platform] %s 链结束，自动关闭其浏览器", name)
-                    await module.shutdown()
-            except Exception as e:  # noqa: BLE001 — 关窗失败不影响状态复位
-                log.debug("[multi-platform] 关闭 %s 浏览器跳过：%s", name, e)
+            """该平台链结束就关它的受控浏览器（模块级实现见 ``close_platform_browser``）。"""
+            await close_platform_browser(name)
 
         async def _wrap_platform(name: str, coro) -> None:
             try:

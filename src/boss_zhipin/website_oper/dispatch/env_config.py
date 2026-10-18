@@ -213,22 +213,34 @@ def _scan_max_jobs() -> int:
     return _int_env("BOSS_SCAN_MAX_JOBS", 50, minimum=1)
 
 
-def _protection_cap(value: int, env_name: str) -> int:
+def _protection_cap(value: int | None, env_name: str) -> int | None:
     """新号保护模式的 env 上限钳制（2026-10-15）：只收紧、不放宽。
 
     画像 env 会被 apply_profile_to_env 无条件覆盖，所以保护包络走独立
     env 名（JOBHUNTER_WINDOW_MAX_SENT / JOBHUNTER_PROTECTION_DAILY，由
     scheduled_cruise / runtime factory 注入），在这里取 min——用户没保存
-    画像也照样受保护。非法/未设值原样返回。
+    画像也照样受保护。非法/未设值原样返回。value=None（不限单轮）时：
+    保护份额存在则收紧到份额（保号优先），否则保持 None。
     """
     raw = os.getenv(env_name, "").strip()
     if raw.isdigit() and int(raw) > 0:
+        if value is None:
+            return int(raw)
         return max(1, min(value, int(raw)))
     return value
 
 
-def _auto_send_max_sent() -> int:
-    value = _int_env("BOSS_AUTO_SEND_MAX_SENT", 50, minimum=1)
+def _auto_send_max_sent() -> int | None:
+    """单轮投递上限；env 显式 "0" = 不限单轮（跑满日限才停）。
+
+    2026-10-15 设计语义「0=不限单轮」在 2026-10-17 复活修复：此前 0 被
+    minimum=1 钳成 1——用户设 0 想跑满日限，实际只投 1 份就停。保护模式
+    注入的更小份额仍然永远优先（即使不限也会被窗口份额截住）。
+    """
+    raw = os.getenv("BOSS_AUTO_SEND_MAX_SENT", "").strip()
+    value: int | None = (
+        None if raw == "0" else _int_env("BOSS_AUTO_SEND_MAX_SENT", 50, minimum=1)
+    )
     return _protection_cap(value, "JOBHUNTER_WINDOW_MAX_SENT")
 
 

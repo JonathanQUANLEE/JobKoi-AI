@@ -105,17 +105,117 @@ def generate_fission_keywords(
 # query 参数，BOSS 按全文匹配搜出的岗位与画像完全无关）。
 _LABEL_SEPARATORS_RE = re.compile(r"[,，、;；\n]+")
 
+# ---------- 空格分隔的智能切词兜底（2026-10-17 用户实测痛点） ----------
+#
+# 大多数用户习惯按空格输入多个岗位（"AI Agent 实习 AI Agent AI 应用工程师"
+# 或文科岗"销售 销售管理 客户经理"），极少有人规范打逗号。旧逻辑找不到
+# 显式分隔符时把整长串当一个关键词拼进 query 参数——BOSS 全词匹配直接
+# 返回 0 条，整轮巡航空转报废。
+#
+# 切词策略（保守启发式，宁少切不错切——切错的后果是关键词碎片化 0 结果，
+# 与不切一样糟，但用户在前端 Tag 输入框里能一眼看出并手动修正）：
+# 1. 只对「无显式分隔符的单段」启用；智能产出 ≥2 个岗位短语才采纳，
+#    否则原样保留（"AI agent 实习" 这类单岗位名零回归）；
+# 2. 岗位短语以「岗位后缀词」收口：中文词以 工程师/实习/经理/专员… 结尾
+#    即认为一个完整岗位名结束；拉丁词（AI/Web/Java）永不收口——它们只
+#    能做方向前缀；
+# 3. 常见岗位起始词（AI/Java/Python…）在当前短语已有内容且下一词是中文
+#    时开启新短语——"AI Agent AI 应用工程师" 由此切出 "AI Agent" +
+#    "AI 应用工程师" 而不是粘成一坨。
+
+# 岗位后缀：中文 token 以此结尾 = 一个完整岗位名收口
+_JOB_SUFFIXES: tuple[str, ...] = (
+    "工程师", "架构师", "分析师", "设计师", "研究员", "开发", "研发", "运维",
+    "实习", "实习生", "兼职", "校招",
+    "专员", "经理", "主管", "总监", "助理", "顾问",
+    "运营", "编辑", "策划", "翻译", "审计",
+    "管培生", "培训生", "管理", "销售", "客服",
+    "老师", "教师", "医生", "护士", "律师", "会计", "文员",
+    "员", "师",
+)
+
+# 独立成岗的完整词（不以任何后缀结尾，但单独就是一个岗位）
+_STANDALONE_JOBS: frozenset[str] = frozenset({
+    "产品", "人事", "行政", "财务", "采购", "主播", "记者", "导购",
+    "收银", "保安", "保洁", "司机", "快递", "外卖", "店长",
+})
+
+# 常见岗位起始词（拉丁）：短语已有内容且下一词是中文时，从它另起一岗
+_JOB_START_TOKENS: frozenset[str] = frozenset({
+    "ai", "web", "java", "python", "go", "golang", "rust", "php",
+    "c", "c++", "c#", ".net", "net", "ios", "android", "harmonyos",
+    "hr", "ui", "ux", "3d", "vr", "ar", "devops", "dba",
+})
+
+_CJK_CHAR_RE = re.compile(r"[\u4e00-\u9fff]")
+
+
+def _has_cjk(token: str) -> bool:
+    return bool(_CJK_CHAR_RE.search(token))
+
+
+def _closes_job_phrase(token: str) -> bool:
+    """中文 token 是否标志一个完整岗位名收口（后缀结尾或独立成岗）。"""
+    return token in _STANDALONE_JOBS or any(
+        token.endswith(suffix) for suffix in _JOB_SUFFIXES
+    )
+
+
+def _smart_split_space_separated(segment: str) -> list[str]:
+    """对无显式分隔符、含空格的单段做岗位短语切分（纯函数）。
+
+    产出 <2 个短语时返回空列表（调用方保留原文，零回归保护）。
+    """
+    tokens = [t for t in (segment or "").split() if t]
+    if len(tokens) < 2:
+        return []
+
+    phrases: list[list[str]] = []
+    current: list[str] = []
+
+    for i, token in enumerate(tokens):
+        if _has_cjk(token):
+            current.append(token)
+            if _closes_job_phrase(token):
+                phrases.append(current)
+                current = []
+        else:
+            is_start = token.lower() in _JOB_START_TOKENS
+            next_is_cjk = i + 1 < len(tokens) and _has_cjk(tokens[i + 1])
+            if is_start and current and next_is_cjk:
+                # "AI Agent | AI 应用工程师"：岗位起始词开启新短语
+                phrases.append(current)
+                current = [token]
+            else:
+                current.append(token)
+    if current:
+        phrases.append(current)
+
+    if len(phrases) < 2:
+        return []
+    return [" ".join(p) for p in phrases if p]
+
 
 def split_search_keywords(raw: str) -> list[str]:
     """把「目标职位」输入切分成关键词列表（纯函数）。
 
     - "AI应用工程师, AI agent实习," → ["AI应用工程师", "AI agent实习"]
-    - "AI应用工程师、大模型；NLP" → 三词（支持中文顿号/分号）
-    - 单关键词（内部含空格/斜杠）原样返回：["AI agent 实习"]
+    - "AI应用工程师、大模型；NLP" → 三词（支持中文顿号/分号/换行）
+    - 显式分隔符多段：完全尊重用户意图，段内不再二次猜测
+    - 无分隔符但含空格：智能切词兜底（"销售 销售管理" → 两词；
+      "AI agent 实习" 单岗位名原样保留，零回归）
     - 空串/全分隔符 → []
     """
-    parts = [p.strip() for p in _LABEL_SEPARATORS_RE.split((raw or "").strip())]
-    return [p for p in parts if p]
+    raw_str = (raw or "").strip()
+    if not raw_str:
+        return []
+    parts = [p.strip() for p in _LABEL_SEPARATORS_RE.split(raw_str) if p.strip()]
+    if not parts:
+        return []
+    if len(parts) > 1:
+        return parts
+    smart = _smart_split_space_separated(parts[0])
+    return smart if smart else parts
 
 
 def generate_fission_keywords_for_label(

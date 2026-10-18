@@ -9,14 +9,30 @@ log = logging.getLogger(__name__)
 
 
 async def get_text_by_css(selector: str, timeout: float = 5) -> str | None:
-    """通用：返回 CSS 选择器命中元素的 text，找不到返回 None。"""
+    """通用：返回 CSS 选择器命中元素的 text，找不到返回 None。
+
+    2026-10-18 事故加固：nodriver 的 ``tab.select(timeout=...)`` 在
+    ``query_selector``（CDP dom.get_document）阻塞时**不会**按 timeout
+    返回——页面主线程被验证码/风控 JS 卡住时它会无限挂起，直到外层
+    ``asyncio.wait_for`` 取消。这里显式包一层 ``wait_for``，把超时收敛
+    在函数内部（抛 TimeoutError 由调用方决定降级策略）。
+    """
     from boss_zhipin.website_oper import finding_jobs
 
     tab = finding_jobs._tab
     if tab is None:
         return None
     try:
-        el = await tab.select(selector, timeout=timeout)
+        # 外层比内层多留 1s（2026-10-18 审查）：内层 select 自己会在
+        # timeout 后返回 None，若两层同值，外层 wait_for 总先触发并取消
+        # 内层——被取消的 nodriver connection.send 会在 mapper 里残留
+        # 未完成 Transaction。给它自然收尾的时间。
+        el = await asyncio.wait_for(
+            tab.select(selector, timeout=timeout), timeout=timeout + 1
+        )
+    except asyncio.TimeoutError:
+        log.warning("get_text_by_css 超时 %.1fs：%s", timeout, selector)
+        return None
     except Exception:
         return None
     return el.text if el else None

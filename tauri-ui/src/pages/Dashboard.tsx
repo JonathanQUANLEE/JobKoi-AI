@@ -13,6 +13,7 @@ import { type SettingsTab } from "../components/SettingsModal";
 import { type MistModalType } from "../components/settings/MistSettingsModal";
 import Sidebar, { type NavItem } from "../components/Sidebar";
 import DashboardModalLayer from "../components/dashboard/DashboardModalLayer";
+import ResumeProfileDialog from "../components/core/ResumeProfileDialog";
 import StartConfirmDialog from "../components/core/StartConfirmDialog";
 import { useWorkbenchWheel } from "../hooks/useWorkbenchWheel";
 import { useProfileFormState } from "../hooks/useProfileFormState";
@@ -47,7 +48,6 @@ export default function Dashboard({ githubUser, onLogout }: DashboardProps = {})
   const lang = useRunStore((s) => s.lang);
   const setLang = useRunStore((s) => s.setLang);
   const setTheme = useRunStore((s) => s.setTheme);
-  const pushAgentMessage = useRunStore((s) => s.pushAgentMessage);
   const setPendingResumePolish = useRunStore((s) => s.setPendingResumePolish);
   const limitNotice = useRunStore((s) => s.limitNotice);
   const setLimitNotice = useRunStore((s) => s.setLimitNotice);
@@ -68,6 +68,12 @@ export default function Dashboard({ githubUser, onLogout }: DashboardProps = {})
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [settingsModalTab, setSettingsModalTab] = useState<SettingsTab>("general");
   const [expandRipple, setExpandRipple] = useState(false);
+
+  // 简历 → 画像一键同步（2026-10-17 P2）：简历中心直连提炼的确认弹窗状态
+  const [resumeProfilePreview, setResumeProfilePreview] = useState<{
+    profile: Record<string, unknown>;
+    reasoning: string;
+  } | null>(null);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
@@ -381,8 +387,10 @@ export default function Dashboard({ githubUser, onLogout }: DashboardProps = {})
               ? "px-2 sm:px-4 lg:px-6 py-0 overflow-hidden"
               : activeNav === "resumes"
               ? "px-3 sm:px-5 py-3 space-y-4 overflow-y-auto"
-              : activeNav === "polish" || activeNav === "copilot"
+              : activeNav === "polish"
               ? "px-3 sm:px-5 py-3 flex flex-col overflow-y-auto"
+              : activeNav === "copilot"
+              ? "px-3 sm:px-5 py-3 flex flex-col overflow-hidden"
               : activeNav === "live"
               ? "px-3 sm:px-5 py-3 flex flex-col overflow-hidden"
               : "px-6 py-5 space-y-6 overflow-y-auto"
@@ -423,6 +431,30 @@ export default function Dashboard({ githubUser, onLogout }: DashboardProps = {})
                 {t("reply.dismiss")}
               </button>
             </div>
+          )}
+
+          {/* 简历 → 画像一键同步确认弹窗（2026-10-17 P2）：简历中心提炼结果
+              先预览确认，再一键回填表单（PRD："是否一键同步至求职画像？"） */}
+          {resumeProfilePreview && (
+            <ResumeProfileDialog
+              profile={resumeProfilePreview.profile}
+              reasoning={resumeProfilePreview.reasoning}
+              onConfirm={() => {
+                profileForm.hydrateFromProfile({
+                  name: profileForm.profileName,
+                  path: "",
+                  data: resumeProfilePreview.profile,
+                });
+                setResumeProfilePreview(null);
+                useRunStore.getState().notify({
+                  type: "success",
+                  text: "已将简历提炼的求职意向同步至求职画像，可继续微调后保存。",
+                  source: "简历中心",
+                });
+                setActiveNav("profile");
+              }}
+              onClose={() => setResumeProfilePreview(null)}
+            />
           )}
 
           {/* TAB 1: 巡航工作台 */}
@@ -512,14 +544,35 @@ export default function Dashboard({ githubUser, onLogout }: DashboardProps = {})
           {activeNav === "resumes" && (
             <div className="w-full space-y-4">
               <ResumePanel
-                onExtractProfile={(resumeName, text) => {
-                  pushAgentMessage({
-                    role: "user",
-                    content: `请基于我的简历资料库中的「${resumeName}」来识别提取我的求职画像（目标岗位、意向城市、核心技能及排除方向）。${
-                      text ? `\n\n简历内容参考：\n${text.slice(0, 1200)}` : ""
-                    }`,
+                onExtractProfile={async (resumeName) => {
+                  // 直连提炼（2026-10-17 P2）：简历 → LLM 画像 → 确认弹窗 →
+                  // 一键回填表单；不再绕道管家聊天页。
+                  useRunStore.getState().notify({
+                    type: "info",
+                    text: `正在解析「${resumeName}」并提炼求职画像…`,
+                    source: "简历中心",
                   });
-                  setActiveNav("copilot");
+                  try {
+                    const res = await ipc.parseResumeToProfile(resumeName);
+                    if (res.status === "ok" && res.profile) {
+                      setResumeProfilePreview({
+                        profile: res.profile,
+                        reasoning: res.reply || "",
+                      });
+                    } else {
+                      useRunStore.getState().notify({
+                        type: "error",
+                        text: res.message || "简历画像提炼失败，请稍后重试或检查模型配置。",
+                        source: "简历中心",
+                      });
+                    }
+                  } catch (err) {
+                    useRunStore.getState().notify({
+                      type: "error",
+                      text: `简历画像提炼异常：${String(err)}`,
+                      source: "简历中心",
+                    });
+                  }
                 }}
                 onReviewResume={(resumeName, text) => {
                   setPendingResumePolish({

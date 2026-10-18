@@ -26,6 +26,7 @@ export type EventKind =
   | "api_flow_finished"
   | "api_flow_error"
   | "captcha_stopped"
+  | "agent_intervene"
   | "error";
 
 export type ProgressEvent = {
@@ -382,6 +383,9 @@ export const ipc = {
     pyInvoke<{ status: string; name: string }>("delete_resume_file", { name }),
   openResumeNative: (name: string) =>
     pyInvoke<{ status: string; name: string; path: string }>("open_resume_native", { name }),
+  // 简历反向驱动求职画像（2026-10-17 P2）：一键提炼，返回与 agent_chat 同构
+  parseResumeToProfile: (name: string) =>
+    pyInvoke<AgentChatResult>("parse_resume_to_profile", { name }),
   diagnoseResume: (
     resumeText: string,
     targetRole?: string,

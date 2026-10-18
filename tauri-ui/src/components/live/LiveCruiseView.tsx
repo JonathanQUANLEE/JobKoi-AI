@@ -6,6 +6,7 @@ import { buildLiveFeed, currentProcessingJob, lastCruiseSummary, PLATFORM_META }
 import { ipc } from "../../lib/ipc";
 import { AnimatedNumber } from "../core/animated-number";
 import LiveActivityFeed from "./LiveActivityFeed";
+import AgentInterventionFeed from "./AgentInterventionFeed";
 
 interface LiveCruiseViewProps {
   onStartRun: () => void;
@@ -522,6 +523,11 @@ export default function LiveCruiseView({ onStartRun, onStopRun, busy = false }: 
               各平台的每个动作都会并列出现在左侧实时动态里。
             </p>
           </div>
+
+          {/* AI 巡航守护记录：平台实时通道正下方（2026-10-17 用户指定位置）——
+              直播守护 Agent 的网申跳过 / 弹窗自愈 / 异常研判，让用户看清
+              "意外都被 AI 有条不紊地化解了"而不是软件死机 */}
+          <AgentInterventionFeed />
         </div>
       </div>
     </div>

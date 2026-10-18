@@ -45,6 +45,37 @@ describe("toLiveFeedItem — 事件转活动流条目", () => {
     expect(item?.tone).toBe("warning");
     expect(item?.detail).toContain("郑州上海");
   });
+
+  it("网申跳过（apply_online）翻译成人话（2026-10-17 守护 Agent）", () => {
+    const item = toLiveFeedItem(ev("job_skipped", { title: "校招岗", reason: "apply_online" }), 9);
+    expect(item?.tone).toBe("skip");
+    expect(item?.detail).toContain("网申岗位");
+    const recovered = toLiveFeedItem(ev("job_skipped", { title: "A", reason: "chat_recovery_skip" }), 10);
+    expect(recovered?.detail).toContain("Agent 已自愈");
+  });
+
+  it("agent_intervene → 守护 Agent 介入条目（info/warn/recovered 三态）", () => {
+    const info = toLiveFeedItem(
+      ev("agent_intervene", { platform: "boss", level: "info", title: "校招岗", action: "安全跳过", detail: "识别到「立即网申」岗位" }),
+      11,
+    );
+    expect(info?.tone).toBe("info");
+    expect(info?.title).toContain("守护 Agent");
+    expect(info?.detail).toContain("校招岗");
+    expect(info?.detail).toContain("立即网申");
+
+    const recovered = toLiveFeedItem(
+      ev("agent_intervene", { platform: "boss", level: "recovered", title: "岗位 A", action: "自愈恢复", detail: "已清理弹窗并返回岗位列表" }),
+      12,
+    );
+    expect(recovered?.tone).toBe("success");
+
+    const warn = toLiveFeedItem(
+      ev("agent_intervene", { platform: "boss", level: "warn", title: "岗位 B", action: "研判", detail: "检测到异常" }),
+      13,
+    );
+    expect(warn?.tone).toBe("warning");
+  });
 });
 
 describe("buildLiveFeed — 时间轴组装", () => {

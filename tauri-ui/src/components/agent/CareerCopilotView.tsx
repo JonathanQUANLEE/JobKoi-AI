@@ -199,7 +199,11 @@ export default function CareerCopilotView({
   const modeLabel = typeof modeKey === "string" ? t(`mode.${modeKey}.title`) : "-";
 
   return (
-    <div className="flex-1 flex flex-col w-full min-h-[calc(100vh-230px)] space-y-3">
+    /* 2026-10-16 布局修复（用户反馈：每发一条消息输入框就被顶出屏幕）：
+     * 外层必须用固定高度 h-（原 min-h- 会随内容无限长高，把输入框顶飞），
+     * 消息列表 min-h-0 允许收缩 + overflow-y-auto 只滚对话内容，
+     * 输入区 shrink-0 钉死底部——VSCode/Codex 式聊天布局。 */
+    <div className="flex-1 flex flex-col w-full h-[calc(100vh-230px)] space-y-3">
       {/* 顶部：当前关联简历感知栏 */}
       <div className="flex items-center justify-between px-3.5 py-2 rounded-xl border border-stone-800 bg-stone-900/60 backdrop-blur text-xs shrink-0">
         <div className="flex items-center gap-2 min-w-0">
@@ -269,9 +273,9 @@ export default function CareerCopilotView({
       </div>
 
       {/* 对话区：自适应伸展铺满空间 */}
-      <div ref={listRef} className="flex-1 min-h-[420px] overflow-y-auto space-y-4 pr-2 text-xs">
+      <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-2 text-xs">
         {agentMessages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full min-h-[380px] text-center p-6 space-y-4">
+          <div className="flex flex-col items-center justify-center h-full text-center p-6 space-y-4">
             <div className="size-16 rounded-3xl bg-amber-500/10 p-1 flex items-center justify-center border border-amber-500/30 shadow-lg shadow-amber-500/10">
               <Bot className="size-8 text-amber-400" />
             </div>
@@ -476,8 +480,8 @@ export default function CareerCopilotView({
         </MagicCard>
       )}
 
-      {/* 输入框 */}
-      <MagicCard className="rounded-2xl border border-stone-700/80 bg-stone-900/90 p-2.5 shadow-sm focus-within:border-amber-500/60 focus-within:ring-2 focus-within:ring-amber-500/10 transition-all" glowColor="245, 158, 11" enableTilt={false} particleCount={4}>
+      {/* 输入框（shrink-0 钉死底部，永不随内容移动） */}
+      <MagicCard className="shrink-0 rounded-2xl border border-stone-700/80 bg-stone-900/90 p-2.5 shadow-sm focus-within:border-amber-500/60 focus-within:ring-2 focus-within:ring-amber-500/10 transition-all" glowColor="245, 158, 11" enableTilt={false} particleCount={4}>
         <textarea
           rows={2}
           className="w-full resize-none bg-transparent px-2.5 pt-1 text-sm text-stone-100 outline-none placeholder:text-stone-500 leading-relaxed"

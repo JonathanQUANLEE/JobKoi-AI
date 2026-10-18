@@ -56,14 +56,17 @@ def read_config(path: Path | None = None) -> AgentConfig:
 
 
 def default_config() -> AgentConfig:
-    """开箱默认配置（智谱 GLM-4-Flash）。
-    若配置了公共体验 Key（如安装包环境注入），则开箱即用。"""
+    """开箱默认配置（智谱 GLM-4-Flash）+ 内置公共体验 Key（V0.4 方案 A）。
+
+    Key 优先级（2026-10-16 修正）：环境变量 ZHIPU_PUBLIC_API_KEY >
+    presets.py 硬编码公共 Key > preset 快照。运行时经 get_public_api_key()
+    读取，测试/注入可随时覆盖。"""
     from boss_zhipin.agent.presets import DEFAULT_PRESET_ID, LLM_PRESETS, get_public_api_key
 
     preset = next((p for p in LLM_PRESETS if p.get("id") == DEFAULT_PRESET_ID), None)
     if not preset:
         return AgentConfig()
-    api_key = str(preset.get("default_api_key") or get_public_api_key()).strip()
+    api_key = get_public_api_key() or str(preset.get("default_api_key") or "").strip()
     return AgentConfig(
         base_url=str(preset.get("base_url") or "").strip(),
         api_key=api_key,

@@ -103,6 +103,54 @@ def test_split_search_keywords_empty_and_garbage():
     assert split_search_keywords(",, 、；") == []
 
 
+# ---------- 空格智能切词兜底（2026-10-17：空格输入习惯 0 结果事故） ----------
+
+
+def test_split_space_separated_mixed_roles():
+    """PRD 经典案例：混合拉丁+中文后缀的长串按岗位短语切开。"""
+    assert split_search_keywords("AI Agent 实习 AI Agent AI 应用工程师") == [
+        "AI Agent 实习",
+        "AI Agent",
+        "AI 应用工程师",
+    ]
+
+
+def test_split_space_separated_liberal_arts_roles():
+    """PRD 文科案例：销售/销售管理/客户经理 各自成词。"""
+    assert split_search_keywords("销售 销售管理 客户经理") == [
+        "销售",
+        "销售管理",
+        "客户经理",
+    ]
+
+
+def test_split_space_separated_two_simple_roles():
+    assert split_search_keywords("Java 开发 Python 后端") == [
+        "Java 开发",
+        "Python 后端",
+    ]
+
+
+def test_split_single_multiword_role_still_intact():
+    """零回归：单个含空格岗位名（无第二个收口词）原样保留。"""
+    assert split_search_keywords("AI agent 实习") == ["AI agent 实习"]
+    assert split_search_keywords("资深 算法工程师") == ["资深 算法工程师"]
+    assert split_search_keywords("AI Agent") == ["AI Agent"]
+
+
+def test_split_explicit_separator_wins_over_smart_split():
+    """显式分隔符多段：完全尊重用户意图，段内不再二次猜测。"""
+    assert split_search_keywords("AI agent 实习, 水利水电实习") == [
+        "AI agent 实习",
+        "水利水电实习",
+    ]
+
+
+def test_split_slash_never_splits():
+    """斜杠从不作为切分依据（"AI/算法工程师" 是一个岗位名）。"""
+    assert split_search_keywords("AI/算法工程师") == ["AI/算法工程师"]
+
+
 def test_fission_for_label_splits_and_fissions_each():
     """多岗位逐词裂变：两个基准词都保留，各自带变体，无逗号整串残留。"""
     kws = generate_fission_keywords_for_label(

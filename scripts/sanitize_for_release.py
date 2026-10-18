@@ -64,6 +64,16 @@ def sensitive_patterns() -> list[tuple[re.Pattern, str]]:
         patterns.append((re.compile(re.escape(dev_name)), "开发者个人真实姓名"))
     return patterns
 
+
+# 内置公共体验 Key（2026-10-18 审查裁定：方案 A 有意保留——新用户开箱即用；
+# 用户拍板"薅羊毛给用户的，透露出来也无所谓"）。发布时显式声明它的存在，
+# 让开发者每次打包都知道这个 Key 会随源码/安装包公开——若某天决定不再
+# 公开，改 presets.py 的 ZHIPU_PUBLIC_API_KEY 环境变量注入即可。
+BUILTIN_PUBLIC_KEY_HINT = (
+    "src/boss_zhipin/agent/presets.py 内置了智谱公共体验 Key（方案 A，"
+    "用户拍板有意保留：新用户开箱即用）。该 Key 会随源码/安装包公开。"
+)
+
 CLEAN_AGENT_CONFIG = {
     # V0.4：默认智谱 GLM-4-Flash；api_key 留空 = 未配置，
     # 引导用户在界面配置个人 API Key 或任意 OpenAI 兼容端点。
@@ -175,6 +185,9 @@ def sanitize() -> None:
             print(f"  - {file_path}: [{desc}] -> {match[:25]}...")
     else:
         print("  [PASS] 恭喜！未在源码和跟踪文件中检测到开发者姓名或私钥残留。")
+
+    # 内置公共 Key 声明（2026-10-18）：让每次发布都显式过目
+    print(f"\n[NOTICE] {BUILTIN_PUBLIC_KEY_HINT}")
 
     print("\n" + "=" * 60)
     print("【4/4】脱敏完成！现在可以安全打包独立 EXE。")

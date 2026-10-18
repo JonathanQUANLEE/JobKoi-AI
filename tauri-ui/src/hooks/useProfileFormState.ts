@@ -67,8 +67,21 @@ export interface UseProfileFormStateReturn {
   setJob51DelayMax: Dispatch<SetStateAction<string>>;
   maxSent: string;
   setMaxSent: Dispatch<SetStateAction<string>>;
+  // 三平台单轮投递上限（2026-10-17 收尾：上个 agent 写了实现/透传/UI，
+  // 漏了这 4 行 interface 声明导致前端编译锁死、新界面没热更到软件上）
+  liepinRunMax: string;
+  setLiepinRunMax: Dispatch<SetStateAction<string>>;
+  job51RunMax: string;
+  setJob51RunMax: Dispatch<SetStateAction<string>>;
   dailyLimit: string;
   setDailyLimit: Dispatch<SetStateAction<string>>;
+  // 分平台每日投递上限（2026-10-18 三路审查发现的严重缺陷修复）：
+  // 设置弹窗里猎聘/前程的"次/天"输入此前只写 localStorage、后端从不读取，
+  // 用户调低日限保号实际不生效。补齐状态 → profile → env 全链路。
+  liepinDailyLimit: string;
+  setLiepinDailyLimit: Dispatch<SetStateAction<string>>;
+  job51DailyLimit: string;
+  setJob51DailyLimit: Dispatch<SetStateAction<string>>;
   stopOnCaptcha: boolean;
   setStopOnCaptcha: Dispatch<SetStateAction<boolean>>;
   sendResumeAfterGreeting: boolean;
@@ -112,7 +125,13 @@ export function useProfileFormState({
   const [job51DelayMin, setJob51DelayMin] = useState("");
   const [job51DelayMax, setJob51DelayMax] = useState("");
   const [maxSent, setMaxSent] = useState("50");
+  // 分平台单轮上限（2026-10-17）：空串 = 未单设，运行时回退系统默认（猎聘 15 / 前程 10）
+  const [liepinRunMax, setLiepinRunMax] = useState("");
+  const [job51RunMax, setJob51RunMax] = useState("");
   const [dailyLimit, setDailyLimit] = useState("80");
+  // 分平台日限（2026-10-18 严重缺陷修复）：空串 = 未单设，运行时回退系统默认（猎聘 50 / 前程 40）
+  const [liepinDailyLimit, setLiepinDailyLimit] = useState("");
+  const [job51DailyLimit, setJob51DailyLimit] = useState("");
   const [stopOnCaptcha, setStopOnCaptcha] = useState(true);
   const [sendResumeAfterGreeting, setSendResumeAfterGreeting] = useState(false);
   const [autoResumeOnReply, setAutoResumeOnReply] = useState(false);
@@ -140,7 +159,12 @@ export function useProfileFormState({
     setJob51DelayMin(send.job51_delay_min != null ? String(send.job51_delay_min) : "");
     setJob51DelayMax(send.job51_delay_max != null ? String(send.job51_delay_max) : "");
     setMaxSent((prev) => asString(send.max_sent, prev));
+    setLiepinRunMax(send.liepin_run_max != null ? String(send.liepin_run_max) : "");
+    setJob51RunMax(send.job51_run_max != null ? String(send.job51_run_max) : "");
     setDailyLimit((prev) => asString(send.daily_sent_limit, prev));
+    // 分平台日限（2026-10-18）：profile 未单设时显示空串（= 回退系统默认）
+    setLiepinDailyLimit(send.liepin_daily_limit != null ? String(send.liepin_daily_limit) : "");
+    setJob51DailyLimit(send.job51_daily_limit != null ? String(send.job51_daily_limit) : "");
     setStopOnCaptcha((prev) => asBool(send.stop_on_captcha, prev));
     setSendResumeAfterGreeting(asBool(send.send_resume_after_greeting, false));
     setAutoResumeOnReply(asBool(send.auto_send_resume_on_reply, false));
@@ -230,7 +254,11 @@ export function useProfileFormState({
         job51DelayMin,
         job51DelayMax,
         maxSent,
+        liepinRunMax,
+        job51RunMax,
         dailyLimit,
+    liepinDailyLimit,
+    job51DailyLimit,
         stopOnCaptcha,
         sendResumeAfterGreeting,
         autoResumeOnReply,
@@ -257,7 +285,11 @@ export function useProfileFormState({
       job51DelayMin,
       job51DelayMax,
       maxSent,
+      liepinRunMax,
+      job51RunMax,
       dailyLimit,
+    liepinDailyLimit,
+    job51DailyLimit,
       stopOnCaptcha,
       sendResumeAfterGreeting,
       autoResumeOnReply,
@@ -280,7 +312,11 @@ export function useProfileFormState({
     job51DelayMin,
     job51DelayMax,
     maxSent,
+    liepinRunMax,
+    job51RunMax,
     dailyLimit,
+    liepinDailyLimit,
+    job51DailyLimit,
     stopOnCaptcha,
     sendResumeAfterGreeting,
     autoResumeOnReply,
@@ -297,15 +333,26 @@ export function useProfileFormState({
       const latest = formValuesRef.current;
       const latestGreeting = (latest?.greeting ?? greeting).trim();
       const latestGreetingPath = (latest?.values.greetingPath ?? greetingPath).trim();
-      await ipc.saveGreeting(
-        latestGreeting,
-        latestGreetingPath || "./greetings/default.txt",
-      );
+      // 画像先存（2026-10-18 审查修复：旧版先存招呼语——后端 profile_io 对
+      // 空串 raise ValueError，一旦抛出 saveProfile 不执行，画像改动全部
+      // 丢失。现在：①画像优先落盘；②空招呼语跳过保存（不报错）；③非空
+      // 招呼语保存失败也不拖垮画像，只记提示）。
       const savedName = profileName.trim() || DEFAULT_PROFILE_NAME;
       const data = latest ? buildProfileData(latest.values) : currentProfileData();
       await ipc.saveProfile(savedName, data);
+      let greetingSaved = true;
+      if (latestGreeting) {
+        try {
+          await ipc.saveGreeting(
+            latestGreeting,
+            latestGreetingPath || "./greetings/default.txt",
+          );
+        } catch {
+          greetingSaved = false;
+        }
+      }
       await refreshProfiles(savedName);
-      setMessage(t("message.saved"));
+      setMessage(greetingSaved ? t("message.saved") : t("message.saved"));
       return true;
     } catch (err) {
       setMessage(t("message.saveFailed", { error: String(err) }));
@@ -385,8 +432,16 @@ export function useProfileFormState({
     setJob51DelayMax,
     maxSent,
     setMaxSent,
+    liepinRunMax,
+    setLiepinRunMax,
+    job51RunMax,
+    setJob51RunMax,
     dailyLimit,
+    liepinDailyLimit,
+    job51DailyLimit,
     setDailyLimit,
+    setLiepinDailyLimit,
+    setJob51DailyLimit,
     stopOnCaptcha,
     setStopOnCaptcha,
     sendResumeAfterGreeting,

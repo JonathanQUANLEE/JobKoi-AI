@@ -70,6 +70,17 @@ def test_unknown_error_without_message_still_clean():
     assert "参数不合法" in str(exc_info.value)
 
 
+def test_empty_evaluate_result_gets_distinct_signature():
+    """evaluate 返回空值（页面上下文未就绪）：独立"无有效响应"签名，供上层识别自愈。
+
+    2026-10-17 实测事故：单元轮换整页导航后首个 wapi XHR 拿到 None——
+    旧签名是含糊的 code=?，上层无法与平台语义错误区分，只能整轮放弃。
+    """
+    with pytest.raises(RuntimeError) as exc_info:
+        asyncio.run(job_api.fetch_search_page(_FakeTab(None), "query=x", page=1))
+    assert "无有效响应" in str(exc_info.value)
+
+
 # ---------------------------------------------------------------------------
 # 2/3. 冷却重试 + 自适应节流（search_api_flow 层）
 # ---------------------------------------------------------------------------
@@ -238,3 +249,58 @@ def test_non_37_error_still_stops_immediately(monkeypatch):
         str(payload.get("message", "")) for kind, payload in collected if kind == "api_flow_error"
     ]
     assert any("code=19" in m for m in error_messages)
+
+
+# ---------------------------------------------------------------------------
+# 4. 页面上下文失效自愈（2026-10-17 实测事故：单元轮换导航后 wapi 拿空值）
+# ---------------------------------------------------------------------------
+
+
+def test_context_breakdown_reload_retry_recovers(monkeypatch):
+    """接口无有效响应 → 30s 冷却 + 刷新页面重试成功 → 巡航继续 + 守护面板直播自愈。"""
+    state = {"page1_calls": 0}
+    jobs = _seen_jobs(monkeypatch, ["e1", "e2"])
+
+    async def fake_fetch(tab, query, page):
+        if page == 1:
+            state["page1_calls"] += 1
+            if state["page1_calls"] == 1:
+                raise RuntimeError("搜索接口无有效响应（页面上下文可能未就绪，可刷新重试）")
+            return jobs
+        return []
+
+    collected, sleeps, reloads = _install_stubs(monkeypatch, fake_fetch)
+    _run_flow()
+
+    # 自愈动作真实发生：30s 短冷却（不是 37 的 90s）+ 刷新页面一次
+    assert 30.0 in sleeps
+    assert 90.0 not in sleeps
+    assert reloads == [True]
+    # 守护面板收到 自愈重试(warn) + 已恢复(recovered) 两条直播
+    interventions = [p for k, p in collected if k == "agent_intervene"]
+    assert [i["action"] for i in interventions] == ["自愈重试", "已恢复"]
+    # 重试成功后巡航正常收尾
+    summaries = [p for k, p in collected if k == "api_flow_finished"]
+    assert len(summaries) == 1
+    assert summaries[0]["stop_reason"] == "completed"
+
+
+def test_context_breakdown_retry_failure_stops_gracefully(monkeypatch):
+    """刷新后仍无响应：单次重试后优雅结束（不无限重试硬闯）。"""
+    _seen_jobs(monkeypatch, ["e1"])
+
+    async def always_empty(tab, query, page):
+        raise RuntimeError("搜索接口无有效响应（页面上下文可能未就绪，可刷新重试）")
+
+    collected, sleeps, reloads = _install_stubs(monkeypatch, always_empty)
+    _run_flow()
+
+    # 恰好刷新一次、冷却一次（第二次失败后不再重试）
+    assert reloads == [True]
+    assert sleeps.count(30.0) == 1
+    error_messages = [
+        str(payload.get("message", "")) for kind, payload in collected if kind == "api_flow_error"
+    ]
+    assert any("仍无响应" in m for m in error_messages)
+    summaries = [p for k, p in collected if k == "api_flow_finished"]
+    assert summaries[0]["stop_reason"] == "api_error"

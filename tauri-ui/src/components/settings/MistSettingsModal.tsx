@@ -38,6 +38,18 @@ interface MistSettingsModalProps {
   setJob51DelayMin?: (val: string) => void;
   job51DelayMax?: string | number;
   setJob51DelayMax?: (val: string) => void;
+  /** 分平台单轮投递上限（2026-10-17）：BOSS 0=不限单轮；猎聘/前程空串=系统默认。 */
+  maxSent?: string | number;
+  setMaxSent?: (val: string) => void;
+  liepinRunMax?: string | number;
+  setLiepinRunMax?: (val: string) => void;
+  job51RunMax?: string | number;
+  setJob51RunMax?: (val: string) => void;
+  /** 分平台每日投递上限（2026-10-18 严重缺陷修复）：旧版只写 localStorage 不生效。 */
+  liepinDailyLimit?: string | number;
+  setLiepinDailyLimit?: (val: string) => void;
+  job51DailyLimit?: string | number;
+  setJob51DailyLimit?: (val: string) => void;
   greeting?: string;
   setGreeting?: (val: string) => void;
   onSaveConfig?: () => Promise<boolean>;
@@ -62,6 +74,16 @@ export default function MistSettingsModal({
   setJob51DelayMin,
   job51DelayMax = "",
   setJob51DelayMax,
+  maxSent = "50",
+  setMaxSent,
+  liepinRunMax = "",
+  setLiepinRunMax,
+  job51RunMax = "",
+  setJob51RunMax,
+  liepinDailyLimit = "",
+  setLiepinDailyLimit,
+  job51DailyLimit = "",
+  setJob51DailyLimit,
   greeting = "",
   setGreeting,
   onSaveConfig,
@@ -85,6 +107,12 @@ export default function MistSettingsModal({
   const [localLiepinDelayMax, setLocalLiepinDelayMax] = useState(String(liepinDelayMax ?? ""));
   const [localJob51DelayMin, setLocalJob51DelayMin] = useState(String(job51DelayMin ?? ""));
   const [localJob51DelayMax, setLocalJob51DelayMax] = useState(String(job51DelayMax ?? ""));
+  const [localMaxSent, setLocalMaxSent] = useState(String(maxSent ?? "50"));
+  const [localLiepinRunMax, setLocalLiepinRunMax] = useState(String(liepinRunMax ?? ""));
+  const [localJob51RunMax, setLocalJob51RunMax] = useState(String(job51RunMax ?? ""));
+  // 分平台日限（2026-10-18 修复）
+  const [localLiepinDailyLimit, setLocalLiepinDailyLimit] = useState(String(liepinDailyLimit ?? ""));
+  const [localJob51DailyLimit, setLocalJob51DailyLimit] = useState(String(job51DailyLimit ?? ""));
   const [localGreeting, setLocalGreeting] = useState(greeting);
 
   // 大模型设置状态（V0.4：默认智谱 GLM-4-Flash，OpenRouter 作为第二推荐可切换）
@@ -113,13 +141,18 @@ export default function MistSettingsModal({
     setLocalLiepinDelayMax(String(liepinDelayMax ?? ""));
     setLocalJob51DelayMin(String(job51DelayMin ?? ""));
     setLocalJob51DelayMax(String(job51DelayMax ?? ""));
+    setLocalMaxSent(String(maxSent ?? "50"));
+    setLocalLiepinRunMax(String(liepinRunMax ?? ""));
+    setLocalJob51RunMax(String(job51RunMax ?? ""));
+    setLocalLiepinDailyLimit(String(liepinDailyLimit ?? ""));
+    setLocalJob51DailyLimit(String(job51DailyLimit ?? ""));
     setLocalGreeting(greeting);
     if (llmConfig) {
       setBaseUrl(llmConfig.base_url || "https://open.bigmodel.cn/api/paas/v4");
       setApiKey(llmConfig.api_key || "");
       setModel(llmConfig.model || "glm-4-flash");
     }
-  }, [rule, dailyLimit, delayMin, delayMax, liepinDelayMin, liepinDelayMax, job51DelayMin, job51DelayMax, greeting, llmConfig]);
+  }, [rule, dailyLimit, delayMin, delayMax, liepinDelayMin, liepinDelayMax, job51DelayMin, job51DelayMax, maxSent, liepinRunMax, job51RunMax, liepinDailyLimit, job51DailyLimit, greeting, llmConfig]);
 
   if (!type) return null;
 
@@ -149,6 +182,12 @@ export default function MistSettingsModal({
     setLiepinDelayMax?.(localLiepinDelayMax);
     setJob51DelayMin?.(localJob51DelayMin);
     setJob51DelayMax?.(localJob51DelayMax);
+    setMaxSent?.(localMaxSent);
+    setLiepinRunMax?.(localLiepinRunMax);
+    setJob51RunMax?.(localJob51RunMax);
+    // 分平台日限（2026-10-18 修复）：随 profile 落盘 → 运行时真实生效
+    setLiepinDailyLimit?.(localLiepinDailyLimit);
+    setJob51DailyLimit?.(localJob51DailyLimit);
     window.setTimeout(() => onSaveConfig?.().catch(() => {}), 0);
     useRunStore.getState().showCenterToast("安全设置已保存", { tone: "success" });
     notify({ type: "success", text: "投递频率与防风控保护策略已生效" });
@@ -290,6 +329,16 @@ export default function MistSettingsModal({
             setLocalJob51DelayMin={setLocalJob51DelayMin}
             localJob51DelayMax={localJob51DelayMax}
             setLocalJob51DelayMax={setLocalJob51DelayMax}
+            localMaxSent={localMaxSent}
+            setLocalMaxSent={setLocalMaxSent}
+            localLiepinRunMax={localLiepinRunMax}
+            setLocalLiepinRunMax={setLocalLiepinRunMax}
+            localJob51RunMax={localJob51RunMax}
+            setLocalJob51RunMax={setLocalJob51RunMax}
+            localLiepinDailyLimit={localLiepinDailyLimit}
+            setLocalLiepinDailyLimit={setLocalLiepinDailyLimit}
+            localJob51DailyLimit={localJob51DailyLimit}
+            setLocalJob51DailyLimit={setLocalJob51DailyLimit}
             onSave={handleSavePolicy}
             onClose={onClose}
           />

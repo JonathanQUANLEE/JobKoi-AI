@@ -124,5 +124,8 @@ tauri-ui/.ds-compiled.css
 # 打包发布脱敏备份目录（开发者私有，绝不进仓）
 /.dev_private_backup/
 
+# 脱敏推送临时备份目录（2026-10-18：本地 Key/配置的物理备份，推送后即删）
+/_local_secret_backup/
+
 # 个人简历目录（包含用户真实简历，严禁入库）
 /resume/

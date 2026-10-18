@@ -60,12 +60,22 @@ async def _wrap(coro: Awaitable[None]) -> None:
         # 开着像资源泄漏）。走优雅退出（CDP browser.close 保 cookie 落盘），
         # 下一轮巡航入口会自动全新启动，免登不受影响；测试里 _browser=None
         # 时 shutdown 是无害空操作。三平台统一：BOSS + 猎聘 + 51job。
+        #
+        # 例外（2026-10-18 用户需求）：验证码/安全验证停机时**保留**对应
+        # 平台的浏览器窗口——用户需要在这个窗口里完成验证，自动关掉会让
+        # 验证码一闪而过（旧版实测痛点）。窗口保留期间巡航已结束、事件
+        # callback 已清空，不影响状态复位。
+        from boss_zhipin.gui import browser_retention
+
         try:
             from boss_zhipin.website_oper import finding_jobs
 
             if finding_jobs._browser is not None:
-                log.info("巡航结束，自动关闭 BOSS 受控浏览器（优雅退出保登录态）")
-                await finding_jobs.shutdown()
+                if browser_retention.should_keep_open("boss"):
+                    log.info("检测到验证码停机：保留 BOSS 受控浏览器窗口，等待用户完成验证")
+                else:
+                    log.info("巡航结束，自动关闭 BOSS 受控浏览器（优雅退出保登录态）")
+                    await finding_jobs.shutdown()
         except Exception as e:  # noqa: BLE001 — 关浏览器失败不影响状态复位
             log.warning("巡航结束自动关 BOSS 浏览器失败（不致命）: %s", e)
         import importlib
@@ -74,10 +84,18 @@ async def _wrap(coro: Awaitable[None]) -> None:
             try:
                 module = importlib.import_module(module_name)
                 if getattr(module, "_browser", None) is not None:
+                    platform = module_name.split(".")[0]
+                    if browser_retention.should_keep_open(platform):
+                        log.info(
+                            "检测到验证码停机：保留 %s 受控浏览器窗口，等待用户完成验证",
+                            module_name,
+                        )
+                        continue
                     log.info("巡航结束，自动关闭 %s 受控浏览器（优雅退出保登录态）", module_name)
                     await module.shutdown()
             except Exception as e:  # noqa: BLE001 — 模块缺失/关闭失败均不致命
                 log.debug("关闭 %s 浏览器跳过：%s", module_name, e)
+        browser_retention.reset()
 
 
 def start_run(

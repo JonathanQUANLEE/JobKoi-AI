@@ -416,7 +416,7 @@ export default function DrawerPolicyTab({
 
         <div className="grid gap-3 sm:grid-cols-2 pt-2 border-t border-[var(--grid)]">
           <div>
-            <label className="field-label">{t("field.maxSent")} (本次上限)</label>
+            <label className="field-label">{t("field.maxSent")} (单轮投递上限)</label>
             <input
               className="field-input"
               type="number"
@@ -424,6 +424,10 @@ export default function DrawerPolicyTab({
               onChange={(e) => setMaxSent(e.target.value)}
               placeholder="50"
             />
+            <p className="mt-1 text-[10px] text-stone-500 leading-relaxed">
+              单轮巡航最多投递多少份；填 0 = 不限单轮，跑满「每日保护限额」或岗位扫完才停
+              （巡航中会自动分批轮换城市与岗位词）。新号保护模式开启时会自动改小此值。
+            </p>
           </div>
           <div>
             <label className="field-label">{t("field.dailyLimit")} (每日保护限额)</label>
@@ -434,6 +438,9 @@ export default function DrawerPolicyTab({
               onChange={(e) => setDailyLimit(e.target.value)}
               placeholder="80"
             />
+            <p className="mt-1 text-[10px] text-stone-500 leading-relaxed">
+              当日各平台投递总量上限（BOSS 官方 150 / 猎聘 100 / 前程无忧 40），投满安全停机。
+            </p>
           </div>
         </div>
       </div>

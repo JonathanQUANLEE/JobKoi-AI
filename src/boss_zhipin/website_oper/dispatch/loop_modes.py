@@ -151,7 +151,50 @@ async def handle_auto_send_job(
         return False, sent_count, daily_sent_count
 
     log.info("自动发送固定招呼语：%s", response)
-    await loop_actions.click_contact_and_send_response(response)
+    try:
+        await loop_actions.click_contact_and_send_response(response)
+    except RuntimeError as e:
+        # 聊天链路异常（#chat-input 未出现/发送后回不到列表/按钮未找到）：
+        # 守护 Agent 自愈——清理弹窗、尽力回到岗位列表。恢复成功记跳过
+        # 继续下一岗位；恢复失败才让异常传播（真·浏览器级故障停机是正确
+        # 行为）。PlatformLimitReached 不在捕获范围（它必须穿透到主循环
+        # 触发安全停机）。注：若消息已实际发出但回列表失败，该岗位已在
+        # seen 账本，下轮自动按 duplicate/继续沟通 兜底，不会重复投递。
+        if not await loop_actions.recover_from_chat_failure():
+            raise
+        log.warning("岗位 #%d 聊天链路异常已自愈（%s），跳过该岗位继续", job_index, e)
+        _log_skipped(
+            skipped_log_path,
+            job=job,
+            job_key=dedupe_key,
+            send_mode=send_mode,
+            reason="chat_recovery_skip",
+            details={
+                "stage": "send",
+                "error": str(e),
+                "job_title": getattr(job, "title", ""),
+            },
+        )
+        events.emit(
+            "job_skipped",
+            platform="boss",
+            index=job_index,
+            reason="chat_recovery_skip",
+            detail="聊天页未如预期出现，Agent 已自愈并跳过该岗位",
+            title=getattr(job, "title", ""),
+        )
+        events.emit(
+            "agent_intervene",
+            platform="boss",
+            level="recovered",
+            title=getattr(job, "title", f"岗位 #{job_index}"),
+            action="自愈恢复",
+            detail=(
+                f"聊天页未如预期出现（{e}），已清理弹窗并返回岗位列表，"
+                "平滑跳过该岗位继续巡航"
+            ),
+        )
+        return False, sent_count, daily_sent_count
     sent_count += 1
     daily_sent_count += 1
     audit.log_attempt(
@@ -188,12 +231,12 @@ async def handle_auto_send_job(
         events.emit("feed_exhausted", total=job_index)
         return True, sent_count, daily_sent_count
 
-    delay = random.uniform(delay_min, delay_max)
-    log.info("自动发送节流等待 %.1f 秒后继续", delay)
-    # 带站岗的节流睡眠：用户中途手关浏览器时 ~2s 内中止，不傻等满 10-30s
-    from boss_zhipin.website_oper.core.browser_session import sleep_with_browser_guard
+    # 2026-10-18 审查修复：均匀分布改高斯钟形（与 API 流 human_pause 同款）。
+    # 自家 browser_session.py 认定"均匀分布的随机延迟是机器签名"——DOM 流
+    # 这里漏迁移了。量级不变（钳制在 delay_min/max 区间内），只改分布形状。
+    from boss_zhipin.website_oper.core.browser_session import human_pause
 
-    await sleep_with_browser_guard(delay)
+    await human_pause(delay_min, delay_max)
     return False, sent_count, daily_sent_count
 
 
@@ -328,7 +371,37 @@ async def handle_review_send_job(
         )
     else:
         log.info("审核通过，发送固定招呼语：%s", response)
-        await loop_actions.click_contact_and_send_response(response)
+        try:
+            await loop_actions.click_contact_and_send_response(response)
+        except RuntimeError as e:
+            # 与 auto 模式同款守护 Agent 自愈：恢复成功记跳过继续，失败才传播
+            if not await loop_actions.recover_from_chat_failure():
+                raise
+            log.warning("岗位 #%d 聊天链路异常已自愈（%s），跳过该岗位继续", job_index, e)
+            _log_skipped(
+                skipped_log_path,
+                job=job,
+                job_key=dedupe_key,
+                send_mode=send_mode,
+                reason="chat_recovery_skip",
+                details={
+                    "stage": "send",
+                    "error": str(e),
+                    "job_title": getattr(job, "title", ""),
+                },
+            )
+            events.emit(
+                "agent_intervene",
+                platform="boss",
+                level="recovered",
+                title=getattr(job, "title", f"岗位 #{job_index}"),
+                action="自愈恢复",
+                detail=(
+                    f"审核通过后聊天页未如预期出现（{e}），已清理弹窗并返回"
+                    "岗位列表，平滑跳过该岗位继续巡航"
+                ),
+            )
+            return "skip"
         audit.log_attempt(
             source="fixed-greeting",
             channel="local",

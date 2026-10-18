@@ -53,6 +53,8 @@ const SKIP_REASON_LABELS: Record<string, string> = {
   duplicate: "过去已投递过，自动跳过",
   already_contacted: "此前已沟通过，跳过",
   contact_unavailable: "「立即沟通」按钮不可用",
+  apply_online: "网申岗位（需外部系统投递），已安全跳过",
+  chat_recovery_skip: "聊天页异常，Agent 已自愈并跳过",
   filtered_out: "与画像规则不匹配",
   review_skip: "人工审核跳过",
   validation: "招呼语未过校验",
@@ -150,6 +152,21 @@ export function toLiveFeedItem(ev: ProgressEvent, seq: number): LiveFeedItem | n
       return { ...base, icon: "warn", tone: "warning", title: "搜索接口异常", detail: text(p.message) || "接口返回异常" };
     case "captcha_stopped":
       return { ...base, icon: "warn", tone: "warning", title: "触发安全验证", detail: title ? `已在 ${title} 处安全停止` : "已按设置安全停止" };
+    case "agent_intervene": {
+      // 守护 Agent 介入动态（2026-10-17）：level=info 网申跳过等 / warn 异常
+      // 研判 / recovered 自愈成功——也进主时间轴，让介入动作在活动流可回溯
+      const level = text(p.level);
+      const action = text(p.action) || "介入处理";
+      const tone = level === "recovered" ? "success" : level === "warn" ? "warning" : "info";
+      const jobTitle = text(p.title);
+      return {
+        ...base,
+        icon: level === "recovered" ? "sent" : "warn",
+        tone,
+        title: `守护 Agent：${action}`,
+        detail: [jobTitle, text(p.detail)].filter(Boolean).join(" — "),
+      };
+    }
     case "limit_reached":
     case "platform_limit_reached":
       return { ...base, icon: "stop", tone: "warning", title: "达到投递上限", detail: text(p.message) || "已安全停机" };

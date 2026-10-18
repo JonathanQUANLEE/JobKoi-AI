@@ -388,14 +388,15 @@ def test_auto_send_sends_without_prompt_and_waits_random_delay(monkeypatch):
         _patch_browser(monkeypatch, get_jd=get_jd, sent=sent, sleeps=sleeps)
         _patch_job_postings(monkeypatch, postings)
         monkeypatch.setattr("builtins.input", lambda prompt="": pytest.fail("auto-send must not prompt"))
-        monkeypatch.setattr(write_response.random, "uniform", lambda low, high: 23.5)
         # 节流睡眠已改为「带站岗的分段实现」（2026-10-12）：这里只验证
-        # random.uniform 的结果确实传给了节流——分段与站岗行为由
-        # tests/test_browser_liveness.py 的 3 个单测覆盖。
-        async def record_guard(seconds: float):
+        # 节流确实发生——分段与站岗行为由 tests/test_browser_liveness.py
+        # 的 3 个单测覆盖。2026-10-18：DOM 流均匀分布迁高斯（human_pause），
+        # 不再走 random.uniform——改为断言任一节流值落在 delay 区间内。
+        async def record_guard(seconds: float, chunk: float = 2.0):
             sleeps.append(seconds)
 
         monkeypatch.setattr(browser_session, "sleep_with_browser_guard", record_guard)
+        monkeypatch.setattr(browser_session, "human_pause", record_guard)
         monkeypatch.setattr(audit, "log_attempt", lambda **kwargs: audit_records.append(kwargs))
         monkeypatch.setattr(gui_events, "emit", lambda kind, **payload: events.append((kind, payload)))
 
@@ -409,7 +410,7 @@ def test_auto_send_sends_without_prompt_and_waits_random_delay(monkeypatch):
 
         assert sent == [FIXED_GREETING, FIXED_GREETING]
         assert all(record["sent"] is True for record in audit_records)
-        assert 23.5 in sleeps
+        assert any(10.0 <= s <= 60.0 for s in sleeps)
         assert any(kind == "feed_exhausted" for kind, _ in events)
 
     asyncio.run(scenario())

@@ -43,6 +43,9 @@ EventKind = Literal[
     "feed_reload",  # 推荐 feed 刷新换一批，payload: {attempt, limit}
     "loop_ended",  # runner 包的整段结束，payload: {reason: "completed"|"cancelled"|"error"}
     "error",  # 任何阶段抛了未捕获异常，payload: {stage, message}
+    # 后台守护 Agent 异常介入与自愈（2026-10-17 网申跳过/聊天链路自愈等），
+    # payload: {platform, level: "info"|"warn"|"recovered", title, action, detail}
+    "agent_intervene",
 ]
 
 

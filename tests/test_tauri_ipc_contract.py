@@ -85,6 +85,8 @@ def test_tauri_ipc_commands_match_gui_v02_contract():
         "open_resume_native",
         "diagnose_resume",
         "calculate_ats_score",
+        # 简历反向驱动求职画像（2026-10-17 P2：一键提炼直连命令）
+        "parse_resume_to_profile",
     }
 
 

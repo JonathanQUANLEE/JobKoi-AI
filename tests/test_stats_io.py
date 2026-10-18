@@ -48,9 +48,9 @@ def test_query_stats_aggregates_today_and_total(tmp_path):
     stats = query_stats(tmp_path)
     assert stats["boss"]["today"] == 2
     assert stats["boss"]["total"] == 3
-    # BOSS 日限默认 100（2026-10-15 保号拍板：平台主动沟通上限 100/天）
-    assert stats["boss"]["remaining"] == 98
-    assert stats["boss"]["limit"] == 100
+    # BOSS 日限默认 150（2026-10-18 用户拍板：官方上限就是 150）
+    assert stats["boss"]["remaining"] == 148
+    assert stats["boss"]["limit"] == 150
     assert len(stats["boss"]["recent"]) == 3
     assert stats["boss"]["recent"][0]["title"] == "AI Agent 实习"
 
@@ -95,7 +95,7 @@ def test_format_stats_renders_labels():
     assert "BOSS 直聘" in text
     assert "猎聘" in text
     assert "前程无忧" in text
-    assert "今日 0 / 100" in text
+    assert "今日 0 / 150" in text
 
 
 def test_get_delivery_records_and_reset_today(tmp_path):

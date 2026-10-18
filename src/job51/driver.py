@@ -273,6 +273,11 @@ async def goto_search(tab: uc.Tab, keyword: str) -> list[dict]:
     # 拟人化浏览（2026-10-15 封号复盘）：加载后扫一眼 + 滚动看几条再解析
     # （固定 sleep(8) 是机器签名；滚动顺带触发懒加载多抓卡片）。
     await human_pause(4.0, 8.0)
+    # 封禁/风控拦截页检测（2026-10-18 审查补齐）：命中即记日志——apply 层
+    # 在 parse_cards 拿 0 张卡时会再探测一次并停轮（两层防线）。
+    if await check_ban_page(tab):
+        log.warning("[job51] 🛑 检测到封禁/风控拦截页（goto_search）")
+        return []
     for _ in range(random.randint(1, 2)):
         try:
             await tab.evaluate(
@@ -293,6 +298,30 @@ async def _check_captcha(tab: uc.Tab) -> bool:
     if not isinstance(txt, str):
         return False
     return any(k in txt for k in ("安全验证", "滑块", "拖动", "验证码", "请完成验证", "行为验证"))
+
+
+# 封禁/风控拦截页特征（2026-10-18 三路审查：51job 缺失猎聘同款封禁检测，
+# 被临时封禁时整轮静默空转）。任一命中即判。
+_BAN_PAGE_KEYWORDS = ("账号行为异常", "异常访问行为", "暂时禁止访问", "访问过于频繁", "账号异常")
+
+
+async def check_ban_page(tab: uc.Tab) -> bool:
+    """检测封禁/风控拦截页（对齐猎聘 _check_ban_page 的 51job 版）。
+
+    不识别的话整轮巡航静默空转（每词 0 岗位），用户还以为没岗位了。
+    """
+    try:
+        txt = await asyncio.wait_for(
+            tab.evaluate(
+                "(document.body && document.body.innerText || '').slice(0, 2000)"
+            ),
+            timeout=5,
+        )
+    except Exception:  # noqa: BLE001
+        return False
+    if not isinstance(txt, str):
+        return False
+    return any(k in txt for k in _BAN_PAGE_KEYWORDS)
 
 
 async def check_limit_alert(tab: uc.Tab) -> bool:
