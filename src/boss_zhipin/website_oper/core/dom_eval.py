@@ -5,11 +5,17 @@ import asyncio
 import json
 import logging
 
+from boss_zhipin.website_oper.core.cdp_guard import cdp_call
+
 log = logging.getLogger(__name__)
 
 
 async def _safe_evaluate(js: str, timeout: float = 10) -> dict:
-    """跑 ``tab.evaluate(js)``，期望 JS 自己 ``JSON.stringify`` 返回字符串。"""
+    """跑 ``tab.evaluate(js)``，期望 JS 自己 ``JSON.stringify`` 返回字符串。
+
+    2026-10-18 事故加固（第二轮）：wait_for 版本在 nodriver 内部 finally
+    链二次挂死时永不返回（见 cdp_guard docstring），改用 cdp_call 护栏。
+    """
     from boss_zhipin.website_oper import finding_jobs
 
     tab = finding_jobs._tab
@@ -18,7 +24,7 @@ async def _safe_evaluate(js: str, timeout: float = 10) -> dict:
 
     js_head = js.strip()[:80].replace("\n", " ")
     try:
-        raw = await asyncio.wait_for(tab.evaluate(js), timeout=timeout)
+        raw = await cdp_call(tab.evaluate(js), timeout=timeout, label=js_head)
     except asyncio.TimeoutError:
         log.warning("evaluate 超过 %ss 没返回（JS: %s...）", timeout, js_head)
         return {}
@@ -54,16 +60,25 @@ async def _safe_evaluate(js: str, timeout: float = 10) -> dict:
 
 
 async def _xpath_safe(xp: str, timeout: float = 3.0) -> list:
-    """``tab.xpath`` 的兜底封装。"""
+    """``tab.xpath`` 的兜底封装。
+
+    2026-10-18 事故根因点（第二轮加固）：nodriver ``tab.xpath`` 在
+    ``finally`` 里再做一次 ``send(dom.disable)``——外层 wait_for 超时
+    cancel 后，任务在 finally 里对已挂死的 CDP 通道二次挂起（取消只注入
+    一次），wait_for 等任务退出永不返回 → 整轮巡航死寂。cdp_call 的
+    第二次 cancel 能打断 finally 链；仍退不出的场景放弃为僵尸，主流程
+    继续由连续失败熔断接管（保号停机优先）。
+    """
     from boss_zhipin.website_oper import finding_jobs
 
     tab = finding_jobs._tab
     if tab is None:
         return []
     try:
-        result = await asyncio.wait_for(
+        result = await cdp_call(
             tab.xpath(xp, timeout=timeout),
             timeout=timeout + 2,
+            label=xp,
         )
         return result or []
     except asyncio.TimeoutError:

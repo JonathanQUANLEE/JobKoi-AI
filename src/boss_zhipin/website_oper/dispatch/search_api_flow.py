@@ -142,12 +142,16 @@ def _can_prescreen_by_title(filters: dict[str, Any]) -> bool:
 async def _open_job_detail_page(url: str, timeout: float = 30) -> bool:
     from boss_zhipin.website_oper import finding_jobs
     from boss_zhipin.website_oper.core.browser_session import human_pause
+    from boss_zhipin.website_oper.core.cdp_guard import cdp_call
 
     tab = finding_jobs.get_tab()
     if tab is None or not url:
         return False
     try:
-        await asyncio.wait_for(tab.get(url), timeout=timeout)
+        # 2026-10-18 事故加固：tab.get 内部是 CDP await 链，页面被风控 JS
+        # 卡死时挂起不返回；wait_for 版本会被 nodriver 内部清理链拖死，
+        # 改走 cdp_call（可放弃僵尸，主循环不死）。
+        await cdp_call(tab.get(url), timeout=timeout, label="tab.get 详情页")
     except Exception as e:
         log.warning("打开详情页失败 %s: %s", url, e)
         return False
@@ -525,8 +529,16 @@ async def _process_single_api_job(
         return "dry_run", sent_count, daily_sent_count
 
     try:
-        status = await asyncio.wait_for(
-            _send_greeting_on_detail_page(greeting), timeout=120
+        # 2026-10-18 事故加固：wait_for 在内层取消链挂死时永不返回（发送
+        # 假死场景实测根因），cdp_call 两次 cancel + 可放弃，保证单岗位
+        # 最坏 120s + 宽限后一定交还主循环（连续失败熔断随后接管）。
+        from boss_zhipin.website_oper.core.cdp_guard import cdp_call
+
+        status = await cdp_call(
+            _send_greeting_on_detail_page(greeting),
+            timeout=120,
+            grace=10.0,
+            label=f"发送招呼语：{job.title}",
         )
     except asyncio.TimeoutError:
         log.warning("发送超时（120s），跳过：%s", job.title)

@@ -26,6 +26,7 @@ from nodriver import Config
 from boss_zhipin.paths import get_platform_profile_dir
 from boss_zhipin.platforms.browser_lookup import apply_browser_fallback
 from boss_zhipin.platforms.session_cleanup import reap_profile_chrome
+from boss_zhipin.website_oper.core.cdp_guard import cdp_call
 
 log = logging.getLogger(__name__)
 
@@ -154,7 +155,13 @@ async def shutdown() -> None:
             # 可能还在 Chrome 内存里——先给 1.5s 追上磁盘再优雅关闭。
             await asyncio.sleep(1.5)
             try:
-                await _browser.connection.send(cdp.browser.close())
+                # 2026-10-19 防挂死加固：close 的 CDP send 在浏览器已假死时
+                # 永不返回（BOSS 事故同款），cdp_call 超时后由 stop() 兜底。
+                await cdp_call(
+                    _browser.connection.send(cdp.browser.close()),
+                    timeout=10,
+                    label="猎聘 browser.close",
+                )
             except Exception as e:  # noqa: BLE001 — close 已送达但连接先断属正常
                 log.info("猎聘浏览器 CDP close 连接断开（多为正常退出中）: %s", e)
             await asyncio.sleep(2.0)  # 给 Chrome 时间完成退出 + cookie 落盘
@@ -214,7 +221,7 @@ async def check_unread() -> dict[str, Any]:
                 "message": "猎聘浏览器已打开但没有受控标签页。",
             }
     try:
-        raw = await asyncio.wait_for(tab.evaluate(UNREAD_JS), timeout=8)
+        raw = await cdp_call(tab.evaluate(UNREAD_JS), timeout=8, label="猎聘未读角标")
         data = json.loads(raw) if isinstance(raw, str) else raw
         if not isinstance(data, dict) or not data.get("found"):
             return {
@@ -267,7 +274,9 @@ async def is_logged_in(tab: uc.Tab | None = None) -> bool:
     # 2. 强凭证：有界尝试从浏览器 CookieJar 获取凭证 cookie（超时 1.5s 兜底）
     if _browser is not None:
         try:
-            cookies = await asyncio.wait_for(_browser.cookies.get_all(), timeout=1.5)
+            cookies = await cdp_call(
+                _browser.cookies.get_all(), timeout=1.5, label="猎聘 cookie 探测"
+            )
             if any(
                 getattr(c, "name", "") in ("lt_auth", "liepin_login_valid")
                 for c in cookies
@@ -283,7 +292,9 @@ async def is_logged_in(tab: uc.Tab | None = None) -> bool:
             u = str(getattr(active_tab, "url", "") or "")
             if not _on_login_page(u):
                 js = "(() => { const t = document.body ? document.body.innerText || '' : ''; return t.slice(0, 500); })()"
-                txt = await asyncio.wait_for(active_tab.evaluate(js), timeout=1.5)
+                txt = await cdp_call(
+                    active_tab.evaluate(js), timeout=1.5, label="猎聘登录 DOM 探测"
+                )
                 if isinstance(txt, str):
                     if "我的首页" in txt or "退出登录" in txt:
                         return True
@@ -296,7 +307,14 @@ async def is_logged_in(tab: uc.Tab | None = None) -> bool:
 
 
 async def parse_cards(tab: uc.Tab) -> list[dict]:
-    raw = await tab.evaluate(PARSE_CARDS_JS)
+    """解析搜索页卡片（2026-10-19 防挂死加固：CDP 通道假死时超时降级为空列表）。"""
+    try:
+        raw = await cdp_call(
+            tab.evaluate(PARSE_CARDS_JS), timeout=15, label="猎聘卡片解析"
+        )
+    except asyncio.TimeoutError:
+        log.warning("猎聘卡片解析超时（CDP 通道疑似挂死），本轮按 0 岗位降级")
+        return []
     try:
         return json.loads(raw)
     except (json.JSONDecodeError, TypeError):
@@ -318,11 +336,12 @@ async def _check_ban_page(tab: uc.Tab) -> bool:
     用户还以为没岗位了。
     """
     try:
-        txt = await asyncio.wait_for(
+        txt = await cdp_call(
             tab.evaluate(
                 "(document.body && document.body.innerText || '').slice(0, 2000)"
             ),
             timeout=5,
+            label="猎聘封禁页检测",
         )
     except Exception:  # noqa: BLE001
         return False
@@ -348,7 +367,17 @@ async def human_pause(low: float, high: float) -> None:
 async def goto_search(tab: uc.Tab, keyword: str) -> list[dict]:
     from urllib.parse import quote
 
-    await tab.get(SEARCH_TMPL.format(kw=quote(keyword)))
+    # 2026-10-19 防挂死加固：搜索页导航在页面被风控 JS 卡死时挂起不返回，
+    # cdp_call 超时后按"本词 0 岗位"降级，轮换到下一关键词（不炸整轮）。
+    try:
+        await cdp_call(
+            tab.get(SEARCH_TMPL.format(kw=quote(keyword))),
+            timeout=30,
+            label=f"猎聘搜索页导航：{keyword}",
+        )
+    except asyncio.TimeoutError:
+        log.warning("猎聘搜索页导航超时（CDP 通道疑似挂死），关键词「%s」按 0 岗位跳过", keyword)
+        return []
     # 封禁页检测：第一时间识别并叫停（抛 LiepinBannedError 由 apply 层
     # 转成用户可见事件 + 安全停止），不再静默空转整轮。
     if await _check_ban_page(tab):
@@ -360,9 +389,13 @@ async def goto_search(tab: uc.Tab, keyword: str) -> list[dict]:
     await human_pause(3.5, 7.0)
     for _ in range(random.randint(1, 2)):
         try:
-            await tab.evaluate(
-                "window.scrollBy({top: 400 + Math.floor(Math.random()*500),"
-                " behavior: 'smooth'})"
+            await cdp_call(
+                tab.evaluate(
+                    "window.scrollBy({top: 400 + Math.floor(Math.random()*500),"
+                    " behavior: 'smooth'})"
+                ),
+                timeout=8,
+                label="猎聘搜索页滚动",
             )
         except Exception:  # noqa: BLE001 — 滚动失败不影响主流程
             pass
@@ -400,13 +433,24 @@ def pick_greeting(fallback: str = "") -> str:
     return fallback
 
 
-async def open_detail(tab: uc.Tab, href: str) -> None:
-    await tab.get(href)
+async def open_detail(tab: uc.Tab, href: str) -> bool:
+    """打开详情页。返回 False = 导航超时/假死（调用方按岗位跳过降级）。
+
+    2026-10-19 防挂死加固：tab.get 在详情页被风控 JS 卡死时挂起不返回
+    （BOSS api-flow 事故同款），cdp_call 超时后返回 False——apply 层
+    忽略返回值继续走 click_chat，其找不到按钮自然返回 failed 跳过。
+    """
+    try:
+        await cdp_call(tab.get(href), timeout=30, label=f"猎聘详情页导航：{href[:80]}")
+    except asyncio.TimeoutError:
+        log.warning("猎聘详情页导航超时（CDP 通道疑似挂死），跳过该岗位")
+        return False
     # 拟人化"阅读"停顿（2026-10-15 调研：JobPilot——人类在新页面上行动前
     # 有 reading pause；ApplyGoat——人扫一个岗 30s、细读 3min）。旧固定
     # sleep(5) 秒开秒关详情页，是"高频访问"画像的直接来源（本次封禁
     # 正是"异常**访问**行为"而非打招呼超限）。
     await human_pause(8.0, 20.0)
+    return True
 
 
 async def detail_company(tab: uc.Tab) -> str:
@@ -420,7 +464,7 @@ async def detail_company(tab: uc.Tab) -> str:
     """
     # ① DOM 结构化提取（最稳）
     try:
-        raw = await asyncio.wait_for(
+        raw = await cdp_call(
             tab.evaluate(
                 "(() => {"
                 " const el = document.querySelector("
@@ -431,6 +475,7 @@ async def detail_company(tab: uc.Tab) -> str:
                 "})()"
             ),
             timeout=5,
+            label="猎聘公司名 DOM 提取",
         )
         if isinstance(raw, str) and raw.strip():
             return raw.strip()
@@ -438,8 +483,10 @@ async def detail_company(tab: uc.Tab) -> str:
         pass
     # ② innerText 正则（旧逻辑兜底）
     try:
-        txt = await tab.evaluate(
-            "(document.body && document.body.innerText || '').slice(0, 800)"
+        txt = await cdp_call(
+            tab.evaluate("(document.body && document.body.innerText || '').slice(0, 800)"),
+            timeout=8,
+            label="猎聘公司名 innerText 兜底",
         )
     except Exception:  # noqa: BLE001
         return ""
@@ -456,7 +503,11 @@ async def detail_company(tab: uc.Tab) -> str:
 async def _check_captcha(tab: uc.Tab) -> bool:
     """检测页面是否弹出验证码/滑块/安全验证（猎聘风控）。"""
     try:
-        txt = await tab.evaluate("(document.body && document.body.innerText || '')")
+        txt = await cdp_call(
+            tab.evaluate("(document.body && document.body.innerText || '')"),
+            timeout=8,
+            label="猎聘验证码检测",
+        )
     except Exception:  # noqa: BLE001
         return False
     if not isinstance(txt, str):
@@ -469,7 +520,11 @@ async def _check_limit_alert(tab: uc.Tab) -> bool:
     from boss_zhipin.platforms.platform_limits import match_limit_alert
 
     try:
-        txt = await tab.evaluate("(document.body && document.body.innerText || '')")
+        txt = await cdp_call(
+            tab.evaluate("(document.body && document.body.innerText || '')"),
+            timeout=8,
+            label="猎聘限额检测",
+        )
     except Exception:  # noqa: BLE001
         return False
     if not isinstance(txt, str):
@@ -531,10 +586,16 @@ async def click_chat(tab: uc.Tab, greeting: str = "") -> str:
 
     # 1. 点"聊一聊"主按钮（这一下就完成打招呼——平台自动发默认话术）
     try:
-        btn = await tab.find("聊一聊", best_match=True, timeout=10)
+        btn = await cdp_call(
+            tab.find("聊一聊", best_match=True, timeout=10),
+            timeout=12,
+            label="猎聘聊一聊按钮",
+        )
         if not btn:
             return "captcha" if await _check_captcha(tab) else "failed: 找不到聊一聊按钮"
-        await btn.click()
+        # 2026-10-19 防挂死加固：click 是 CDP 输入事件序列，页面假死时
+        # 挂起不返回（except 分支没机会执行）——cdp_call 超时走下方 except。
+        await cdp_call(btn.click(), timeout=10, label="猎聘点击聊一聊")
         await human_pause(2.0, 4.0)
     except Exception as e:  # noqa: BLE001
         return f"failed: 点聊一聊异常 {e}"
@@ -550,27 +611,46 @@ async def click_chat(tab: uc.Tab, greeting: str = "") -> str:
 
     # 3.（紧急回退：LIEPIN_CLICK_ONLY=0）手发模式——找输入框逐字符输入
     try:
-        box = await tab.find("请输入文字", best_match=True, timeout=10)
+        box = await cdp_call(
+            tab.find("请输入文字", best_match=True, timeout=10),
+            timeout=12,
+            label="猎聘聊天输入框",
+        )
         if not box:
             # 退而求其次用 textarea 选择器
-            box = await tab.select("textarea.im-ui-textarea", timeout=8)
+            box = await cdp_call(
+                tab.select("textarea.im-ui-textarea", timeout=8),
+                timeout=10,
+                label="猎聘聊天输入框 textarea",
+            )
         if not box:
             return "captcha" if await _check_captcha(tab) else "failed: 找不到聊天输入框"
-        await box.click()
+        await cdp_call(box.click(), timeout=8, label="猎聘聚焦输入框")
         await human_pause(0.4, 1.0)
-        await _type_human(box, greeting)
+        # 2026-10-19 防挂死加固：逐字符 send_keys 是长 CDP 事件序列，
+        # 整体包 cdp_call（90s 上限 ≈ 300 字招呼语最坏打字时长），超时
+        # 由外层 except 捕获按"输入异常"跳过该岗位。
+        await cdp_call(_type_human(box, greeting), timeout=90, label="猎聘逐字符输入")
         await human_pause(0.5, 1.2)
     except Exception as e:  # noqa: BLE001
         return f"failed: 输入招呼语异常 {e}"
 
     # 4.（手发模式）点"发送"按钮
     try:
-        send = await tab.find("发送", best_match=True, timeout=8)
+        send = await cdp_call(
+            tab.find("发送", best_match=True, timeout=8),
+            timeout=10,
+            label="猎聘发送按钮",
+        )
         if not send:
-            send = await tab.select("button.im-ui-basic-send-btn", timeout=6)
+            send = await cdp_call(
+                tab.select("button.im-ui-basic-send-btn", timeout=6),
+                timeout=8,
+                label="猎聘发送按钮 selector",
+            )
         if not send:
             return "failed: 找不到发送按钮"
-        await send.click()
+        await cdp_call(send.click(), timeout=8, label="猎聘点击发送")
         await human_pause(1.5, 3.0)
     except Exception as e:  # noqa: BLE001
         return f"failed: 点发送异常 {e}"

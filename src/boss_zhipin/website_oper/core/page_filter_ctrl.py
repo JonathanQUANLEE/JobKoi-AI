@@ -121,8 +121,13 @@ async def click_filter_value(group_name: str, value: str, timeout: float = 5) ->
     城市筛选 3/4 落空、搜索变成全国混合（扫出 312 个非意向城市的深圳岗）。
     修法：值找不到时重试一次——重新点开组标签（面板可能已关闭）+ 等待
     渲染，再找一次。
+
+    2026-10-18 事故加固：裸 ``tab.find`` 在 CDP 通道挂死时永不返回
+    （except 分支无机会执行，整轮巡航死寂），统一走 cdp_call 护栏——
+    超时按"未找到"降级，与既有重试/URL 直填兜底链自然衔接。
     """
     from boss_zhipin.website_oper import finding_jobs
+    from boss_zhipin.website_oper.core.cdp_guard import cdp_call
 
     tab = finding_jobs._tab
     if tab is None:
@@ -131,7 +136,11 @@ async def click_filter_value(group_name: str, value: str, timeout: float = 5) ->
 
     async def _open_group() -> None:
         try:
-            group = await tab.find(group_label, best_match=True, timeout=timeout)
+            group = await cdp_call(
+                tab.find(group_label, best_match=True, timeout=timeout),
+                timeout=timeout + 2,
+                label=f"筛选组：{group_label}",
+            )
             if group:
                 await group.click()
                 # 0.3→0.8s：给懒加载的城市面板一点渲染时间（点了组标签后
@@ -142,7 +151,11 @@ async def click_filter_value(group_name: str, value: str, timeout: float = 5) ->
 
     async def _click_value() -> bool:
         try:
-            option = await tab.find(value, best_match=True, timeout=timeout)
+            option = await cdp_call(
+                tab.find(value, best_match=True, timeout=timeout),
+                timeout=timeout + 2,
+                label=f"筛选值：{value}",
+            )
             if not option:
                 return False
             await option.click()

@@ -113,7 +113,17 @@ async def shutdown() -> None:
             # 常见误报：close 已送达、Chrome 正在退出时连接先断 → send 抛
             # ConnectionRefused(1225)——这不代表失败，走下面的兜底判断。
             try:
-                await finding_jobs._browser.connection.send(cdp.browser.close())
+                # 2026-10-19 防挂死加固（三平台统一，猎聘/51job 同款）：close
+                # 的 CDP send 在浏览器已假死时永不返回——旧版裸 send 会把
+                # runner 收尾/停止按钮整个挂死（close 挂起 → shutdown 挂起 →
+                # _wrap finally 挂起 → 下次 start_run 报 already in progress）。
+                from boss_zhipin.website_oper.core.cdp_guard import cdp_call
+
+                await cdp_call(
+                    finding_jobs._browser.connection.send(cdp.browser.close()),
+                    timeout=10,
+                    label="BOSS browser.close",
+                )
             except Exception as e:  # noqa: BLE001
                 log.info("CDP close 连接断开（多为 Chrome 正常退出中）: %s", e)
                 # 清理没退干净的残留孤儿：否则它继续锁着 Cookies 库，

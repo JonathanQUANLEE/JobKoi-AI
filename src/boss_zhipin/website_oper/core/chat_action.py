@@ -5,17 +5,22 @@ import asyncio
 import logging
 import os
 
+from boss_zhipin.website_oper.core.cdp_guard import cdp_call
+
 log = logging.getLogger(__name__)
 
 
 async def get_text_by_css(selector: str, timeout: float = 5) -> str | None:
     """通用：返回 CSS 选择器命中元素的 text，找不到返回 None。
 
-    2026-10-18 事故加固：nodriver 的 ``tab.select(timeout=...)`` 在
-    ``query_selector``（CDP dom.get_document）阻塞时**不会**按 timeout
-    返回——页面主线程被验证码/风控 JS 卡住时它会无限挂起，直到外层
-    ``asyncio.wait_for`` 取消。这里显式包一层 ``wait_for``，把超时收敛
-    在函数内部（抛 TimeoutError 由调用方决定降级策略）。
+    2026-10-18 事故加固（第二轮，取代同日早些的 wait_for 版本）：nodriver
+    的 ``tab.select(timeout=...)`` 在 ``query_selector``（CDP dom.get_document）
+    阻塞时**不会**按 timeout 返回——页面主线程被验证码/风控 JS 卡住时它会
+    无限挂起。第一轮用 ``asyncio.wait_for`` 包裹，但 wait_for 的语义是
+    "取消后等任务退出才返回"，而 nodriver ``tab.xpath`` 在 ``finally`` 里
+    会再做一次 CDP send（``dom.disable``）——CancelledError 注入后任务在
+    finally 里二次挂死，wait_for 永不返回（实测整轮巡航死寂的根因）。
+    本轮改用 ``cdp_call``：两次 cancel + 可放弃（僵尸协程不再拖死主循环）。
     """
     from boss_zhipin.website_oper import finding_jobs
 
@@ -23,12 +28,10 @@ async def get_text_by_css(selector: str, timeout: float = 5) -> str | None:
     if tab is None:
         return None
     try:
-        # 外层比内层多留 1s（2026-10-18 审查）：内层 select 自己会在
-        # timeout 后返回 None，若两层同值，外层 wait_for 总先触发并取消
-        # 内层——被取消的 nodriver connection.send 会在 mapper 里残留
-        # 未完成 Transaction。给它自然收尾的时间。
-        el = await asyncio.wait_for(
-            tab.select(selector, timeout=timeout), timeout=timeout + 1
+        el = await cdp_call(
+            tab.select(selector, timeout=timeout),
+            timeout=timeout + 1,
+            label=selector,
         )
     except asyncio.TimeoutError:
         log.warning("get_text_by_css 超时 %.1fs：%s", timeout, selector)
@@ -66,14 +69,22 @@ async def click_stay_on_page_if_present(timeout: float = 3) -> bool:
 
 
 async def dismiss_greeting_dialog(timeout: float = 5) -> bool:
-    """关闭“立即沟通”后出现的默认招呼语确认框。"""
+    """关闭“立即沟通”后出现的默认招呼语确认框。
+
+    2026-10-18 事故加固：裸 ``tab.find`` 同样会在 CDP 通道挂死时永不
+    返回（find → find_element_by_text → send），走 cdp_call 护栏。
+    """
     from boss_zhipin.website_oper import finding_jobs
 
     tab = finding_jobs._tab
     if tab is None:
         return False
     try:
-        button = await tab.find("继续沟通", best_match=True, timeout=timeout)
+        button = await cdp_call(
+            tab.find("继续沟通", best_match=True, timeout=timeout),
+            timeout=timeout + 2,
+            label="继续沟通",
+        )
     except Exception:
         button = None
     if button:
@@ -86,14 +97,24 @@ async def dismiss_greeting_dialog(timeout: float = 5) -> bool:
 
 
 async def wait_for_css(selector: str, timeout: float = 50) -> bool:
-    """等 CSS 选择器命中。成功返回 True，超时返回 False。"""
+    """等 CSS 选择器命中。成功返回 True，超时返回 False。
+
+    2026-10-18 事故加固：裸 ``tab.select`` 在 CDP 通道挂死时永不返回
+    （见 get_text_by_css docstring），统一走 cdp_call 防挂死护栏。
+    """
     from boss_zhipin.website_oper import finding_jobs
 
     tab = finding_jobs._tab
     if tab is None:
         return False
     try:
-        el = await tab.select(selector, timeout=timeout)
+        el = await cdp_call(
+            tab.select(selector, timeout=timeout),
+            timeout=timeout + 1,
+            label=selector,
+        )
+    except asyncio.TimeoutError:
+        return False
     except Exception:
         return False
     return el is not None
@@ -169,12 +190,23 @@ async def click_send_resume(timeout: float = 5) -> bool:
 
 
 async def navigate_back() -> None:
-    """``history.back()`` —— 浏览器返回上一页。"""
+    """``history.back()`` —— 浏览器返回上一页。
+
+    2026-10-18 事故加固：裸 ``tab.evaluate`` 走 cdp_call 护栏防挂死。
+    导航类 evaluate 失败不致命（return_to_job_list 会重试），超时继续。
+    """
     from boss_zhipin.website_oper import finding_jobs
 
     tab = finding_jobs._tab
     if tab is not None:
-        await tab.evaluate("history.back()")
+        try:
+            await cdp_call(
+                tab.evaluate("history.back()"),
+                timeout=8,
+                label="history.back()",
+            )
+        except asyncio.TimeoutError:
+            log.warning("history.back() 超时（CDP 通道疑似挂死），继续重试逻辑")
     await asyncio.sleep(3)
 
 
