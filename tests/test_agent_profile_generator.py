@@ -433,3 +433,65 @@ def test_generate_ui_action_flow(monkeypatch):
     assert result["reply"] == "已为您切换至黑白极简主题。"
     assert result["action"] == {"type": "switch_theme", "params": {"n": 5, "theme": "monochrome"}}
 
+
+def test_sanitize_action_synonym_normalization():
+    """验证同义词（如 orange/amber/经典/黑白/安全）能自动归一化到规范枚举。"""
+    from boss_zhipin.agent.profile_schema import sanitize_action
+
+    # 1. 橙色/暖色同义词归一到 classic
+    act1 = sanitize_action({"type": "switch_theme", "params": {"theme": "orange"}})
+    assert act1["params"]["theme"] == "classic"
+    act2 = sanitize_action({"type": "switch_theme", "params": {"theme": "经典"}})
+    assert act2["params"]["theme"] == "classic"
+
+    # 2. 极简/黑白同义词归一到 monochrome
+    act3 = sanitize_action({"type": "switch_theme", "params": {"theme": "黑白"}})
+    assert act3["params"]["theme"] == "monochrome"
+    act4 = sanitize_action({"type": "switch_theme", "params": {"theme": "dark"}})
+    assert act4["params"]["theme"] == "monochrome"
+
+    # 3. modal 同义词归一到 policy / model
+    act5 = sanitize_action({"type": "open_settings", "params": {"modal": "防封"}})
+    assert act5["params"]["modal"] == "policy"
+    act6 = sanitize_action({"type": "open_settings", "params": {"modal": "llm"}})
+    assert act6["params"]["modal"] == "model"
+
+    # 4. to 路由同义词归一
+    act7 = sanitize_action({"type": "navigate", "params": {"to": "简历"}})
+    assert act7["params"]["to"] == "resumes"
+    act8 = sanitize_action({"type": "navigate", "params": {"to": "dashboard"}})
+    assert act8["params"]["to"] == "workbench"
+
+
+def test_parse_llm_json_handles_think_tags_and_trailing_commas():
+    """验证包含深度思考 <think> 标签或尾随逗号的 JSON 能够被稳健提取。"""
+    raw_think = "<think>用户想切换经典暖色主题\n{not_json}\n</think>\n```json\n{\"reply\": \"好的\", \"action\": null}\n```"
+    parsed = pg.parse_llm_json(raw_think)
+    assert parsed["reply"] == "好的"
+
+    raw_trailing = '{"reply": "测试逗号", "profile": null,}'
+    parsed_trailing = pg.parse_llm_json(raw_trailing)
+    assert parsed_trailing["reply"] == "测试逗号"
+
+
+def test_generate_filters_error_messages_from_history(monkeypatch):
+    """验证历史中的系统报错回显（如'出错了：...'）会被剔除，避免污染提示词。"""
+    _configured_agent(monkeypatch)
+    llm_payload = json.dumps({"reply": "回复", "profile": None}, ensure_ascii=False)
+    calls = _mock_llm(monkeypatch, llm_payload)
+
+    history = [
+        {"role": "user", "content": "1"},
+        {"role": "assistant", "content": "出错了：模型调用失败 (timeout): 请求超时（12.0s）"},
+        {"role": "user", "content": "你好"},
+        {"role": "assistant", "content": "出错了：模型输出不是合法 JSON，请重试或换个模型: 模型输出里找不到 JSON 对象"},
+        {"role": "assistant", "content": "正常的助理消息"},
+    ]
+
+    asyncio.run(pg.generate("换成经典橙色主题", history, None))
+
+    # calls['messages'] 中只应保留 system + 正常的 user/assistant，错误 assistant 被剔除
+    contents = [m["content"] for m in calls["messages"]]
+    assert not any("出错了：" in c for c in contents)
+    assert "正常的助理消息" in contents
+

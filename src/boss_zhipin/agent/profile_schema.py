@@ -245,6 +245,60 @@ class _ActionParams(BaseModel):
             raise ValueError(f"params.n 不是整数: {value!r}") from e
         return max(1, min(10, num))
 
+    @field_validator("theme", mode="before")
+    @classmethod
+    def _normalize_theme(cls, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        v = value.strip().lower()
+        if v in ("classic", "orange", "amber", "warm", "经典", "橙色", "琥珀"):
+            return "classic"
+        if v in ("monochrome", "mono", "black", "white", "dark", "极简", "黑白"):
+            return "monochrome"
+        if v in ("system", "follow", "系统"):
+            return "system"
+        return value
+
+    @field_validator("modal", mode="before")
+    @classmethod
+    def _normalize_modal(cls, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        v = value.strip().lower()
+        if v in ("policy", "security", "safety", "strategy", "defense", "防封", "安全", "策略"):
+            return "policy"
+        if v in ("model", "llm", "ai", "模型"):
+            return "model"
+        if v in ("rules", "rule", "filter", "keyword", "规则", "关键词"):
+            return "rules"
+        if v in ("greeting", "greet", "sayhi", "招呼", "招呼语"):
+            return "greeting"
+        if v in ("settings", "setting", "setup", "设置"):
+            return "settings"
+        return value
+
+    @field_validator("to", mode="before")
+    @classmethod
+    def _normalize_to(cls, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        v = value.strip().lower()
+        if v in ("resumes", "resume", "简历", "简历库", "简历资料库"):
+            return "resumes"
+        if v in ("workbench", "home", "dashboard", "工作台", "巡航工作台"):
+            return "workbench"
+        if v in ("analytics", "statistic", "statistics", "stats", "数据", "统计", "数据统计"):
+            return "analytics"
+        if v in ("live", "cruise", "monitor", "巡航", "实时巡航"):
+            return "live"
+        if v in ("polish", "diagnose", "精修", "简历精修"):
+            return "polish"
+        if v in ("profile", "portrait", "画像", "求职画像"):
+            return "profile"
+        if v in ("copilot", "agent", "assistant", "管家", "智能管家"):
+            return "copilot"
+        return value
+
 
 class _Action(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -268,6 +322,21 @@ def sanitize_profile(raw: dict[str, Any]) -> dict[str, Any]:
 def parse_llm_json(content: str) -> dict[str, Any]:
     """从模型输出里取出 JSON 对象。"""
     text = (content or "").strip()
+    # 1. 过滤思考模型可能输出的 <think>...</think> 标签
+    text = re.sub(r"<think>[\s\S]*?</think>", "", text).strip()
+
+    # 2. 优先提取 markdown json 代码块（避免代码块外部文本干扰）
+    m = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", text, re.IGNORECASE)
+    if m:
+        try:
+            candidate = m.group(1).strip()
+            data = json.loads(candidate)
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            pass
+
+    # 3. 尝试直接反序列化
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
@@ -282,10 +351,16 @@ def _parse_braced_slice(text: str) -> dict[str, Any]:
     end = text.rfind("}")
     if start < 0 or end <= start:
         raise ProfileParseError("模型输出里找不到 JSON 对象")
+    slice_text = text[start : end + 1]
     try:
-        return json.loads(text[start : end + 1])
-    except json.JSONDecodeError as e:
-        raise ProfileParseError(f"模型输出 JSON 解析失败: {e}") from e
+        return json.loads(slice_text)
+    except json.JSONDecodeError:
+        # 常见容错：修复 JSON 尾随逗号 (e.g. {"a": 1,})
+        fixed = re.sub(r",\s*([\}\]])", r"\1", slice_text)
+        try:
+            return json.loads(fixed)
+        except json.JSONDecodeError as e:
+            raise ProfileParseError(f"模型输出 JSON 解析失败: {e}") from e
 
 
 def sanitize_action(raw: Any) -> dict[str, Any] | None:

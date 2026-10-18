@@ -133,7 +133,9 @@ export default function CareerCopilotView({
     setPrepareRunReady(false);
 
     try {
-      const history = agentMessages.slice(-10);
+      const history = agentMessages
+        .filter((m) => !m.content.startsWith("出错了：") && !m.content.startsWith("出错了:"))
+        .slice(-10);
       const currentForm = {
         ...getCurrentForm(),
         ...(activeResumeName

@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from typing import Any
 
 from boss_zhipin.agent.config_io import effective_config
@@ -64,9 +65,22 @@ async def generate(
         role = item.get("role")
         content_text = item.get("content")
         if role in ("user", "assistant") and isinstance(content_text, str) and content_text.strip():
+            # 过滤历史中的系统报错回显（如"出错了："），防止错误样本在上下文里形成误导
+            if role == "assistant" and (content_text.startswith("出错了：") or content_text.startswith("出错了:")):
+                continue
             messages.append({"role": role, "content": content_text})
     messages.append({"role": "user", "content": _user_message(message, current_form)})
 
+    # 审查修复（2026-10-18）：与项目其他 env 解析（_unit_quotas 等）同款
+    # 容错——误配非法值时回退默认，绝不炸穿 generate（原 float() 裸调用
+    # 在 try 外，BOSS_AGENT_TIMEOUT="35s" 这类带单位的值会直接 ValueError）。
+    try:
+        agent_timeout = float(os.getenv("BOSS_AGENT_TIMEOUT", "35.0"))
+        if agent_timeout <= 0:
+            raise ValueError
+    except ValueError:
+        log.warning("BOSS_AGENT_TIMEOUT 配置非法，回退默认 35.0s")
+        agent_timeout = 35.0
     try:
         data = await asyncio.to_thread(
             chat_completion_with_retry,
@@ -74,7 +88,7 @@ async def generate(
             base_url=config.base_url,
             api_key=config.api_key,
             model=config.model,
-            timeout=12.0,
+            timeout=agent_timeout,
         )
         content = extract_content(data)
     except LLMClientError as e:
