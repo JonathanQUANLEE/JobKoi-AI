@@ -62,9 +62,7 @@ export default function Dashboard({ githubUser, onLogout }: DashboardProps = {})
   const [activeNav, setActiveNav] = useState<NavItem>("workbench");
   const [drawerTab, setDrawerTab] = useState<DrawerTab>("rules");
   const [mistModalType, setMistModalType] = useState<MistModalType>(null);
-  const [defaultResumeName, setDefaultResumeName] = useState<string>(
-    "我的求职简历.docx"
-  );
+  const [defaultResumeName, setDefaultResumeName] = useState<string>("");
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [settingsModalTab, setSettingsModalTab] = useState<SettingsTab>("general");
   const [expandRipple, setExpandRipple] = useState(false);

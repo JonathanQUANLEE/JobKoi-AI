@@ -7,7 +7,7 @@ export const DEFAULT_GREETING = "";
 
 export const DEFAULT_RULE: RuleForm = {
   requiredKeywords: "",
-  anyKeywords: "后端开发,AI,RAG,大模型",
+  anyKeywords: "",
   excludeKeywords: "销售,客服,培训",
   scope: "title",
   // smart（2026-10-13）：意图分层匹配——关键词解析成「方向×性质」逐步降级

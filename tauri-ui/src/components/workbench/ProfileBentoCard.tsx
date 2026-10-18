@@ -123,7 +123,7 @@ export default function ProfileBentoCard({
               <div className="text-[11px] sm:text-xs text-stone-400 font-medium">
                 {t("bento.targetRoleCities")}
               </div>
-              <div className="text-base sm:text-lg font-bold text-[var(--ink)] mt-1.5 truncate">
+              <div className={`text-base sm:text-lg font-bold mt-1.5 truncate ${label ? "text-[var(--ink)]" : "text-stone-500"}`}>
                 {label || t("bento.notSpecified")}
               </div>
             </div>
@@ -152,18 +152,23 @@ export default function ProfileBentoCard({
                   onClick={onGoToResumes}
                   className="text-amber-400 hover:underline hover:text-amber-300 cursor-pointer text-xs sm:text-[13px] font-medium"
                 >
-                  {t("bento.manageResumes")}
+                  {defaultResumeName ? t("bento.manageResumes") : t("bento.importResume")}
                 </button>
               </div>
               <div className="flex items-center gap-2.5 mt-2 min-w-0">
-                <FileText className="h-5 w-5 text-amber-400 shrink-0" />
-                <span className="text-sm sm:text-base font-semibold text-stone-100 truncate" title={defaultResumeName}>
-                  {defaultResumeName || "我的求职简历.docx"}
+                <FileText className={`h-5 w-5 shrink-0 ${defaultResumeName ? "text-amber-400" : "text-stone-500"}`} />
+                <span
+                  className={`text-sm sm:text-base font-semibold truncate ${
+                    defaultResumeName ? "text-stone-100" : "text-stone-500"
+                  }`}
+                  title={defaultResumeName || t("bento.noResume")}
+                >
+                  {defaultResumeName || t("bento.noResume")}
                 </span>
               </div>
             </div>
             <div className="mt-3 text-xs sm:text-[13px] text-stone-400">
-              {t("bento.defaultAttachment")}
+              {defaultResumeName ? t("bento.defaultAttachment") : t("bento.noResumeHint")}
             </div>
           </MagicCard>
 

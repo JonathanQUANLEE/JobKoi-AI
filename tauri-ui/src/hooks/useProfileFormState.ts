@@ -108,7 +108,7 @@ export function useProfileFormState({
   const [profileName, setProfileName] = useState(DEFAULT_PROFILE_NAME);
   const [mode, setMode] = useState<Mode>("auto");
   const [usrName, setUsrName] = useState("");
-  const [label, setLabel] = useState("后端开发实习");
+  const [label, setLabel] = useState("");
   const [startUrl, setStartUrl] = useState("");
   const [greeting, setGreeting] = useState(DEFAULT_GREETING);
   const [greetingPath, setGreetingPath] = useState("./greetings/default.txt");

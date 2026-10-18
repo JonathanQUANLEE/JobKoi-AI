@@ -42,18 +42,20 @@ export default function ResumeBindingCard({
 
       <div className="rounded-xl border border-[var(--grid)] bg-[var(--panel-2)] p-4 flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="size-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+          <div className={`size-9 rounded-xl border flex items-center justify-center shrink-0 ${
+            defaultResumeName ? "bg-amber-500/15 border-amber-500/30 text-amber-400" : "bg-stone-800/40 border-stone-700/50 text-stone-500"
+          }`}>
             <FileText className="size-5" />
           </div>
           <div className="min-w-0">
             <div
-              className="text-xs font-semibold text-stone-100 truncate"
-              title={defaultResumeName}
+              className={`text-xs font-semibold truncate ${defaultResumeName ? "text-stone-100" : "text-stone-400"}`}
+              title={defaultResumeName || t("rbind.noResume")}
             >
-              {defaultResumeName || "我的求职简历.docx"}
+              {defaultResumeName || t("rbind.noResume")}
             </div>
             <div className="text-[10px] text-stone-400 mt-0.5">
-              {t("rbind.attachmentHint")}
+              {defaultResumeName ? t("rbind.attachmentHint") : t("rbind.noResumeHint")}
             </div>
           </div>
         </div>
@@ -62,7 +64,7 @@ export default function ResumeBindingCard({
           onClick={onGoToResumes}
           className="px-3 py-1.5 rounded-lg border border-[var(--grid)] hover:border-stone-700 bg-[#1c1917] text-xs text-stone-300 hover:text-white shrink-0 cursor-pointer"
         >
-          {t("rbind.change")}
+          {defaultResumeName ? t("rbind.change") : t("rbind.uploadNow")}
         </button>
       </div>
     </MagicCard>
