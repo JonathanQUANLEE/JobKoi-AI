@@ -49,8 +49,8 @@ CASES: list[tuple[str, str, bool, str]] = [
 
 
 def main() -> None:
-    # profile 继承了 base.yml，必须走 load_profile 合并后的 data，
-    # 直接读 0my.yml 会漏掉父级规则。
+    # profile 可能带 extends 继承，必须走 load_profile 合并后的 data，
+    # 直接读 yml 原文会漏掉父级规则（base.yml 已随 2026-10-19 脱敏移除）。
     loaded = profiles_mod.load_profile("0my", profiles_dir=ROOT / "profiles")
     filters = loaded.data.get("filters") or {}
     if not filters:
