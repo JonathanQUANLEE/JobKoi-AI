@@ -175,6 +175,88 @@ def sanitize() -> None:
                         pass
             print(f"  [OK] 已清空临时目录: {temp_dir.name}")
 
+    # 5. 重置 profiles/gui-default.yml 为干净开箱模板
+    gui_default_path = REPO_ROOT / "profiles" / "gui-default.yml"
+    if gui_default_path.exists():
+        clean_gui_default = """search:
+  query: ""
+page_filters:
+  strict: false
+  city:
+    enabled: true
+    values:
+    - 深圳
+    - 广州
+    - 北京
+    - 上海
+    - 杭州
+  education:
+    enabled: false
+    values: []
+  boss_active:
+    enabled: true
+    values:
+    - 刚刚活跃
+    - 今日活跃
+    - 3日内活跃
+filters:
+  title:
+    required:
+      enabled: false
+      scope: title
+      match: smart
+      case_sensitive: false
+      keywords: []
+    any:
+      enabled: false
+      scope: title
+      match: smart
+      case_sensitive: false
+      keywords: []
+    exclude:
+      enabled: true
+      scope: title
+      match: smart
+      case_sensitive: false
+      keywords:
+      - 销售
+      - 客服
+      - 劳务派遣
+      - 外包
+      - 培训
+      - 电话销售
+      - 数据标注
+send:
+  mode: auto
+  greeting_file: ./greetings/default.txt
+  delay_min: 30
+  delay_max: 45
+  liepin_delay_min: 30
+  liepin_delay_max: 45
+  job51_delay_min: 30
+  job51_delay_max: 45
+  max_sent: 50
+  daily_sent_limit: 80
+  stop_on_captcha: true
+  send_resume_after_greeting: false
+  auto_send_resume_on_reply: false
+  ai_greeting: false
+state:
+  seen_jobs_file: ./logs/seen_jobs.jsonl
+  sent_log_file: ./logs/sent_jobs.jsonl
+  skipped_log_file: ./logs/skipped_jobs.jsonl
+"""
+        gui_default_path.write_text(clean_gui_default, encoding="utf-8")
+        print("  [OK] profiles/gui-default.yml 已重置为无个人意向模板")
+
+    # （2026-10-19 审查删除）曾有人在此处加过"清理打包机 AppData"步骤
+    # （rmtree LOCALAPPDATA/APPDATA 的 com.jonathanquanlee.jobkoi-ai）——
+    # **不要这么做**：Roaming 目录是用户画像/投递记录/简历绑定等真实资产，
+    # 无备份删除违反"发布后完整恢复用户本地私有数据"红线；且本机同时是
+    # 打包机与开发者日常用机。打包后如需"新用户视角"自测，正解是给测试
+    # 进程设 BOSS_APP_DATA_DIR 环境变量指向临时目录（paths.py 原生支持），
+    # 不动真实数据。
+
     print("\n" + "=" * 60)
     print("【3/4】执行代码库敏感信息扫描...")
     print("=" * 60)
