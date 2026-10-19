@@ -2,7 +2,7 @@
 
 > 目标读者：任何接手发版任务的 AI Agent / 开发者。读完即可独立完成
 > 「代码 → 安装包 → GitHub Release → 全体用户自动收到更新」全流程。
-> 最后验证于 2026-10-19（v0.7.0 发布实战 + mock E2E 真机全链路验证）。
+> 最后验证于 2026-10-19（v0.7.0 / v0.7.1 / v0.8.0 三次发布实战 + mock E2E 真机全链路验证）。
 
 ## 0. 架构总览
 
@@ -39,7 +39,7 @@ https://github.com/JonathanQUANLEE/JobKoi-AI/releases/latest/download/latest.jso
 1. **双模式镜像**：`tauri.conf.json` 与 `src/boss_zhipin/tauri/Tauri.toml` 的 `plugins.updater` 三项（pubkey/endpoints/installMode）必须逐字一致——`tests/test_standalone_sync.py` 守卫，改一份必须同步另一份。
 2. **版本锁**：`tauri = "=2.11.2"`（pytauri 0.8 兼容上限，升级 pytauri >0.8 才能放开）；npm 插件必须与 Cargo.lock 解析版本同 minor（当前 `@tauri-apps/plugin-updater@2.12.0` / `plugin-process@2.3.1`——tauri CLI 强校验，错位构建直接失败）。
 
-## 2. 发版第一步：版本号同步（共 7 处）
+## 2. 发版第一步：版本号同步（共 8 处）
 
 ```powershell
 # 自动管 5 处（pyproject.toml / Cargo.toml / tauri.conf.json / Tauri.toml / Cargo.lock）
@@ -50,7 +50,19 @@ uv run python scripts/set_version.py 0.8.0
 - `tauri-ui/package.json` 的 `version`
 - `tauri-ui/src/lib/storageSanitizer.ts` 的 `CURRENT_STORAGE_VERSION`（有 vitest 版本守卫测试，忘改会红）
 
+第 8 处（自动但需提交）：`uv.lock` 里的 `bosszhipin-job-bot` 版本会在下一次 `uv run` 时自动刷新——门禁跑完 `git status` 里出现的 `uv.lock` 改动**属于版本同步，必须一并提交**，不要丢下也不要还原。
+
 ## 3. 发版门禁（全绿才许继续）
+
+### 3.0 接手他人改动后的自检（bug 修复 → 发版交接必做）
+
+发版 agent 拿到的往往是**另一个 agent 修完 bug 的工作树**，先做三件事再进门禁：
+
+1. **以 `git diff --stat` 为真实改动集**。`git status` 里比 diff 多出来的 M 文件是编辑器造成的 CRLF 行尾幻影改动（内容零变化）——用「status 的 M 集合 减去 `git diff --name-only` 集合」求差，逐个 `git checkout -- <file>` 恢复，让工作树只剩真实改动（2026-10-19 实战：34 个 M 里 22 个是幻影）。
+2. **逐文件审查 diff，不信修复报告**。报告说改了 ≠ 真改了；报告里的"测试全绿"必须自己重跑复核；checklist 打勾 ≠ 真机测过。
+3. **登录/cookie/浏览器探测类改动的测试盲区检查**：测试建表必须用真实 Chrome schema（含 `value` + `encrypted_value` 两列）——只建简化 4 列表会走"valid 占位"降级分支，永远测不到加密 cookie 真实路径（2026-10-19 教训：空值拒收误杀 HttpOnly 登录凭证 bst/lt_auth，590 个测试照样全绿）。
+
+### 3.1 环境准备与四项门禁
 
 **环境准备（本机受限 shell：git/node/pnpm/cargo/uv 都不在默认 PATH，每个新 shell 会话先注入一次）**：
 
@@ -95,6 +107,9 @@ $env:Path = "C:\Users\14905\AppData\Roaming\npm;B:\nodejs;$env:USERPROFILE\.carg
 
 ### 5.2 暂存 + ASCII 重命名（latest.json 的 url 与资产名必须逐字符一致）
 
+暂存目录直接用发布专区的版本目录（v0.8.0 起实战惯例，暂存即归档）：
+`B:\JobHunter-发布专区\安装包\v0.8.0\`（先建目录）。
+
 ```powershell
 # NSIS 必须 ASCII（GitHub 资产 URL 含中文会 percent-encode 不可控）；MSI 保持原名
 Copy-Item "<nsis>\JobKoi-AI · 全智能求职锦鲤助手_0.8.0_x64-setup.exe" "<暂存>\JobKoi-AI-Setup-0.8.0-x64.exe"
@@ -138,13 +153,17 @@ Copy-Item "<暂存>\*" "B:\JobHunter-发布专区\安装包\v0.8.0\"
 ## 6. 红线（违者回滚重做）
 
 1. **私钥/密码绝不进仓库、项目 .env、代码**——只放 `%USERPROFILE%\.tauri\` 或 GitHub Secrets。
-2. `sanitize --sanitize` 发布后必须 `--restore` 并逐项核对用户私有数据（.env / agent_config.json / profiles / greetings / logs / resume）。
-3. **严禁在 sanitize 脚本里删打包机 AppData**——`%APPDATA%\com.jonathanquanlee.jobkoi-ai`（Roaming）是用户画像与投递记录；本机同时是打包机与开发者日常用机。要"新用户视角"自测就设 `BOSS_APP_DATA_DIR` 指向临时目录（`boss_zhipin.paths` 原生支持）。
-4. **卸载钩子只清 `%LOCALAPPDATA%`（WebView2 缓存），保留 Roaming 用户数据**（`src-tauri/windows/hooks.nsh`，改动前先读注释）。
-5. **localStorage 版本隔离不得清空管家对话历史、不得拦截开发者本人登录**（见 `storageSanitizer.ts` 头注释的设计边界）。
-6. latest.json 的 url 文件名必须与上传资产**逐字符一致**（ASCII）。
-7. 先 draft 核对再 Publish，防错版本公开。
-8. 升级安装（自动更新）不走卸载钩子，用户数据无虞。
+2. **两个内置公共 Key 是产品功能，不是泄露，严禁"修复"或脱敏**（v0.7.0 P0 教训：Secret 被脱敏抹空后新用户 GitHub 登录全挂）：
+   - `src/boss_zhipin/agent/presets.py` 的智谱公共体验 Key（base64，`ZHIPU_PUBLIC_API_KEY` 环境变量可覆盖）——新用户开箱即用 AI 功能；
+   - `src/boss_zhipin/tauri/commands/oauth.py` 的 GitHub OAuth Client Secret（base64，`_BUILTIN_CLIENT_SECRET_B64`）——桌面公共客户端的标准做法，不带它新用户无法 GitHub 登录；
+   - 两者**必须随构建进入安装包**；`sanitize` 脚本从不动 `src/`，发版 agent 也不得动。历史教训：曾用 git skip-worktree 维持"git 脱敏版 + 本地明文版"双态，导致 CI 构建丢 Key、本地改动静默不进 git——base64 单态是终局方案，勿回退。
+3. `sanitize --sanitize` 发布后必须 `--restore` 并逐项核对用户私有数据（.env / agent_config.json / profiles / greetings / logs / resume）。
+4. **严禁在 sanitize 脚本里删打包机 AppData**——`%APPDATA%\com.jonathanquanlee.jobkoi-ai`（Roaming）是用户画像与投递记录；本机同时是打包机与开发者日常用机。要"新用户视角"自测就设 `BOSS_APP_DATA_DIR` 指向临时目录（`boss_zhipin.paths` 原生支持）。
+5. **卸载钩子只清 `%LOCALAPPDATA%`（WebView2 缓存），保留 Roaming 用户数据**（`src-tauri/windows/hooks.nsh`，改动前先读注释；宏签名已于 v0.8.0 构建实测通过）。
+6. **localStorage 版本隔离不得清空管家对话历史、不得拦截开发者本人登录**（见 `storageSanitizer.ts` 头注释的设计边界）。
+7. latest.json 的 url 文件名必须与上传资产**逐字符一致**（ASCII）。
+8. 先 draft 核对再 Publish，防错版本公开。
+9. 升级安装（自动更新）不走卸载钩子，用户数据无虞。
 
 ## 7. 老用户边界
 
