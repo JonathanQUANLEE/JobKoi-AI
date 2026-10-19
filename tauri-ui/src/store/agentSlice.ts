@@ -12,7 +12,19 @@ function loadSavedAgentMessages(): AgentChatMessage[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      return parsed.slice(-MAX_AGENT_MESSAGES);
+      // 过滤掉所有超时、模型响应失败、JSON解析失败等历史崩溃废弃消息
+      const cleaned = parsed.filter((m: AgentChatMessage) => {
+        if (!m || typeof m.content !== "string") return false;
+        const c = m.content;
+        return (
+          !c.includes("timeout") &&
+          !c.includes("模型响应失败") &&
+          !c.includes("出错了：") &&
+          !c.includes("出错了:") &&
+          !c.includes("不是合法 JSON")
+        );
+      });
+      return cleaned.slice(-MAX_AGENT_MESSAGES);
     }
   } catch (err) {
     console.warn("Failed to load saved agent messages:", err);
