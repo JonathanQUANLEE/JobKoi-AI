@@ -97,10 +97,12 @@ export function useResumeVault() {
       if (!name) {
         await ipc.setDefaultResume("");
         await refresh();
+        window.dispatchEvent(new Event("jobhunter_resume_default_updated"));
         notify({ type: "success", text: "已取消默认简历绑定", source: "资料档案" });
       } else {
         await ipc.setDefaultResume(name);
         await refresh();
+        window.dispatchEvent(new Event("jobhunter_resume_default_updated"));
         notify({ type: "success", text: t("resume.defaultSet", { name }), source: "资料档案" });
       }
     } catch (err) {

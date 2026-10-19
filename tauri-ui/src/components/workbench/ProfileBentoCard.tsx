@@ -168,7 +168,16 @@ export default function ProfileBentoCard({
               </div>
             </div>
             <div className="mt-3 text-xs sm:text-[13px] text-stone-400">
-              {defaultResumeName ? t("bento.defaultAttachment") : t("bento.noResumeHint")}
+              {defaultResumeName ? (
+                t("bento.defaultAttachment")
+              ) : (
+                <div className="space-y-0.5">
+                  <div className="text-stone-400">{t("bento.noResumeHint")}</div>
+                  <div className="text-[10.5px] text-amber-400/90 font-medium">
+                    {t("bento.noResumeGuide")}
+                  </div>
+                </div>
+              )}
             </div>
           </MagicCard>
 

@@ -320,15 +320,20 @@ export default function Dashboard({ githubUser, onLogout }: DashboardProps = {})
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // 同步当前默认简历名称
+  // 同步当前默认简历名称（初次加载、切换页面以及资料库设置默认时实时响应）
   useEffect(() => {
-    ipc
-      .listResumes()
-      .then((res) => {
-        const def = res.resumes.find((r) => r.is_default);
-        setDefaultResumeName(def ? def.name : "");
-      })
-      .catch(() => {});
+    const fetchDefault = () => {
+      ipc
+        .listResumes()
+        .then((res) => {
+          const def = (res.resumes || []).find((r) => r.is_default);
+          setDefaultResumeName(def ? def.name : "");
+        })
+        .catch(() => {});
+    };
+    fetchDefault();
+    window.addEventListener("jobhunter_resume_default_updated", fetchDefault);
+    return () => window.removeEventListener("jobhunter_resume_default_updated", fetchDefault);
   }, [activeNav]);
 
   return (
@@ -488,7 +493,7 @@ export default function Dashboard({ githubUser, onLogout }: DashboardProps = {})
                     path: "",
                     data: heroChat.heroProfileResult,
                   });
-                  heroChat.resetHeroChat();
+                  // 不清空 heroChat，保留历史对话思路与实录，便于用户回溯
                   wheel.scrollToRingStage(2, true);
                 }
               }}

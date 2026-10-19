@@ -23,9 +23,15 @@ export function useResumeUpload(onSubmitPrompt: (text: string) => void) {
     try {
       const b64 = await readFileAsBase64(file);
       await ipc.saveResumeFile(file.name, b64);
+      // 自动设为当前默认投递简历并通知全局界面实时更新绑定卡片
+      try {
+        await ipc.setDefaultResume(file.name);
+        window.dispatchEvent(new Event("jobhunter_resume_default_updated"));
+      } catch {}
+
       useRunStore.getState().notify({
         type: "success",
-        text: `已成功导入简历资料库：${file.name}`,
+        text: `已成功导入简历资料库并设为默认：${file.name}`,
         source: "资料档案",
       });
 
