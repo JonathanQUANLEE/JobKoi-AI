@@ -15,6 +15,8 @@ import Sidebar, { type NavItem } from "../components/Sidebar";
 import DashboardModalLayer from "../components/dashboard/DashboardModalLayer";
 import ResumeProfileDialog from "../components/core/ResumeProfileDialog";
 import StartConfirmDialog from "../components/core/StartConfirmDialog";
+import UpdateDialog from "../components/core/UpdateDialog";
+import { useUpdateChecker } from "../hooks/useUpdateChecker";
 import { useWorkbenchWheel } from "../hooks/useWorkbenchWheel";
 import { useProfileFormState } from "../hooks/useProfileFormState";
 import { useJobBotRuntime } from "../hooks/useJobBotRuntime";
@@ -222,10 +224,14 @@ export default function Dashboard({ githubUser, onLogout }: DashboardProps = {})
     activeNav,
   });
 
+  // 软件内自动更新：启动静默检查（生产 + Windows）+ 全局更新弹窗状态
+  const updateDialogOpen = useRunStore((s) => s.updateDialog !== null);
+  useUpdateChecker();
+
   // 5. 新手引导（三步：AI 模型 → 画像 → 平台巡航；可跳过、断点续播、信号自动点亮）
   // blocked：任何全屏级弹窗打开时收起引导卡，关闭后自动回来（互斥优先于 z-index 抢屏）。
   const hardOverlayOpen =
-    settingsModalOpen || startConfirm !== null || loginOverlay !== null || cruiseEndNotice !== null;
+    settingsModalOpen || startConfirm !== null || loginOverlay !== null || cruiseEndNotice !== null || updateDialogOpen;
   const tour = useOnboardingTour({
     t,
     // 引导按账号隔离：换 GitHub 账号登录会重新弹一遍（2026-10-14 用户需求）
@@ -640,6 +646,7 @@ export default function Dashboard({ githubUser, onLogout }: DashboardProps = {})
 
       {/* 弹窗与悬浮层外壳 */}
       <StartConfirmDialog />
+      <UpdateDialog />
       <DashboardModalLayer
         drawerOpen={drawerOpen}
         setDrawerOpen={setDrawerOpen}

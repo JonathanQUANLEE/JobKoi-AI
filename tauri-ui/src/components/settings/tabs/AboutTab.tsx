@@ -1,4 +1,6 @@
-import { useRunStore } from "../../../store";
+import { useEffect, useState } from "react";
+import { useRunStore, useT } from "../../../store";
+import { checkForUpdate } from "../../../lib/updater";
 
 interface AboutTabProps {
   isMonochrome: boolean;
@@ -7,7 +9,49 @@ interface AboutTabProps {
 }
 
 export default function AboutTab({ isMonochrome, onClose }: AboutTabProps) {
+  const t = useT();
   const requestTourReset = useRunStore((s) => s.requestTourReset);
+  const showCenterToast = useRunStore((s) => s.showCenterToast);
+  const openUpdateDialog = useRunStore((s) => s.openUpdateDialog);
+  const [version, setVersion] = useState<string>("…");
+  const [checking, setChecking] = useState(false);
+
+  // 真实版本号：编译期烧进 binary（tauri.conf.json version，CI 由 tag 注入）
+  useEffect(() => {
+    let cancelled = false;
+    import("@tauri-apps/api/app")
+      .then(({ getVersion }) => getVersion())
+      .then((v) => {
+        if (!cancelled) setVersion(v);
+      })
+      .catch(() => {
+        if (!cancelled) setVersion("—");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleCheckUpdate = async () => {
+    if (checking) return;
+    setChecking(true);
+    try {
+      const info = await checkForUpdate();
+      if (info) {
+        openUpdateDialog(info);
+      } else {
+        showCenterToast(t("update.upToDate"));
+      }
+    } catch (err) {
+      showCenterToast(
+        t("update.checkFailed", {
+          message: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    } finally {
+      setChecking(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -15,7 +59,9 @@ export default function AboutTab({ isMonochrome, onClose }: AboutTabProps) {
         <img src="/favicon.png" alt="Logo" className="size-10 rounded-xl border border-pink-400/30" />
         <div>
           <div className="font-bold text-sm text-stone-100">JobKoi-AI · 全智能求职锦鲤助手</div>
-          <div className="text-[11px] text-stone-400 mt-0.5">全平台智能巡航 · Offer 尊享版 v0.4.0</div>
+          <div className="text-[11px] text-stone-400 mt-0.5">
+            {t("about.versionLine", { version })}
+          </div>
         </div>
       </div>
 
@@ -41,10 +87,11 @@ export default function AboutTab({ isMonochrome, onClose }: AboutTabProps) {
           </button>
           <button
             type="button"
-            onClick={() => alert("当前已是最新版本 v0.4.0")}
-            className={`hover:underline cursor-pointer ${isMonochrome ? "text-zinc-300 hover:text-white" : "text-amber-400"}`}
+            onClick={() => void handleCheckUpdate()}
+            disabled={checking}
+            className={`hover:underline cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${isMonochrome ? "text-zinc-300 hover:text-white" : "text-amber-400"}`}
           >
-            检查更新
+            {checking ? t("update.checking") : t("update.checkNow")}
           </button>
         </div>
       </div>

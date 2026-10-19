@@ -8,6 +8,7 @@ import { createHeroSlice } from "./heroSlice";
 import { createNoticeSlice } from "./noticeSlice";
 import { createRunSlice } from "./runSlice";
 import { createUiSlice } from "./ui";
+import { createUpdateSlice } from "./updateSlice";
 import type { RunStore } from "./types";
 
 export const useRunStore = create<RunStore>()((...a) => ({
@@ -16,6 +17,7 @@ export const useRunStore = create<RunStore>()((...a) => ({
   ...createAgentSlice(...a),
   ...createHeroSlice(...a),
   ...createUiSlice(...a),
+  ...createUpdateSlice(...a),
 }));
 
 /** 组件里取翻译函数：`const t = useT()`，`t("run.title")`。
