@@ -394,7 +394,7 @@ export default function Dashboard({ githubUser, onLogout }: DashboardProps = {})
               : activeNav === "polish"
               ? "px-3 sm:px-5 py-3 flex flex-col overflow-y-auto"
               : activeNav === "copilot"
-              ? "px-3 sm:px-5 py-3 flex flex-col overflow-hidden"
+              ? "px-3 sm:px-5 py-2 flex flex-col h-full min-h-0 overflow-hidden"
               : activeNav === "live"
               ? "px-3 sm:px-5 py-3 flex flex-col overflow-hidden"
               : "px-6 py-5 space-y-6 overflow-y-auto"
@@ -599,7 +599,7 @@ export default function Dashboard({ githubUser, onLogout }: DashboardProps = {})
 
           {/* TAB 5: AI 智能管家 (全能操作管家、软件全知答疑、简历深度辅导与求职闲聊) */}
           {activeNav === "copilot" && (
-            <div className="w-full flex-1 flex flex-col">
+            <div className="w-full flex-1 min-h-0 h-full flex flex-col overflow-hidden">
               <CareerCopilotView
                 getCurrentForm={profileForm.currentProfileData}
                 onApply={(data) =>

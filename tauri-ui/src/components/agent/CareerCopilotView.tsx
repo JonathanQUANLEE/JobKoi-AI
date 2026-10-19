@@ -6,6 +6,7 @@ import {
   Terminal,
   Sparkles,
   Check,
+  Copy,
   Bot,
   UploadCloud,
   FileText,
@@ -84,11 +85,33 @@ export default function CareerCopilotView({
       .catch(() => {});
   }, []);
 
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [queuedMessage, setQueuedMessage] = useState<string | null>(null);
+
+  const handleCopyText = async (text: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedIndex(index);
+      setTimeout(() => setCopiedIndex(null), 2000);
+    } catch (err) {
+      console.warn("Failed to copy:", err);
+    }
+  };
+
   useEffect(() => {
     if (listRef.current) {
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
-  }, [agentMessages, agentPending]);
+  }, [agentMessages, agentPending, queuedMessage]);
+
+  // 排队消息自动消费（当智能管家完成前一轮回答后自动发出）
+  useEffect(() => {
+    if (!agentPending && queuedMessage) {
+      const next = queuedMessage;
+      setQueuedMessage(null);
+      void handleSendText(next);
+    }
+  }, [agentPending, queuedMessage]);
 
   // 直接在管家内上传新简历附件
   async function handleDirectUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -122,7 +145,13 @@ export default function CareerCopilotView({
 
   async function handleSendText(textToSend: string) {
     const trimmed = textToSend.trim();
-    if (!trimmed || agentPending) return;
+    if (!trimmed) return;
+
+    if (agentPending) {
+      setQueuedMessage(trimmed);
+      setInput("");
+      return;
+    }
 
     pushAgentMessage({ role: "user", content: trimmed });
     setInput("");
@@ -201,11 +230,11 @@ export default function CareerCopilotView({
   const modeLabel = typeof modeKey === "string" ? t(`mode.${modeKey}.title`) : "-";
 
   return (
-    /* 2026-10-16 布局修复（用户反馈：每发一条消息输入框就被顶出屏幕）：
-     * 外层必须用固定高度 h-（原 min-h- 会随内容无限长高，把输入框顶飞），
-     * 消息列表 min-h-0 允许收缩 + overflow-y-auto 只滚对话内容，
-     * 输入区 shrink-0 钉死底部——VSCode/Codex 式聊天布局。 */
-    <div className="flex-1 flex flex-col w-full h-[calc(100vh-230px)] space-y-3">
+    /* 工业级弹性布局（Codex / OpenCode 式视口约束）：
+     * 全链路保持 h-full flex-1 min-h-0 overflow-hidden；
+     * 顶部感知栏与底部输入坞严格 shrink-0 锁死高度；
+     * 中间消息列表 flex-1 min-h-0 独立内滚，彻底杜绝输入框被下移顶飞。 */
+    <div className="flex-1 min-h-0 h-full w-full flex flex-col justify-between overflow-hidden gap-2.5">
       {/* 顶部：当前关联简历感知栏 */}
       <div className="flex items-center justify-between px-3.5 py-2 rounded-xl border border-stone-800 bg-stone-900/60 backdrop-blur text-xs shrink-0">
         <div className="flex items-center gap-2 min-w-0">
@@ -362,20 +391,36 @@ export default function CareerCopilotView({
           agentMessages.map((msg, index) => {
             const isUser = msg.role === "user";
             return (
-              <div key={index} className={`flex gap-2.5 ${isUser ? "justify-end" : "justify-start"}`}>
+              <div key={index} className={`flex gap-2.5 ${isUser ? "justify-end" : "justify-start"} group`}>
                 {!isUser && (
                   <div className="size-8 rounded-xl overflow-hidden border border-amber-500/30 shadow-sm shrink-0">
                     <img src="/favicon.png" alt="AI" className="size-full object-cover" />
                   </div>
                 )}
-                <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-2.5 leading-relaxed break-words shadow-sm ${
-                    isUser
-                      ? "bg-amber-500 text-stone-950 font-medium rounded-tr-sm"
-                      : "bg-stone-900 border border-stone-800 text-stone-200 rounded-tl-sm"
-                  }`}
-                >
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                <div className="relative group max-w-[85%]">
+                  <div
+                    className={`rounded-2xl px-4 py-2.5 leading-relaxed break-words shadow-sm ${
+                      isUser
+                        ? "bg-amber-500 text-stone-950 font-medium rounded-tr-sm"
+                        : "bg-stone-900 border border-stone-800 text-stone-200 rounded-tl-sm pr-9"
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                  </div>
+                  {!isUser && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopyText(msg.content, index)}
+                      title={copiedIndex === index ? "已复制到剪贴板" : "一键复制回答"}
+                      className="absolute top-2 right-2 p-1 rounded-md text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 cursor-pointer"
+                    >
+                      {copiedIndex === index ? (
+                        <Check className="size-3.5 text-emerald-400" />
+                      ) : (
+                        <Copy className="size-3.5" />
+                      )}
+                    </button>
+                  )}
                 </div>
                 {isUser && (
                   <div className="size-8 rounded-xl bg-stone-800 border border-stone-700 text-stone-300 flex items-center justify-center text-xs shrink-0">
@@ -482,6 +527,24 @@ export default function CareerCopilotView({
         </MagicCard>
       )}
 
+      {/* 排队等待消息提示条 */}
+      {queuedMessage && (
+        <div className="shrink-0 flex items-center justify-between px-3.5 py-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-xs text-amber-300">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="size-2 rounded-full bg-amber-400 animate-ping shrink-0" />
+            <span className="font-semibold shrink-0">已排队待发送：</span>
+            <span className="truncate text-stone-200">“{queuedMessage}”</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setQueuedMessage(null)}
+            className="text-stone-400 hover:text-red-400 text-[11px] ml-2 shrink-0 cursor-pointer transition-colors"
+          >
+            取消排队
+          </button>
+        </div>
+      )}
+
       {/* 输入框（shrink-0 钉死底部，永不随内容移动） */}
       <MagicCard className="shrink-0 rounded-2xl border border-stone-700/80 bg-stone-900/90 p-2.5 shadow-sm focus-within:border-amber-500/60 focus-within:ring-2 focus-within:ring-amber-500/10 transition-all" glowColor="245, 158, 11" enableTilt={false} particleCount={4}>
         <textarea
@@ -495,8 +558,12 @@ export default function CareerCopilotView({
               handleSendText(input);
             }
           }}
-          placeholder="对管家下达指令或聊聊你的求职困惑（例如：帮我换成黑白主题、看看我的简历、投快一点...）"
-          disabled={agentPending}
+          placeholder={
+            agentPending
+              ? "管家正在思考中… 您可在此提前输入下一个问题（按 Enter 加入排队）"
+              : "对管家下达指令或聊聊你的求职困惑（例如：帮我换成黑白主题、看看我的简历、投快一点...）"
+          }
+          disabled={false}
         />
 
         <div className="flex items-center justify-between gap-2 pt-2 border-t border-stone-800/80">
@@ -533,7 +600,6 @@ export default function CareerCopilotView({
                   key={idx}
                   type="button"
                   onClick={() => handleSendText(tItem.prompt)}
-                  disabled={agentPending}
                   className="shrink-0 flex items-center gap-1.5 rounded-full border border-stone-800 bg-stone-950/80 px-2.5 py-1 text-[11px] text-stone-400 hover:border-amber-500/40 hover:text-stone-200 transition-all cursor-pointer"
                 >
                   {renderIcon()}
@@ -549,7 +615,8 @@ export default function CareerCopilotView({
             </span>
             <button
               onClick={() => handleSendText(input)}
-              disabled={agentPending || !input.trim()}
+              disabled={!input.trim()}
+              title={agentPending ? "加入待发队列（回复后自动发送）" : "发送指令"}
               className="grid size-8 place-items-center rounded-xl bg-amber-500 text-stone-950 hover:bg-amber-400 active:scale-95 transition-all disabled:opacity-40 font-bold cursor-pointer"
             >
               <ArrowUp className="h-4 w-4" />
