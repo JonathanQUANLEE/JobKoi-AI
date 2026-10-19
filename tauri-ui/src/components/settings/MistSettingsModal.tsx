@@ -131,6 +131,21 @@ export default function MistSettingsModal({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
+  // 打开模型弹窗时自动拉取最新配置与预置列表
+  useEffect(() => {
+    if (type === "model") {
+      ipc
+        .getLLMConfig()
+        .then((cfg) => {
+          setLLMConfig(cfg);
+          if (cfg.base_url) setBaseUrl(cfg.base_url);
+          if (cfg.model) setModel(cfg.model);
+          if (cfg.api_key) setApiKey(cfg.api_key);
+        })
+        .catch(() => {});
+    }
+  }, [type, setLLMConfig]);
+
   // 同步外部状态
   useEffect(() => {
     setLocalRule(getRuleString(rule));
@@ -208,17 +223,19 @@ export default function MistSettingsModal({
   const handleSaveModel = async () => {
     try {
       const res = await ipc.saveLLMConfig(baseUrl.trim(), apiKey.trim(), model.trim());
-      // 后端 save_llm_config 成功返回 status="saved"（出错抛异常走 catch）。
-      // 老代码判 "ok" 永远不成立且无 else → 点"保存配置"毫无反应，
-      // 用户实测"没办法保存"的根因（2026-10-14 修复；保留 "ok" 双兼容）。
       if (res.status === "saved" || res.status === "ok") {
-        setLLMConfig({
-          base_url: baseUrl.trim(),
-          api_key: res.api_key || apiKey.trim(),
-          model: model.trim(),
-          configured: res.configured ?? true,
-          presets: llmConfig?.presets || [],
-        });
+        const cfg = await ipc.getLLMConfig().catch(() => null);
+        if (cfg) {
+          setLLMConfig(cfg);
+        } else {
+          setLLMConfig({
+            base_url: baseUrl.trim(),
+            api_key: res.api_key || apiKey.trim(),
+            model: model.trim(),
+            configured: res.configured ?? true,
+            presets: llmConfig?.presets || [],
+          });
+        }
         useRunStore.getState().showCenterToast("模型配置已保存", { tone: "success" });
         notify({ type: "success", text: "AI 大模型配置保存成功" });
         onClose();
@@ -232,8 +249,10 @@ export default function MistSettingsModal({
 
   // 测试模型可用性
   const handleTestModel = async () => {
-    if (!apiKey.trim()) {
-      setTestResult({ ok: false, msg: "请先填写 API Key" });
+    const trimmedKey = apiKey.trim();
+    const isMaskedOrEmpty = !trimmedKey || trimmedKey.includes("****");
+    if (isMaskedOrEmpty && !llmConfig?.configured && !baseUrl.includes("open.bigmodel.cn")) {
+      setTestResult({ ok: false, msg: "请先填写该模型服务商的 API Key 后再测试" });
       return;
     }
     setTestingModel(true);
@@ -242,16 +261,18 @@ export default function MistSettingsModal({
       await ipc.saveLLMConfig(baseUrl.trim(), apiKey.trim(), model.trim());
       const res = await ipc.agentChat("你好，测试连接是否畅通", [], {});
       if (res.status === "ok") {
-        setTestResult({ ok: true, msg: "模型连接测试成功！响应正常" });
-        setLLMConfig({
-          base_url: baseUrl.trim(),
-          api_key: apiKey.trim(),
-          model: model.trim(),
-          configured: true,
-          presets: llmConfig?.presets || [],
-        });
+        setTestResult({ ok: true, msg: "模型连接测试成功！响应正常，可正常使用" });
+        const cfg = await ipc.getLLMConfig().catch(() => null);
+        if (cfg) setLLMConfig(cfg);
       } else {
-        setTestResult({ ok: false, msg: `连接测试失败: ${res.message || "未知错误"}` });
+        const rawMsg = res.message || "服务商未正常响应";
+        if (rawMsg.includes("401") || rawMsg.includes("Unauthorized") || rawMsg.includes("auth")) {
+          setTestResult({ ok: false, msg: "连接失败 [401 鉴权未通过]：API Key 无效或未激活，请检查 Key" });
+        } else if (rawMsg.includes("timeout") || rawMsg.includes("超时")) {
+          setTestResult({ ok: false, msg: "连接失败 [超时]：网络连接较慢或服务商响应超时，请稍后重试" });
+        } else {
+          setTestResult({ ok: false, msg: `连接测试未通过：${rawMsg}` });
+        }
       }
     } catch (err) {
       setTestResult({ ok: false, msg: `连接异常: ${String(err)}` });

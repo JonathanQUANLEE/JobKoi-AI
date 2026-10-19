@@ -38,8 +38,19 @@ export default function DrawerModelTab() {
     if (!preset) return;
     setBaseUrl(preset.base_url);
     setModel(preset.default_model);
-    // V0.4：带公共 Key 的预置（智谱）一键填入；其余清空让用户自己填
-    setApiKey(preset.default_api_key || "");
+    if (preset.id === "zhipu") {
+      if (!apiKey || apiKey.trim() === "" || apiKey.includes("****")) {
+        setApiKey(preset.default_api_key || "");
+      }
+    } else {
+      const isZhipuKey =
+        apiKey.startsWith("417644cd") ||
+        apiKey.includes("ruETAePj") ||
+        apiKey === (preset.default_api_key || "");
+      if (isZhipuKey) {
+        setApiKey("");
+      }
+    }
   }
 
   async function handleSaveModel() {

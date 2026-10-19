@@ -5,7 +5,6 @@ import {
   User,
   Palette,
   Keyboard,
-  Bot,
   Info,
   Bell,
 } from "lucide-react";
@@ -17,7 +16,6 @@ import ScheduleTab from "./settings/tabs/ScheduleTab";
 import ProfileTab from "./settings/tabs/ProfileTab";
 import AppearanceTab from "./settings/tabs/AppearanceTab";
 import ShortcutsTab from "./settings/tabs/ShortcutsTab";
-import ModelTab from "./settings/tabs/ModelTab";
 import NotificationsTab from "./settings/tabs/NotificationsTab";
 import AboutTab from "./settings/tabs/AboutTab";
 import { useSettingsModalState } from "./settings/useSettingsModalState";
@@ -28,7 +26,6 @@ export type SettingsTab =
   | "profile"
   | "appearance"
   | "shortcuts"
-  | "model"
   | "notifications"
   | "about";
 
@@ -70,15 +67,6 @@ export default function SettingsModal({
     setActiveTab,
     notifyOnMatch,
     setNotifyOnMatch,
-    llmConfig,
-    selectedPreset,
-    apiKeyInput,
-    setApiKeyInput,
-    baseUrlInput,
-    setBaseUrlInput,
-    modelInput,
-    setModelInput,
-    modelStatusMsg,
     savedSuccess,
     auditLogs,
     setAuditLogs,
@@ -86,8 +74,6 @@ export default function SettingsModal({
     setLogSearchQuery,
     logTypeFilter,
     setLogTypeFilter,
-    handleSelectPreset,
-    handleSaveModel,
     handleSaveAll,
   } = useSettingsModalState({
     isOpen,
@@ -125,15 +111,6 @@ export default function SettingsModal({
       id: "shortcuts",
       label: t("smodal.tab.shortcuts"),
       icon: <Keyboard className="size-4" />,
-    },
-    {
-      id: "model",
-      label: t("smodal.tab.model"),
-      icon: <Bot className="size-4" />,
-      badge: llmConfig?.configured ? t("smodal.badge.configured") : t("smodal.badge.unset"),
-      badgeColor: llmConfig?.configured
-        ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/30"
-        : "bg-stone-800 text-stone-400 border border-stone-700/40",
     },
     {
       id: "notifications",
@@ -207,7 +184,6 @@ export default function SettingsModal({
                 {activeTab === "profile" && <User className="size-4" />}
                 {activeTab === "appearance" && <Palette className="size-4" />}
                 {activeTab === "shortcuts" && <Keyboard className="size-4" />}
-                {activeTab === "model" && <Bot className="size-4" />}
                 {activeTab === "notifications" && <Bell className="size-4" />}
                 {activeTab === "about" && <Info className="size-4" />}
               </span>
@@ -217,7 +193,6 @@ export default function SettingsModal({
                 {activeTab === "profile" && t("smodal.title.profile")}
                 {activeTab === "appearance" && t("smodal.title.appearance")}
                 {activeTab === "shortcuts" && t("smodal.title.shortcuts")}
-                {activeTab === "model" && t("smodal.title.model")}
                 {activeTab === "notifications" && t("smodal.title.notifications")}
                 {activeTab === "about" && t("smodal.title.about")}
               </span>
@@ -279,23 +254,6 @@ export default function SettingsModal({
 
             {activeTab === "shortcuts" && (
               <ShortcutsTab lang={lang} />
-            )}
-
-            {activeTab === "model" && (
-              <ModelTab
-                llmConfig={llmConfig}
-                selectedPreset={selectedPreset}
-                onSelectPreset={handleSelectPreset}
-                baseUrlInput={baseUrlInput}
-                setBaseUrlInput={setBaseUrlInput}
-                apiKeyInput={apiKeyInput}
-                setApiKeyInput={setApiKeyInput}
-                modelInput={modelInput}
-                setModelInput={setModelInput}
-                modelStatusMsg={modelStatusMsg}
-                isMonochrome={isMonochrome}
-                onSaveModel={handleSaveModel}
-              />
             )}
 
             {activeTab === "notifications" && (
