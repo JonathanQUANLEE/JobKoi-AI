@@ -93,21 +93,27 @@ async def generate(
         content = extract_content(data)
     except LLMClientError as e:
         log.warning("agent LLM 调用失败 [%s]: %s", e.code, e.message[:200])
-        return _error("llm_error", f"模型调用失败 [{e.code}]：{e.message[:300]}")
+        msg = e.message[:200]
+        if "timeout" in msg.lower() or e.code == "timeout":
+            return _error("llm_error", "AI 顾问网络连接超时，大模型服务器较繁忙，请稍后重试。")
+        return _error("llm_error", f"AI 顾问连接遇到问题（{e.code}），请检查网络或在模型设置中重试。")
 
     try:
         parsed = parse_llm_json(content)
     except ProfileParseError as e:
         log.warning("agent 模型输出解析失败: %s", e)
-        return _error("bad_model_output", f"模型输出不是合法 JSON，请重试或换个模型：{e}")
+        return _error(
+            "bad_model_output",
+            "AI 顾问响应繁忙，请稍后重试或在设置中换个模型。",
+        )
 
     reply = parsed.get("reply")
     if not isinstance(reply, str) or not reply.strip():
-        return _error("bad_model_output", "模型输出缺少 reply 字段，请重试。")
+        return _error("bad_model_output", "AI 顾问响应繁忙，未返回有效回复，请稍后重试。")
 
     profile = parsed.get("profile")
     if profile is not None and not isinstance(profile, dict):
-        return _error("bad_model_output", "模型输出的 profile 不是对象，请重试。")
+        return _error("bad_model_output", "模型生成的画像结构异常，请稍后重试。")
 
     safe_profile = None
     if profile is not None:

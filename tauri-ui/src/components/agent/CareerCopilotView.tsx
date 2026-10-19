@@ -210,10 +210,15 @@ export default function CareerCopilotView({
           }
         }
       } else {
-        pushAgentMessage({ role: "assistant", content: `${t("agent.error.prefix")}${result.message ?? ""}` });
+        const rawMsg = result.message ?? "";
+        const friendlyMsg =
+          rawMsg.includes("JSON") || rawMsg.includes("bad_model_output")
+            ? "AI 顾问响应繁忙，请稍后重试。"
+            : rawMsg;
+        pushAgentMessage({ role: "assistant", content: `${t("agent.error.prefix")}${friendlyMsg}` });
       }
     } catch (err) {
-      pushAgentMessage({ role: "assistant", content: `${t("agent.error.prefix")}${String(err)}` });
+      pushAgentMessage({ role: "assistant", content: "AI 顾问连线遇到波动，请检查网络或稍后重试。" });
     } finally {
       setAgentPending(false);
     }

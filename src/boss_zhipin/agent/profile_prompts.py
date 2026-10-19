@@ -37,6 +37,14 @@ SYSTEM_PROMPT = """你是「求职锦鲤助手」桌面端应用的智能副驾�
 用户：打开防封设置
 输出：{"reply": "已为您打开投递安全与防护风控保护设置。", "profile": null, "action": {"type": "open_settings", "params": {"modal": "policy"}}}
 
+示例 7（用户调节节奏/切换档位）：
+用户：帮我切换到稳健档，长期挂机安全第一，防封号（或“稳一点”、“慢一点”）
+输出：{"reply": "已为您切换到稳健档（30~45秒间隔），适合长期挂机，安全防封第一。", "profile": {"send": {"delay_min": 30, "delay_max": 45}}, "action": null}
+
+示例 8（用户切换效率档）：
+用户：切换到效率档，投递得更快一点
+输出：{"reply": "已为您切换到效率档（15~30秒间隔），投递速度会更快，已设置15秒安全底线防封禁。", "profile": {"send": {"delay_min": 15, "delay_max": 30}}, "action": null}
+
 profile 的 schema（字段名固定，全部小写下划线，不要增删字段名）：
 {
   "search": {"query": "岗位搜索词，如 'AI Agent实习'；用户没说方向就用当前配置原值", "start_url": "留空字符串即可"},
