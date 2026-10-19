@@ -52,12 +52,22 @@ uv run python scripts/set_version.py 0.8.0
 
 ## 3. 发版门禁（全绿才许继续）
 
+**环境准备（本机受限 shell：git/node/pnpm/cargo/uv 都不在默认 PATH，每个新 shell 会话先注入一次）**：
+
 ```powershell
-uv run pytest tests/ -q                    # 全量（当前 590+）
-pnpm --dir tauri-ui exec tsc               # 类型检查
-pnpm --dir tauri-ui test                   # vitest 全量（含版本守卫）
-uv run python scripts/sanitize_for_release.py --check
+$env:Path = "C:\Users\14905\AppData\Roaming\npm;B:\nodejs;$env:USERPROFILE\.cargo\bin;$env:USERPROFILE\.local\bin;C:\Program Files\Git\cmd;" + $env:Path
 ```
+
+然后依次跑（全绿才许进入发布步骤）：
+
+```powershell
+uv run --no-progress pytest tests/ -q               # 全量（当前 590+）
+pnpm --dir tauri-ui exec tsc                        # 类型检查
+pnpm --dir tauri-ui test                            # vitest 全量（含版本守卫）
+uv run --no-progress python scripts/sanitize_for_release.py --check
+```
+
+> 注：uv/pnpm 的门禁命令在 `tauri-ui` 目录下跑 `pnpm`、仓库根跑 `uv`；若报"命令不存在"说明 PATH 注入漏了或跑错了目录。
 
 ## 4. 通道 A：CI 全自动（GitHub 账单解锁后首选）
 
