@@ -2,14 +2,16 @@
 # src-tauri/tauri.conf.json，编译期被 generate_context! 烧进 Rust binary）。
 # 两份是**同一个 App 的两种运行模式各一份**，不是冗余，删任何一份对应模式起不来。
 #
-# ⚠️ 共享字段（productName / identifier / 窗口 title·label·width·height·
-# minWidth·minHeight / withGlobalTauri）必须跟 src-tauri/tauri.conf.json **逐字一致**，
-# 改一份记得同步改另一份。version 例外：release 时 scripts/set_version.py 会从 git
-# tag 把两份一起覆盖，平时不用手动对齐。（tauri.conf.json 是 JSON 不能写注释，
-# 所以这条提醒只放这里。）
+# ⚠️ 共享字段（productName / identifier / 窗口 title·label·width·height /
+# minWidth·minHeight / withGlobalTauri / plugins.updater）必须跟
+# src-tauri/tauri.conf.json **逐字一致**，改一份记得同步改另一份。version 例外：
+# release 时 scripts/set_version.py 会从 git tag 把两份一起覆盖，平时不用手动
+# 对齐。（tauri.conf.json 是 JSON 不能写注释，所以这条提醒只放这里。）
+# plugins.updater（2026-10-19 软件内自动更新）：pubkey/endpoints/installMode
+# 三项双模式必须一致，由 tests/test_standalone_sync.py 守卫。
 "$schema" = "https://schema.tauri.app/config/2"
 productName = "JobKoi-AI · 全智能求职锦鲤助手"
-version = "0.6.0"
+version = "0.7.0"
 identifier = "com.jonathanquanlee.jobkoi-ai"
 
 [build]
@@ -39,3 +41,15 @@ icon = [
   "icons/icon.ico",
   "icons/icon.png"
 ]
+
+# 软件内自动更新（2026-10-19）：与 src-tauri/tauri.conf.json 的 plugins.updater
+# 逐字同步。endpoints 指向 GitHub Releases 的 latest.json（draft 期间 404，
+# Publish 后生效）。
+[plugins.updater]
+pubkey = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI2RDUwQzFBODA1NzM0ODYKUldTR05GZUFHZ3pWdGpRNVU4ZFMyenBWbmZQTUNvOWdoMjNhYVZRU3lqeWNTTG9jSWhiZ0pocFkK"
+endpoints = [
+  "https://github.com/JonathanQUANLEE/JobKoi-AI/releases/latest/download/latest.json",
+]
+
+[plugins.updater.windows]
+installMode = "passive"

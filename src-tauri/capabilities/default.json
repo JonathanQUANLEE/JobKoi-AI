@@ -10,6 +10,8 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
     "core:window:allow-start-dragging",
-    "pytauri:default"
+    "pytauri:default",
+    "updater:default",
+    "process:allow-restart"
   ]
 }

@@ -135,6 +135,24 @@ BOSS_STANDALONE = environ.get("BOSS_TAURI_STANDALONE") == "1"
 log = logging.getLogger(__name__)
 
 
+def _updater_plugins() -> list:
+    """注册 updater / process 插件（2026-10-19 软件内自动更新）。
+
+    - wheel dev 模式：pytauri-wheel 预编译二进制已启用双插件特性；
+    - standalone 模式：src-tauri/Cargo.toml 的 pytauri features 编入本 binary；
+    - 注册失败（极端环境）降级为空列表：应用照常启动、投递主流程不受影响，
+      仅「检查更新」不可用——系统稳定优先。
+    """
+    try:
+        from pytauri_plugins.updater import Builder as UpdaterBuilder
+        from pytauri_plugins.process import init as process_init
+
+        return [UpdaterBuilder().build(), process_init()]
+    except Exception:
+        log.exception("updater/process 插件注册失败，软件内自动更新不可用")
+        return []
+
+
 def main() -> int:
     """启动 PyTauri app——根据 BOSS_TAURI_STANDALONE 自动切换 wheel / standalone。"""
     if BOSS_STANDALONE:
@@ -181,5 +199,6 @@ def main() -> int:
         app = builder_factory().build(
             context=ctx,
             invoke_handler=commands.generate_handler(portal),
+            plugins=_updater_plugins(),
         )
         return app.run_return()

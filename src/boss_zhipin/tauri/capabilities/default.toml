@@ -12,4 +12,6 @@ permissions = [
     "core:window:allow-close",
     "core:window:allow-start-dragging",
     "pytauri:default",
+    "updater:default",
+    "process:allow-restart",
 ]

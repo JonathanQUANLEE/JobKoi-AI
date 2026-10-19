@@ -6,7 +6,7 @@
 
 [package]
 name = "boss-zhipin"
-version = "0.6.0"
+version = "0.7.0"
 description = "BOSS Zhipin Helper (PyTauri standalone)"
 authors = ["JonathanQUANLEE"]
 edition = "2021"
@@ -32,12 +32,23 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# tauri 精确锁 2.11.2（2026-10-19 自动更新接入时发现）：tauri-plugin-updater
+# 2.14 会把 tauri 拉到 2.12.4，而 pytauri-core 0.8.0 对 Effect 枚举的穷举
+# match 在 2.12 下编译失败（E0004）。锁 2.11.2 后 cargo 自动选兼容该版本
+# 的 updater/process 插件版本。升级 pytauri（>0.8）时才能放开此锁。
+tauri = { version = "=2.11.2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 pyo3 = "0.25"
-pytauri = "0.8"
+# plugin-updater/plugin-process（2026-10-19 软件内自动更新）：features 让
+# pytauri_plugins 的 Python 绑定可用；下面的直接依赖是 ACL 硬要求——
+# tauri-build 经 cargo links 机制（DEP_*_PERMISSION_FILES_PATH）收集插件
+# 权限，links 元数据只传给直接依赖，仅靠 features 传递会导致 capabilities
+# 里的 updater:* / process:* 编译期报未知权限。
+pytauri = { version = "0.8", features = ["plugin-updater", "plugin-process"] }
 tauri-plugin-pytauri = "0.8"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 # standalone bundle 用独立 profile，不污染 `tauri dev` 的 target/release
 # （pytauri 官方 build-standalone 教程的做法）

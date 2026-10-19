@@ -73,3 +73,31 @@ def test_product_name_in_sync():
         (WHEEL_TAURI_DIR / "Tauri.toml").read_text(encoding="utf-8")
     )
     assert tauri_conf["productName"] == wheel_tauri["productName"]
+
+
+def test_updater_config_in_sync():
+    """plugins.updater（2026-10-19 自动更新）双模式一致性守卫。
+
+    pubkey / endpoints / windows.installMode 三项任一分叉都会导致 wheel dev
+    模式与 standalone 安装包的更新行为不一致（如 dev 能查更新而安装包报
+    "无 endpoints"）。
+    """
+    tauri_conf = json.loads(
+        (SRC_TAURI_DIR / "tauri.conf.json").read_text(encoding="utf-8")
+    )
+    wheel_tauri = tomllib.loads(
+        (WHEEL_TAURI_DIR / "Tauri.toml").read_text(encoding="utf-8")
+    )
+    conf_updater = tauri_conf["plugins"]["updater"]
+    toml_updater = wheel_tauri["plugins"]["updater"]
+    assert conf_updater["pubkey"] == toml_updater["pubkey"], "updater pubkey 双模式不一致"
+    assert conf_updater["endpoints"] == toml_updater["endpoints"], (
+        "updater endpoints 双模式不一致"
+    )
+    assert (
+        conf_updater["windows"]["installMode"]
+        == toml_updater["windows"]["installMode"]
+    ), "updater installMode 双模式不一致"
+    # 端点必须是 https（release 构建拒绝 http，除非显式开危险开关）
+    for endpoint in conf_updater["endpoints"]:
+        assert endpoint.startswith("https://"), f"updater 端点必须 https：{endpoint}"
