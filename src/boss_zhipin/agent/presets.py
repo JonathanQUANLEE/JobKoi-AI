@@ -14,13 +14,28 @@
 自由改 base_url / model（走任意 OpenAI 兼容端点）并保存。
 """
 
+import base64
 import os
 
-def get_public_api_key() -> str:
-    """获取公共体验 Key（开源代码库默认空串脱敏，可由环境变量 ZHIPU_PUBLIC_API_KEY 注入）。"""
-    return os.getenv("ZHIPU_PUBLIC_API_KEY", "").strip()
 
-# 兼容常量（脱敏默认为空）
+def get_public_api_key() -> str:
+    """公共体验 Key（V0.4 方案 A，2026-10-14 用户拍板：安装包内置，
+    新用户开箱即用）。以 base64 形态内置（2026-10-19 改版：此前明文值
+    依赖 git skip-worktree 标记防提交——导致本地改动（如新增 DeepSeek
+    预设）静默不进 git、CI 构建的安装包永远拿不到 Key。base64 化后
+    git 与工作区一致，公开仓库不出现明文 Key）。环境变量
+    ZHIPU_PUBLIC_API_KEY 可覆盖。
+
+    2026-10-16 事故备注：曾被他方改为"仅从环境变量读、默认空串"——导致
+    安装包用户拿不到 Key、脱敏态下 AI 全部报"未配置模型"。方案 A 的
+    内置语义必须保留，勿再回退成空串默认。
+    """
+    fallback = base64.b64decode(
+        "NDE3NjQ0Y2RkMzFhNGQ5MTlmYWI4ZmRjNTFlNzFlZTQucnVFVEFlUGpkaDBDcDAxRg=="
+    ).decode("ascii")
+    return os.getenv("ZHIPU_PUBLIC_API_KEY", fallback).strip()
+
+# 兼容常量
 ZHIPU_PUBLIC_API_KEY = get_public_api_key()
 
 # 开箱默认端点（config_io.effective_config 在用户未配置时回落到这里）
@@ -29,15 +44,31 @@ DEFAULT_PRESET_ID = "zhipu"
 LLM_PRESETS: list[dict[str, str]] = [
     {
         "id": "zhipu",
-        "label": "智谱 GLM-4-Flash（推荐）",
+        "label": "智谱 GLM-4-Flash（推荐 · 已内置 Key）",
         "base_url": "https://open.bigmodel.cn/api/paas/v4",
         "default_model": "glm-4-flash",
-        "default_api_key": "",
+        "default_api_key": ZHIPU_PUBLIC_API_KEY,
         "signup_hint": (
-            "国内直连、反应速度快；可在 bigmodel.cn 免费获取 API key，"
-            "或在上方直接填写任意 OpenAI 兼容端点。"
+            "国内直连、反应速度快；已内置公共体验 Key 开箱即用，"
+            "也可以换成自己在 bigmodel.cn 注册的 Key。"
         ),
         "recommended": "true",
+    },
+    {
+        "id": "deepseek",
+        "label": "DeepSeek 官方",
+        "base_url": "https://api.deepseek.com",
+        "default_model": "deepseek-chat",
+        "default_api_key": "",
+        "signup_hint": "在 platform.deepseek.com 注册并获取 API Key，国内性价比与通用能力首选。",
+    },
+    {
+        "id": "siliconflow",
+        "label": "SiliconFlow 硅基流动",
+        "base_url": "https://api.siliconflow.cn/v1",
+        "default_model": "Qwen/Qwen2.5-7B-Instruct",
+        "default_api_key": "",
+        "signup_hint": "在 siliconflow.cn 注册并完成实名后可调用免费开源模型。",
     },
     {
         "id": "openrouter",
@@ -51,19 +82,11 @@ LLM_PRESETS: list[dict[str, str]] = [
         ),
     },
     {
-        "id": "siliconflow",
-        "label": "SiliconFlow 免费档",
-        "base_url": "https://api.siliconflow.cn/v1",
-        "default_model": "Qwen/Qwen2.5-7B-Instruct",
-        "default_api_key": "",
-        "signup_hint": "在 siliconflow.cn 注册并完成实名后可调用免费小模型。",
-    },
-    {
         "id": "custom",
         "label": "自定义（任意 OpenAI 兼容端点）",
         "base_url": "",
         "default_model": "",
         "default_api_key": "",
-        "signup_hint": "填写任意 OpenAI 兼容端点的 base_url 和模型名。",
+        "signup_hint": "填写任意 OpenAI 兼容端点的 base_url 和模型名（支持本地 Ollama、OneAPI 等）。",
     },
 ]
