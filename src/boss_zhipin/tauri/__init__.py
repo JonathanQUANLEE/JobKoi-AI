@@ -147,7 +147,12 @@ def _updater_plugins() -> list:
         from pytauri_plugins.updater import Builder as UpdaterBuilder
         from pytauri_plugins.process import init as process_init
 
-        return [UpdaterBuilder().build(), process_init()]
+        # 注意：UpdaterBuilder.build 是 **staticmethod**（对镜像
+        # tauri_plugin_updater::Builder），不能先实例化——`Builder()` 会抛
+        # TypeError: No constructor defined（2026-10-19 mock E2E 实测踩坑，
+        # 该异常被本函数的 except 吞掉后表现为前端 "plugin updater not
+        # found"，极具迷惑性）。
+        return [UpdaterBuilder.build(), process_init()]
     except Exception:
         log.exception("updater/process 插件注册失败，软件内自动更新不可用")
         return []
