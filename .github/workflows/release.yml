@@ -55,9 +55,16 @@ jobs:
             artifact_name: windows-x64
             artifact_path: |
               src-tauri/target/bundle-release/bundle/nsis/*.exe
+              src-tauri/target/bundle-release/bundle/nsis/*.sig
               src-tauri/target/bundle-release/bundle/msi/*.msi
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
+    # 更新签名（2026-10-19 软件内自动更新）：createUpdaterArtifacts=true 后
+    # tauri build 必须拿到私钥才会给 NSIS 产物生成 .sig。两个 matrix 都要注入
+    # （mac 的 dmg 打包同样会因缺私钥挂掉）。
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -150,11 +157,33 @@ jobs:
         with:
           path: dist
 
-      # 调试用：把待上传的文件列出来，CI log 里能看清楚
+      # 列出来，CI log 里能看清楚
       - name: List artifacts
         run: |
           echo "=== artifacts to publish ==="
           find dist -type f | sort
+
+      # 产物 ASCII 化（2026-10-19）：NSIS 安装器文件名含中文+空格+间隔号
+      # （"JobKoi-AI · 全智能求职锦鲤助手_0.7.0_x64-setup.exe"），percent-
+      # encoding 进 latest.json 是隐性契约（· 用 U+00B7 还是 U+2022、GitHub
+      # 的编码行为都不可控）。统一改纯 ASCII，latest.json 只引用改名后的资产。
+      - name: Rename Windows installer to ASCII
+        shell: bash
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          mv dist/windows-x64/nsis/*-setup.exe "dist/windows-x64/nsis/JobKoi-AI-Setup-${VER}-x64.exe"
+
+      # 生成 updater 的 latest.json（签名取 .sig 文件内容；url 指向本 tag 的
+      # ASCII 资产）。draft 期间 releases/latest 404，Publish 后 endpoint 生效。
+      - name: Generate latest.json
+        shell: bash
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          python3 scripts/make_latest_json.py \
+            --version "$VER" \
+            --sig "$(find dist/windows-x64 -name '*.sig' | head -1)" \
+            --url "https://github.com/JonathanQUANLEE/JobKoi-AI/releases/download/${GITHUB_REF_NAME}/JobKoi-AI-Setup-${VER}-x64.exe" \
+            --out dist/latest.json
 
       # 建 draft release：generate_release_notes=true 让 GitHub 从 commit
       # message 自动拼初稿，user 在 GitHub UI 里 review + 改完再点 Publish
@@ -174,3 +203,4 @@ jobs:
           files: |
             dist/macos-arm64/**
             dist/windows-x64/**
+            dist/latest.json

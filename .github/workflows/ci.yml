@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
-    branches: [master]
+    branches: [main]
 
 # 同一分支并行 push 时取消旧 run，省 CI 配额
 concurrency:

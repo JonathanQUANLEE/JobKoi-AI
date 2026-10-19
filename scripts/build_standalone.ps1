@@ -142,6 +142,25 @@ $UnitSep = [char]31
 $env:CARGO_ENCODED_RUSTFLAGS = "-L${UnitSep}native=$PythonLibs"
 Remove-Item Env:RUSTFLAGS -ErrorAction SilentlyContinue
 
+# ---------- 4.5 更新签名私钥（2026-10-19 软件内自动更新）----------
+# createUpdaterArtifacts=true 后 tauri build 必须拿到私钥才给 NSIS 产物生成
+# .sig。私钥在仓库外（%USERPROFILE%\.tauri\），不放项目 .env——sanitize
+# --sanitize 会把 .env 重置成模板把私钥销毁。CI 由 release.yml 的 job env
+# 注入（TAURI_SIGNING_PRIVATE_KEY 已设时本段跳过）。
+if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
+    $KeyFile = Join-Path $env:USERPROFILE '.tauri\jobkoi-updater.key'
+    if (Test-Path $KeyFile) {
+        $env:TAURI_SIGNING_PRIVATE_KEY = (Get-Content $KeyFile -Raw)
+        Write-Host "==> 已装载更新签名私钥：$KeyFile"
+        $PassFile = "$KeyFile.pass"
+        if (-not $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD -and (Test-Path $PassFile)) {
+            $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = (Get-Content $PassFile -Raw)
+        }
+    } else {
+        throw "createUpdaterArtifacts 需要 TAURI_SIGNING_PRIVATE_KEY；把私钥放 $KeyFile 或设环境变量（自行构建者：tauri signer generate 生成自己的密钥对）"
+    }
+}
+
 # ---------- 5. 前端 + tauri bundle ----------
 Write-Host "==> pnpm install（tauri-ui）"
 $TauriUiDir = Join-Path $RepoRoot 'tauri-ui'
@@ -178,6 +197,18 @@ if ($Bundles) {
 } else {
     Write-Warning "没生成 NSIS/MSI 安装器，检查 tauri.conf.json 的 bundle.targets"
     Write-Host  "（raw exe 已生成，但 python313.dll 等 resources 只在 installer 里拷齐）"
+}
+
+# 更新签名产物（2026-10-19）：NSIS setup.exe 旁边必须有同名 .sig，
+# 没有它 latest.json 组不出 signature、用户端自动更新必失败。
+$Sigs = Get-ChildItem -Path $TargetRoot -Recurse -Filter '*-setup.exe.sig' `
+    -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -match 'bundle-release' } |
+    Where-Object { $_.LastWriteTime -gt (Get-Date).AddHours(-2) }
+if ($Sigs) {
+    foreach ($s in $Sigs) { Write-Host "[OK] 更新签名：$($s.FullName)" }
+} else {
+    Write-Warning "没找到本次构建的 .sig 签名文件——自动更新链路不完整（本地应急发布请核对 TAURI_SIGNING_PRIVATE_KEY）"
 }
 
 # 提醒：dumpbin 检查 IMPORTS 是 nice-to-have，但 import 只记 DLL 文件名
