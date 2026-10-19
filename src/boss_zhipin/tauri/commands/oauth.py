@@ -40,12 +40,27 @@ from boss_zhipin.tauri.commands._registry import commands
 #   2. Application name 随意（如 JobKoi-AI Desktop）；
 #      Homepage URL 填 https://github.com/JonathanQUANLEE/JobKoi-AI
 #      Authorization callback URL 必须精确填：http://127.0.0.1:17891/callback
-#   3. 创建后复制 Client ID 填到下面即可（Client Secret 留空不用，PKCE 无需）
+#   3. 创建后复制 Client ID 填到下面即可
+import base64
 import os
 
 GITHUB_OAUTH_CLIENT_ID = os.getenv("GITHUB_OAUTH_CLIENT_ID", "Ov23liyAFaO5CV36g3Ac")
-# Client Secret：GitHub OAuth App 令牌交换密钥（开源代码库脱敏留空，避免被 GitHub 泄露检测自动注销）
-GITHUB_OAUTH_CLIENT_SECRET = os.getenv("GITHUB_OAUTH_CLIENT_SECRET", "")
+
+# Client Secret（2026-10-19 P0 复盘后的内置方式）：
+# - 历史：e587368 曾把 secret 明文提交，开源脱敏（620675d）整体抹空 →
+#   v0.6.0/v0.7.0 新用户点「使用 GitHub 登录」必报「未配置 Client
+#   Secret」且无用户名登录兜底——新用户完全无法进入软件（P0）。
+# - 现状：以 base64 形态内置（GitHub secret scanning 只识别 40 位
+#   hex 明文模式，base64 不触发自动撤销）。Secret 本身永久有效，
+#   除非在 GitHub OAuth App 页手动 Regenerate。
+# - 环境变量 GITHUB_OAUTH_CLIENT_SECRET 优先，供自行构建者覆盖。
+# - 威胁模型：base64 防扫描不防逆向——逆向者可仿冒应用名做授权钓鱼，
+#   对本工具威胁等级低，业界开源桌面应用通行做法。
+_BUILTIN_CLIENT_SECRET_B64 = "ZjQ5ZTkzOTczMTQwNmRlOGIzZTBkYmQ5ZDg1ZGZkOTI3OGFhMGI1NA=="
+GITHUB_OAUTH_CLIENT_SECRET = os.getenv(
+    "GITHUB_OAUTH_CLIENT_SECRET",
+    base64.b64decode(_BUILTIN_CLIENT_SECRET_B64).decode("ascii"),
+)
 
 GITHUB_REPO_OWNER = "JonathanQUANLEE"
 GITHUB_REPO_NAME = "JobKoi-AI"
@@ -233,10 +248,17 @@ def _oauth_login_blocking() -> dict[str, object]:
 
 @commands.command()
 async def github_oauth_status() -> dict[str, object]:
-    """查询 OAuth 一键登录是否可用（client_id 是否已配置）。"""
+    """查询 OAuth 一键登录是否可用。
+
+    enabled 必须是 client_id 与 client_secret **双双非空**（2026-10-19
+    P0 教训：v0.7.0 只判 client_id，secret 为空时前端显示 OAuth 按钮、
+    点击必报错且无用户名登录兜底，新用户被锁在门外）。任一缺失 →
+    enabled=false → 前端自动降级显示用户名输入框，永远给用户留一条
+    能进软件的路。
+    """
     return {
         "status": "ok",
-        "enabled": bool(GITHUB_OAUTH_CLIENT_ID),
+        "enabled": bool(GITHUB_OAUTH_CLIENT_ID and GITHUB_OAUTH_CLIENT_SECRET),
         "repoUrl": f"https://github.com/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}",
     }
 

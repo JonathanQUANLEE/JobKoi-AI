@@ -42,14 +42,17 @@ interface GithubAuthGateProps {
  * - 新用户注册（一键打开 GitHub 注册页）
  * - 游客模式（仅开发模式：发布版剥离，本地 dev 保留——2026-10-14 用户要求）
  * 旧的 Token 切换 / 邮箱登录 / 注册指引 Tab 全部移除。
- * OAuth 未配置 client_id 时降级显示用户名输入框（过渡期，配置后自动消失）。
+ * 后端 client_id 与 client_secret 任一未配置时降级显示用户名输入框
+ * （双条件 enabled，2026-10-19 P0 教训：单判 client_id 导致 secret 缺失
+ * 时用户被锁在门外），配置齐后一键登录自动出现。
  */
 export default function GithubAuthGate({ onLoginSuccess }: GithubAuthGateProps) {
   const [accountInput, setAccountInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  // OAuth 一键登录：后端配置了 client_id 才显示，未配置零影响
+  // OAuth 一键登录：后端 client_id 与 client_secret 双双配置才显示，
+  // 任一缺失降级用户名登录（永远给用户留一条能进软件的路）
   const [oauthEnabled, setOauthEnabled] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
 
