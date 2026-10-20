@@ -15,8 +15,8 @@ log = logging.getLogger(__name__)
 
 
 # 猎聘网页登录凭证 cookie：登录成功才写入、游客绝无
-# 严禁加入 UniqueKey 等设备访客 cookie，否则从未登录的访客也会被误判已就绪
-LIEPIN_LOGIN_COOKIE_NAMES = ("lt_auth", "liepin_login_valid")
+# 严禁加入 liepin_login_valid（游客会被下发 false）或 UniqueKey 等访客 cookie
+LIEPIN_LOGIN_COOKIE_NAMES = ("lt_auth",)
 
 
 class LiepinPlatform(BasePlatform):
@@ -42,7 +42,7 @@ class LiepinPlatform(BasePlatform):
 
     def get_info(self) -> PlatformInfo:
         state = self._cookie_login_state()
-        if state is True:
+        if state is True or self.is_recently_verified():
             is_logged, status_text = True, "已就绪 (免密免登)"
         elif state is False:
             is_logged, status_text = False, "未登录 (需扫码)"
@@ -78,11 +78,9 @@ class LiepinPlatform(BasePlatform):
         browser = await uc.start(config=cfg)
         driver._browser = browser
 
-        # 核心设计（与 BOSS 对齐）：
-        # 导航至猎聘求职端个人主页 https://c.liepin.com/：
-        # 1. 若已持久化登录（有 lt_auth 凭证）：保持在个人主页，秒级识别 logged_in=True，前端瞬间绿对勾+关浏览器；
-        # 2. 若未登录：猎聘服务端自动 302 重定向到 https://www.liepin.com/login 供扫码。
-        # 严禁直接写死访问 /login（直接访问 /login 会强行展示登录框，让已登录用户误以为丢失登录态）。
+        # 打开猎聘求职端个人主页供用户扫码或查看状态。
+        # 规范：打开登录浏览器旨在引导用户进行扫码，初始一律返回 logged_in=False，
+        # 绝不抢跑关闭窗口；后续由前端 4s 轮询 check_login_status 侦测真实扫码结果。
         tab = await browser.get("https://c.liepin.com/")
         driver._tab = tab
         try:
@@ -91,16 +89,9 @@ class LiepinPlatform(BasePlatform):
         except Exception:
             pass
 
-        await asyncio.sleep(2.0)
-        logged_in = False
-        try:
-            logged_in = await driver.is_logged_in(tab)
-        except Exception:
-            logged_in = False
-
         return {
             "status": "opened",
-            "logged_in": logged_in,
+            "logged_in": False,
             "platform": "liepin",
             "url": str(getattr(tab, "url", "https://c.liepin.com/")),
         }

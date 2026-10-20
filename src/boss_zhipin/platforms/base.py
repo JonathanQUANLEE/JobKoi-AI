@@ -14,6 +14,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from time import time as _time
 from typing import Any
 
 
@@ -37,6 +38,15 @@ class BasePlatform(ABC):
 
     def __init__(self, root_dir: Path | None = None) -> None:
         self.root_dir = root_dir or Path(__file__).resolve().parent.parent.parent.parent
+        self._last_verified_at: float = 0.0
+
+    def mark_login_verified(self) -> None:
+        """标记该平台刚刚在活跃会话中确认登录成功。"""
+        self._last_verified_at = _time()
+
+    def is_recently_verified(self, max_age: float = 45.0) -> bool:
+        """是否在最近 max_age 秒内刚被活跃探测证实已登录（平滑 SQLite 关进程锁）。"""
+        return (_time() - self._last_verified_at) < max_age
 
     @property
     @abstractmethod

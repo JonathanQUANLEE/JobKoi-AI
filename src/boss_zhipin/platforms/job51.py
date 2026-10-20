@@ -14,8 +14,9 @@ from boss_zhipin.platforms.cookies_probe import read_cookie_state
 log = logging.getLogger(__name__)
 
 
-# 51job 网页登录凭证 cookie：51job（内含 cuid）、accountid、partner_session
-JOB51_LOGIN_COOKIE_NAMES = ("51job", "accountid", "partner_session")
+# 51job 网页登录凭证 cookie：accountid（个人账号专属 ID，登录成功后才写入、游客绝无）
+# 严禁加入 51job 访客追踪 cookie 或 partner_session，否则打开过登录页的访客会被误判已就绪
+JOB51_LOGIN_COOKIE_NAMES = ("accountid",)
 
 
 class Job51Platform(BasePlatform):
@@ -41,7 +42,7 @@ class Job51Platform(BasePlatform):
 
     def get_info(self) -> PlatformInfo:
         state = self._cookie_login_state()
-        if state is True:
+        if state is True or self.is_recently_verified():
             is_logged, status_text = True, "已就绪 (免密免登)"
         elif state is False:
             is_logged, status_text = False, "未登录 (需扫码)"
@@ -77,11 +78,9 @@ class Job51Platform(BasePlatform):
         browser = await uc.start(config=cfg)
         driver._browser = browser
 
-        # 核心设计（与 BOSS 对齐）：
-        # 导航至 51job 官方登录页 https://login.51job.com/login.php?lang=c：
-        # 1. 弹出 51job 扫码登录页供用户扫码；
-        # 2. 若用户已持久化登录且 51job 自动跳回首页/个人中心，秒级识别 logged_in=True；
-        # 3. 若未登录，页面停留在登录页，logged_in=False，由前端展示扫码引导并启动 4s 轮询等待扫码完成。
+        # 导航至 51job 官方登录页供扫码。
+        # 规范：打开登录浏览器旨在引导用户进行扫码，初始一律返回 logged_in=False，
+        # 绝不抢跑关闭窗口；后续由前端 4s 轮询 check_login_status 侦测真实扫码结果。
         tab = await browser.get("https://login.51job.com/login.php?lang=c")
         driver._tab = tab
         try:
@@ -90,16 +89,9 @@ class Job51Platform(BasePlatform):
         except Exception:
             pass
 
-        await asyncio.sleep(2.0)
-        logged_in = False
-        try:
-            logged_in = await driver.is_logged_in(tab)
-        except Exception:
-            logged_in = False
-
         return {
             "status": "opened",
-            "logged_in": logged_in,
+            "logged_in": False,
             "platform": "job51",
             "url": str(getattr(tab, "url", "https://login.51job.com/login.php?lang=c")),
         }

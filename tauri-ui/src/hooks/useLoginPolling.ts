@@ -42,21 +42,22 @@ export function useLoginPolling(onLoginSuccess: () => void | Promise<void>) {
           );
           if (st && st.logged_in) {
             stopLoginPoll();
-            // 登录成功：cookie 已写入持久化 profile，自动关掉登录浏览器
+            // 登录成功：先展示 FaceID 绿对勾与提示音，给用户清晰的视觉/听觉反馈
+            useRunStore.getState().updateLoginOverlay({ status: "success" });
+            // 缓冲 1000ms：确保浏览器完成扫码后的最终跳转并完成 Cookie/Session 磁盘写入
+            await new Promise((resolve) => window.setTimeout(resolve, 1000));
             try {
               await ipc.shutdownBrowser();
             } catch {
               /* 关闭失败不阻塞提示 */
             }
-            // FaceID 式反馈：圆圈 → 绿色对勾 + 叮一声 → 1.5s 后自动淡出
-            useRunStore.getState().updateLoginOverlay({ status: "success" });
             window.setTimeout(() => {
               useRunStore.getState().hideLoginOverlay();
               useRunStore.getState().showCenterToast("检测到您已登录 · 认证成功", {
                 tone: "success",
                 duration: 2200,
               });
-            }, 1500);
+            }, 1200);
             await onLoginSuccess();
           }
         } catch {

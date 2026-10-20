@@ -49,7 +49,7 @@ class BossPlatform(BasePlatform):
 
     def get_info(self) -> PlatformInfo:
         state = self._cookie_login_state()
-        if state is True:
+        if state is True or self.is_recently_verified():
             is_logged, status_text = True, "已就绪 (免密免登)"
         elif state is False:
             is_logged, status_text = False, "未登录 (需扫码)"
@@ -80,7 +80,6 @@ class BossPlatform(BasePlatform):
         from boss_zhipin.website_oper import finding_jobs
         from boss_zhipin.website_oper.core.login_detector import (
             BOSS_LOGIN_URL,
-            _is_logged_in,
             _wait_url_stable,
         )
 
@@ -97,9 +96,5 @@ class BossPlatform(BasePlatform):
             pass
         await _wait_url_stable(stable_for=2.0, timeout=15)
 
-        logged_in = False
-        try:
-            logged_in = await _is_logged_in()
-        except Exception:  # noqa: BLE001
-            logged_in = False
-        return {"status": "opened", "logged_in": logged_in, "url": BOSS_LOGIN_URL}
+        # 打开登录页是供用户扫码，严禁在刚打开页面时直接断言已登录关掉窗口
+        return {"status": "opened", "logged_in": False, "url": BOSS_LOGIN_URL}

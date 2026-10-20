@@ -130,9 +130,9 @@ async def open_browser(url: str) -> uc.Tab:
 
 
 def _on_login_page(url: str) -> bool:
-    if not url or url == "about:blank":
+    if not url or url == "about:blank" or url.startswith("chrome://"):
         return True
-    return any(s in url for s in ("login.51job.com", "passport.51job.com"))
+    return any(s in url for s in ("login.51job.com", "passport.51job.com", "/login"))
 
 
 async def is_logged_in(tab: uc.Tab | None = None) -> bool:
@@ -158,8 +158,9 @@ async def is_logged_in(tab: uc.Tab | None = None) -> bool:
     active_url = str(getattr(active_tab, "url", "") or "") if active_tab else ""
 
     # 核心安全栅栏：如果活跃 Tab 明确处于登录页，绝对不能判为已登录（避免关掉扫码窗口）
-    if active_url and _on_login_page(active_url):
-        return False
+    if not active_url or _on_login_page(active_url):
+        if all(_on_login_page(str(getattr(t, "url", "") or "")) for t in candidate_tabs):
+            return False
 
     # 2. 活跃页面 LocalStorage 与业务 DOM 探测（有界 1.5s，最准且与实际页面渲染同步）
     # 51job 扫码成功后跳至 www.51job.com / we.51job.com，同时写入 localStorage(token, accountId) 与展示用户数据
@@ -187,7 +188,7 @@ async def is_logged_in(tab: uc.Tab | None = None) -> bool:
             pass
 
     # 3. 强凭证：有界尝试从浏览器 CookieJar 获取凭证 cookie（超时 1.5s 兜底）
-    # 51job 扫码登录后下发 51job(内含 cuid) 或 accountid / partner_session
+    # 51job 真实登录后下发 accountid（纯数字用户 ID，游客绝无）
     if _browser is not None:
         try:
             cookies = await cdp_call(
@@ -196,9 +197,8 @@ async def is_logged_in(tab: uc.Tab | None = None) -> bool:
             for c in cookies:
                 c_name = getattr(c, "name", "")
                 c_val = str(getattr(c, "value", "") or "")
-                if c_name in ("accountid", "partner_session"):
-                    return True
-                if c_name == "51job" and ("cuid" in c_val or len(c_val) > 20):
+                # accountid 是 51job 登录成功后的纯数字唯一标识，游客绝无
+                if c_name == "accountid" and c_val.isdigit() and len(c_val) >= 4:
                     return True
         except Exception:
             pass
@@ -208,7 +208,7 @@ async def is_logged_in(tab: uc.Tab | None = None) -> bool:
         u = str(getattr(t, "url", "") or "")
         target = getattr(t, "target", None)
         title = str(getattr(target, "title", "") or "")
-        if _on_login_page(u):
+        if _on_login_page(u) or "登录" in title:
             continue
         # i.51job.com 是专属求职者个人中心
         if "i.51job.com" in u or "我的51Job" in title or "个人中心" in title:

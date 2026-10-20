@@ -264,11 +264,14 @@ async def is_logged_in(tab: uc.Tab | None = None) -> bool:
         u = str(getattr(t, "url", "") or "")
         target = getattr(t, "target", None)
         title = str(getattr(target, "title", "") or "")
-        # 进入个人首页（用户端专属域名 c.liepin.com 或 "我的首页"）= 绝对登录证据
-        if "c.liepin.com" in u or "我的首页" in title:
+        # 若处于登录页或空白页或标题包含登录，决不能误判已登录
+        if _on_login_page(u) or "登录" in title:
+            continue
+        # 进入个人首页（用户端专属域名 c.liepin.com 且非登录页）或标题明确带有"我的首页"
+        if ("c.liepin.com" in u and "登录" not in title) or "我的首页" in title:
             return True
-        # 离开登录页，且已处于猎聘有效业务域
-        if u and "liepin.com" in u and not _on_login_page(u) and "登录" not in title:
+        # 离开登录页，且已处于猎聘有效业务域，标题明确不是登录
+        if u and "liepin.com" in u and not _on_login_page(u) and "登录" not in title and title:
             return True
 
     # 2. 强凭证：有界尝试从浏览器 CookieJar 获取凭证 cookie（超时 1.5s 兜底）
@@ -277,11 +280,12 @@ async def is_logged_in(tab: uc.Tab | None = None) -> bool:
             cookies = await cdp_call(
                 _browser.cookies.get_all(), timeout=1.5, label="猎聘 cookie 探测"
             )
-            if any(
-                getattr(c, "name", "") in ("lt_auth", "liepin_login_valid")
-                for c in cookies
-            ):
-                return True
+            for c in cookies:
+                c_name = getattr(c, "name", "")
+                c_val = str(getattr(c, "value", "") or "")
+                # 只有真实登录才会下发 lt_auth 凭证（严禁看访客 cookie liepin_login_valid）
+                if c_name == "lt_auth" and len(c_val) > 10:
+                    return True
         except Exception:
             pass
 
@@ -291,14 +295,21 @@ async def is_logged_in(tab: uc.Tab | None = None) -> bool:
         try:
             u = str(getattr(active_tab, "url", "") or "")
             if not _on_login_page(u):
-                js = "(() => { const t = document.body ? document.body.innerText || '' : ''; return t.slice(0, 500); })()"
-                txt = await cdp_call(
+                js = """JSON.stringify((() => {
+                    const text = document.body ? document.body.innerText || '' : '';
+                    const hasUser = Boolean(document.querySelector('.text-username, .user-name, [class*=user-name], a[href*="/user/"], .im-ui-basic-entry-unread-count'));
+                    const isLogout = text.includes('退出登录') || text.includes('退出');
+                    const isLogin = text.includes('扫码登录') || text.includes('账号密码登录') || text.includes('登录/注册');
+                    return { hasUser, isLogout, isLogin, textLen: text.length };
+                })())"""
+                raw = await cdp_call(
                     active_tab.evaluate(js), timeout=1.5, label="猎聘登录 DOM 探测"
                 )
-                if isinstance(txt, str):
-                    if "我的首页" in txt or "退出登录" in txt:
-                        return True
-                    if "扫码登录" not in txt and "账号密码登录" not in txt and "登录/注册" not in txt[:200]:
+                data = json.loads(raw) if isinstance(raw, str) else raw
+                if isinstance(data, dict):
+                    if data.get("isLogin"):
+                        return False
+                    if data.get("hasUser") or data.get("isLogout"):
                         return True
         except Exception:
             pass

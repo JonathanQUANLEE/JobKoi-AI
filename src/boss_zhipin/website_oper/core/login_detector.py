@@ -11,6 +11,10 @@ BOSS_LOGIN_URL = "https://www.zhipin.com/web/user/?ka=header-login"
 
 
 def _on_login_page(url: str) -> bool:
+    if not url or url == "about:blank" or url.startswith("chrome://"):
+        return True
+    if "zhipin.com" not in url:
+        return True
     return any(s in url for s in ("/web/user/", "passport-zp", "/login"))
 
 
@@ -18,13 +22,20 @@ def _is_logged_in_from_page_state(url: str, info: dict) -> bool:
     """从 URL + DOM 探测结果判断登录态。"""
     if _on_login_page(url):
         return False
+    if "zhipin.com" not in url:
+        return False
     if info.get("loginWallVisible"):
         return False
     if info.get("headerLoginVisible"):
         return False
     if info.get("loginRequiredVisible"):
         return False
-    return True
+    # 正向证据：具有用户头像/导航/个人中心，或在求职端业务子路径下
+    if info.get("userNavVisible") or "/web/geek/" in url or "/web/common/" in url:
+        return True
+    if info.get("hasContent") and not info.get("headerLoginVisible"):
+        return True
+    return False
 
 
 async def _is_logged_in() -> bool:
@@ -54,10 +65,16 @@ async def _is_logged_in() -> bool:
         '.header-login-btn, a[ka="header-login"], [ka="guide_login_btn_click"], '
         + '.guide-login-btn, .zp-job-list-login-card'
       );
+      const userNav = document.querySelector(
+        '.header-user-nav, .user-nav, a[ka="header-username"], '
+        + '.nav-figure, .user-avatar, a[href*="/web/geek/chat"], a[href*="/web/geek/resume"]'
+      );
       const bodyText = document.body ? document.body.innerText || '' : '';
       return {
         loginWallVisible: visible(wall),
         headerLoginVisible: visible(headerLogin),
+        userNavVisible: visible(userNav),
+        hasContent: Boolean(bodyText.length > 50),
         loginRequiredVisible: bodyText.includes('登录查看完整内容')
           || bodyText.includes('登录账号，查看更多好职位')
       };

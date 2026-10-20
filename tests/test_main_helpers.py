@@ -98,8 +98,27 @@ class TestGetStartUrl:
             f"https://www.zhipin.com/web/geek/jobs?query={quote('AI应用工程师')}"
         )
 
+    def test_start_url_with_page_filters_city(self, monkeypatch):
+        """意向城市（如深圳）自动解析代码并附加到初始 URL，防止落地默认郑州。"""
+        monkeypatch.delenv("BOSS_START_URL", raising=False)
+        monkeypatch.setenv("BOSS_LABEL", "AI应用工程师")
+        monkeypatch.setenv(
+            "BOSS_PAGE_FILTERS_JSON",
+            '{"city": {"enabled": true, "values": ["深圳", "广州"]}}',
+        )
+        url = main.get_start_url()
+        assert "city=101280600" in url
+        assert "query=AI%E5%BA%94%E7%94%A8%E5%B7%A5%E7%A8%8B%E5%B8%88" in url
 
-class TestCliArgs:
+    def test_start_url_with_start_city_env(self, monkeypatch):
+        """显式 BOSS_START_CITY 环境变量优先解析代码。"""
+        monkeypatch.delenv("BOSS_START_URL", raising=False)
+        monkeypatch.setenv("BOSS_LABEL", "AI应用工程师")
+        monkeypatch.setenv("BOSS_START_CITY", "北京")
+        url = main.get_start_url()
+        assert "city=101010100" in url
+        assert "query=AI%E5%BA%94%E7%94%A8%E5%B7%A5%E7%A8%8B%E5%B8%88" in url
+
     def test_parse_args_accepts_profile(self):
         args = main.parse_args(["--profile", "backend-intern"])
 

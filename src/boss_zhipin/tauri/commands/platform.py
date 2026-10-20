@@ -102,6 +102,8 @@ async def check_login_status(body: _PlatformLoginBody) -> dict[str, Any]:
     #（2026-10-12 猎聘扫码实测事故）——先 DOM 探测，没开浏览器才走 cookie 证据。
     live = await _live_dom_probe(body.platform_id)
     if live is not None:
+        if live:
+            platform.mark_login_verified()
         return {"logged_in": live, "verified": True}
     return {"logged_in": platform.check_login(), "verified": False}
 

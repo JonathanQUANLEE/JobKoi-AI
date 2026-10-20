@@ -220,8 +220,8 @@ def test_job51_rejects_tourist_cookies(tmp_path: Path):
         "CREATE TABLE cookies (host_key TEXT, name TEXT, expires_utc INTEGER, is_persistent INTEGER)"
     )
     future_micros = (int(time.time()) + 86400 * 30) * 1_000_000 + 11644473600000000
-    # 模拟仅打开过 51job 登录页所留下的百度统计/神策/设备 guid
-    for name in ("guid", "uid", "sensorsdata2015jssdkcross", "Hm_lvt_xxx"):
+    # 模拟仅打开过 51job 登录页所留下的百度统计/神策/设备 guid 以及访客临时 cookie
+    for name in ("guid", "uid", "sensorsdata2015jssdkcross", "Hm_lvt_xxx", "51job", "partner_session"):
         conn.execute(
             "INSERT INTO cookies VALUES ('.51job.com', ?, ?, 1)", (name, future_micros)
         )
@@ -245,13 +245,75 @@ def test_job51_accepts_valid_credential_cookie(tmp_path: Path):
     )
     future_micros = (int(time.time()) + 86400 * 30) * 1_000_000 + 11644473600000000
     conn.execute(
-        "INSERT INTO cookies VALUES ('.51job.com', '51job', ?, 1)", (future_micros,)
+        "INSERT INTO cookies VALUES ('.51job.com', 'accountid', ?, 1)", (future_micros,)
     )
     conn.commit()
     conn.close()
 
     assert job51.check_login() is True
     assert "已就绪" in job51.get_info().status_text
+
+
+def test_boss_login_cookie_is_httponly_encrypted(tmp_path: Path):
+    """真实 Chrome 库形态回归（2026-10-19 本机实证）：bst 是 HttpOnly 凭证——
+    明文 value 恒为空串、真实值在 encrypted_value（实测长度 130）。
+    探针必须认加密 cookie，否则已登录用户被误杀成"明确未登录"
+    （2026-10-11"网页已登录、卡片待扫码"事故的复活根因）。"""
+    import sqlite3
+
+    boss = BossPlatform(root_dir=tmp_path)
+    db_file = tmp_path / "chrome_profile" / "Default" / "Network" / "Cookies"
+    db_file.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(
+        "CREATE TABLE cookies (host_key TEXT, name TEXT, value BLOB, "
+        "encrypted_value BLOB, expires_utc INTEGER, is_persistent INTEGER)"
+    )
+    future_micros = (int(time.time()) + 86400 * 30) * 1_000_000 + 11644473600000000
+    conn.execute(
+        "INSERT INTO cookies VALUES ('.zhipin.com', 'bst', ?, ?, ?, 1)",
+        ("", b"\x01" * 130, future_micros),
+    )
+    # 同库再混入一个双空壳的游客 cookie，确保不影响判定
+    conn.execute(
+        "INSERT INTO cookies VALUES ('.zhipin.com', '__zp_stoken__', ?, ?, ?, 1)",
+        ("", b"", future_micros),
+    )
+    conn.commit()
+    conn.close()
+
+    assert boss.check_login() is True
+    assert "已就绪" in boss.get_info().status_text
+
+
+def test_empty_shell_cookies_rejected(tmp_path: Path):
+    """value 与 encrypted_value 双空的空壳 cookie（哪怕名字叫 lt_auth）
+    不构成登录证据——防的是 Chrome 库里的占位行/空壳行。"""
+    import sqlite3
+
+    liepin = LiepinPlatform(root_dir=tmp_path)
+    db_file = tmp_path / "liepin_profile" / "Default" / "Network" / "Cookies"
+    db_file.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(
+        "CREATE TABLE cookies (host_key TEXT, name TEXT, value BLOB, "
+        "encrypted_value BLOB, expires_utc INTEGER, is_persistent INTEGER)"
+    )
+    future_micros = (int(time.time()) + 86400 * 30) * 1_000_000 + 11644473600000000
+    # 名单内 cookie 但明文/加密双空壳 + 游客统计 cookie
+    conn.execute(
+        "INSERT INTO cookies VALUES ('.liepin.com', 'lt_auth', ?, ?, ?, 1)",
+        ("", b"", future_micros),
+    )
+    conn.execute(
+        "INSERT INTO cookies VALUES ('.liepin.com', 'UniqueKey', ?, ?, ?, 1)",
+        ("guest-device-id", b"", future_micros),
+    )
+    conn.commit()
+    conn.close()
+
+    assert liepin.check_login() is False
+    assert "未登录" in liepin.get_info().status_text
 
 
 def test_zhaopin_platform_open_login_unsupported():
@@ -351,7 +413,7 @@ def test_check_login_status_command_with_live_tabs(monkeypatch):
 
 
 def test_liepin_open_login_browser_contract(monkeypatch):
-    """验证 open_login_browser 对齐 BOSS 规范：必须返回 logged_in 字段。"""
+    """验证 open_login_browser 对齐规范：直达 c.liepin.com，返回 logged_in=False 供扫码。"""
     liepin = LiepinPlatform()
 
     class DummyTab:
@@ -370,11 +432,10 @@ def test_liepin_open_login_browser_contract(monkeypatch):
     monkeypatch.setattr(liepin_drv, "shutdown", lambda: asyncio.sleep(0))
     monkeypatch.setattr(liepin_drv, "cleanup_profile", lambda: None)
     monkeypatch.setattr(uc, "start", lambda **kwargs: asyncio.sleep(0, result=DummyBrowser()))
-    monkeypatch.setattr(liepin_drv, "is_logged_in", lambda tab: asyncio.sleep(0, result=True))
 
     res = asyncio.run(liepin.open_login_browser())
     assert res["status"] == "opened"
-    assert res["logged_in"] is True
+    assert res["logged_in"] is False
     assert "c.liepin.com" in res["url"]
 
 

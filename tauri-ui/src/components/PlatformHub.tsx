@@ -123,37 +123,9 @@ export default function PlatformHub({
         setMessage(`提示: ${res.message || "拉起失败"}`);
         return;
       }
-      if (res.logged_in) {
-        // 打开时就探测到已登录（如 cookie/session 有效，页面自动跳过登录页）
-        // → 同样走**完整** FaceID 式反馈流程：扫描动画 → 绿对勾 + 叮一声 →
-        //   1.5s 淡出，再接自动关浏览器（优雅退出保 cookie 落盘）→ 刷新卡片。
-        //   2026-10-12 用户实测两轮反馈：① 只弹绿字 toast 少了 FaceID 特效；
-        //   ② 同步直切 success 后 React 批处理把 waiting+success 合并成一次
-        //   渲染——扫描动画完全被跳过，浮层一出现就是绿勾，简陋且没声音。
-        //   必须先渲染 waiting（看到扫描脉冲），真实等待 ~900ms 再切 success。
-        useRunStore.getState().showLoginOverlay(platformId);
-        setBusy(true);
-        await new Promise((resolve) => window.setTimeout(resolve, 900));
-        useRunStore.getState().updateLoginOverlay({ status: "success" });
-        try {
-          await withTimeout(ipc.shutdownBrowser(), 10_000, "关闭登录浏览器");
-        } catch {
-          /* 关闭失败不阻塞提示 */
-        }
-        window.setTimeout(() => {
-          useRunStore.getState().hideLoginOverlay();
-          useRunStore.getState().showCenterToast("检测到您已登录 · 认证成功", {
-            tone: "success",
-            duration: 2200,
-          });
-        }, 1500);
-        setMessage(`「${platformId}」已登录成功，状态已刷新！`);
-        await loadPlatforms();
-        return;
-      }
-      // 打开成功、等扫码 → FaceID 式全屏引导浮层（背景模糊+圆圈扫描动画）
+      // 打开登录浏览器成功 → 保持窗口开启供用户扫码，同时展示全屏引导浮层并启动登录状态轮询
       useRunStore.getState().showLoginOverlay(platformId);
-      setMessage(`已打开「${platformId}」登录页，请在浏览器扫码；登录成功会自动识别。`);
+      setMessage(`已打开「${platformId}」登录页，请在浏览器中扫码；登录成功后系统会自动识别并同步。`);
       startLoginPoll(platformId);
     } catch (err) {
       // 把技术报错翻译成人话：连接类错误多半是浏览器被关/旧进程残留，重试即可
