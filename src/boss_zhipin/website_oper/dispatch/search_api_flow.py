@@ -204,9 +204,11 @@ async def _send_greeting_on_detail_page(greeting: str) -> str:
     contact_xpaths = (
         "//a[contains(@class, 'btn-startchat')]",
         "//a[contains(@class, 'op-btn-chat')]",
-        "//a[contains(normalize-space(text()), '立即沟通')]",
+        # 2026-10-20 加固：text() 只匹配直接文本节点，嵌套形态
+        # <a><span>立即沟通</span></a> 会漏匹配——改用 .（含后代文本）。
+        "//a[contains(., '立即沟通')]",
         "//button[contains(@class, 'btn-startchat')]",
-        "//button[contains(normalize-space(text()), '立即沟通')]",
+        "//button[contains(., '立即沟通')]",
         "//*[contains(@class, 'btn-startchat')]",
         "//*[contains(@class, 'op-btn-chat')]",
     )
@@ -217,8 +219,8 @@ async def _send_greeting_on_detail_page(greeting: str) -> str:
             break
     if not clicked:
         fallback_xpath = (
-            "//a[contains(@class, 'btn-startchat') or contains(@class, 'op-btn-chat') or contains(normalize-space(text()), '立即沟通')] "
-            "| //button[contains(@class, 'btn-startchat') or contains(normalize-space(text()), '立即沟通')]"
+            "//a[contains(@class, 'btn-startchat') or contains(@class, 'op-btn-chat') or contains(., '立即沟通')] "
+            "| //button[contains(@class, 'btn-startchat') or contains(., '立即沟通')]"
         )
         if not await finding_jobs.click_by_xpath(fallback_xpath, timeout=5):
             log.warning(

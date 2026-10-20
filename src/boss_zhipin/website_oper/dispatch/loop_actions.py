@@ -59,9 +59,12 @@ async def click_contact_and_send_response(response: str) -> None:
     contact_xpaths = (
         "//a[contains(@class, 'btn-startchat')]",
         "//a[contains(@class, 'op-btn-chat')]",
-        "//a[contains(normalize-space(text()), '立即沟通')]",
+        # 2026-10-20 加固：text() 只匹配直接文本节点，BOSS 按钮若为
+        # <a><span>立即沟通</span></a> 嵌套形态则全部漏匹配（朋友实测 15/15
+        # no_button 的最可疑根因）——改用 . （含后代全部文本）兜底。
+        "//a[contains(., '立即沟通')]",
         "//button[contains(@class, 'btn-startchat')]",
-        "//button[contains(normalize-space(text()), '立即沟通')]",
+        "//button[contains(., '立即沟通')]",
         "//*[contains(@class, 'btn-startchat')]",
         "//*[contains(@class, 'op-btn-chat')]",
     )
@@ -72,8 +75,8 @@ async def click_contact_and_send_response(response: str) -> None:
             break
     if not clicked:
         fallback_xpath = (
-            "//a[contains(@class, 'btn-startchat') or contains(@class, 'op-btn-chat') or contains(normalize-space(text()), '立即沟通')] "
-            "| //button[contains(@class, 'btn-startchat') or contains(normalize-space(text()), '立即沟通')]"
+            "//a[contains(@class, 'btn-startchat') or contains(@class, 'op-btn-chat') or contains(., '立即沟通')] "
+            "| //button[contains(@class, 'btn-startchat') or contains(., '立即沟通')]"
         )
         if not await finding_jobs.click_by_xpath(fallback_xpath, timeout=5):
             raise RuntimeError("立即沟通按钮未找到")
