@@ -58,6 +58,11 @@ const SKIP_REASON_LABELS: Record<string, string> = {
   filtered_out: "与画像规则不匹配",
   review_skip: "人工审核跳过",
   validation: "招呼语未过校验",
+  // 2026-10-20 补齐 API 直读流静默事故（扫 15/投 0/跳 0 全程无下文）暴露
+  // 的缺失 reason：任何处理完的岗位都必须有明确去向，禁止静默消失。
+  no_button: "详情页未找到「立即沟通」按钮，下轮自动重试",
+  detail_open_failed: "详情页打开失败，下轮自动重试",
+  send_failed: "发送失败（超时/异常），下轮自动重试",
 };
 
 function text(value: unknown): string {
@@ -91,7 +96,9 @@ export function toLiveFeedItem(ev: ProgressEvent, seq: number): LiveFeedItem | n
         icon: "scan",
         tone: "live",
         title: jobLabel || "正在筛选岗位",
-        detail: "正在比对去重记录与画像规则…",
+        // 2026-10-20 文案勘误：旧文案「正在比对去重记录与画像规则」让用户
+        // 误以为卡在比对（实际比对是瞬时的，耗时在详情页/发送/节流）。
+        detail: "正在打开详情页并按画像规则判定…",
       };
     case "job_found":
       return {

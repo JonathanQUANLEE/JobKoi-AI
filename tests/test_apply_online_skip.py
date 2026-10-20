@@ -254,6 +254,136 @@ def test_full_page_apply_online_jobs_do_not_halt_flow(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# 3.5 防静默回归（2026-10-20 朋友实测事故：扫 15/投 0/跳 0 全程无下文）
+#
+# no_button / detail_open_failed 等发送阶段路径历史上只写磁盘不发前端
+# 事件——岗位在时间轴上无声消失，「正在比对去重记录与画像规则」永远
+# 没有下文，用户无从判断软件是卡死还是在工作。契约：任何处理完的岗位
+# 都必须广播 job_skipped（带 reason），绝不静默。
+# ---------------------------------------------------------------------------
+
+
+def _run_single_job_with(button_setup, monkeypatch):
+    """直调 _process_single_api_job，按钮读值与点击行为可控；返回 (status, 事件流)。"""
+    collected: list[tuple[str, dict]] = []
+    monkeypatch.setattr(
+        gui_events, "emit", lambda kind, **payload: collected.append((kind, payload))
+    )
+    button_setup(monkeypatch)
+    monkeypatch.setattr(
+        search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _async_value(True)
+    )
+    monkeypatch.setattr(
+        search_api_flow, "_extract_detail_jd", lambda: _async_value("岗位职责：负责AI应用开发与落地。")
+    )
+    from boss_zhipin.website_oper.core import browser_session
+
+    monkeypatch.setattr(browser_session, "human_pause", lambda a, b: _async_value(None))
+
+    async def run():
+        return await search_api_flow._process_single_api_job(
+            api_job=job_api.parse_api_job(_api_job("e-silent")),
+            seen_job_keys=set(),
+            seen_jobs_path=None,
+            sent_log_path=None,
+            skipped_log_path=None,
+            filters={},
+            boss_active_filter_enabled=False,
+            stop_on_captcha=False,
+            scan_only=False,
+            dry_run=False,
+            greeting=GREETING,
+            sent_count=0,
+            daily_sent_count=0,
+            delay_min=0.1,
+            delay_max=0.2,
+        )
+
+    return asyncio.run(run()), collected
+
+
+def test_api_flow_no_button_emits_job_skipped_event(monkeypatch):
+    """按钮全链探测失败（no_button）必须广播 job_skipped(reason=no_button)。
+
+    事故复现形状：详情页按钮形态变化 → 单条 xpath 全军覆没 → 旧版静默
+    跳过不发事件 → 前端「扫 N/投 0/跳 0」全部停在比对文案。
+    """
+
+    def setup(ms):
+        ms.setattr(
+            finding_jobs, "get_text_by_css", lambda selector, timeout=3: _async_value("")
+        )
+        ms.setattr(
+            finding_jobs, "_xpath_safe", lambda xp, timeout=1.5: _async_value([])
+        )
+        ms.setattr(
+            finding_jobs, "click_by_xpath", lambda xp, timeout=10: _async_value(False)
+        )
+
+    status, collected = _run_single_job_with(setup, monkeypatch)
+
+    assert status == ("no_button", 0, 0)
+    kinds = [(k, p) for k, p in collected]
+    # 核心断言：静默路径必须补前端事件——岗位去向用户可见
+    assert any(
+        k == "job_skipped" and p.get("reason") == "no_button" for k, p in kinds
+    ), "no_button 岗位静默消失——2026-10-20 实测事故形状，必须广播 job_skipped"
+    # 绝不能虚报已发送
+    assert not any(k in ("job_sent", "letter_sent") for k, _ in kinds)
+
+
+def test_api_flow_detail_open_failed_emits_job_skipped_event(monkeypatch):
+    """详情页打开失败也必须广播 job_skipped(reason=detail_open_failed)。"""
+
+    def setup(ms):
+        ms.setattr(
+            finding_jobs, "get_text_by_css", lambda selector, timeout=3: _async_value("立即沟通")
+        )
+        ms.setattr(
+            finding_jobs, "click_by_xpath", lambda xp, timeout=10: _async_value(True)
+        )
+
+    collected: list[tuple[str, dict]] = []
+    monkeypatch.setattr(
+        gui_events, "emit", lambda kind, **payload: collected.append((kind, payload))
+    )
+    monkeypatch.setattr(
+        search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _async_value(False)
+    )
+    from boss_zhipin.website_oper.core import browser_session
+
+    monkeypatch.setattr(browser_session, "human_pause", lambda a, b: _async_value(None))
+
+    async def run():
+        return await search_api_flow._process_single_api_job(
+            api_job=job_api.parse_api_job(_api_job("e-openfail")),
+            seen_job_keys=set(),
+            seen_jobs_path=None,
+            sent_log_path=None,
+            skipped_log_path=None,
+            filters={},
+            boss_active_filter_enabled=False,
+            stop_on_captcha=False,
+            scan_only=False,
+            dry_run=False,
+            greeting=GREETING,
+            sent_count=0,
+            daily_sent_count=0,
+            delay_min=0.1,
+            delay_max=0.2,
+        )
+
+    status = asyncio.run(run())
+
+    assert status == ("failed", 0, 0)
+    kinds = [(k, p) for k, p in collected]
+    assert any(
+        k == "job_skipped" and p.get("reason") == "detail_open_failed"
+        for k, p in kinds
+    ), "detail_open_failed 岗位静默消失——必须广播 job_skipped"
+
+
+# ---------------------------------------------------------------------------
 # 4. DOM 流 auto 模式：聊天链路异常自愈（不炸巡航）
 # ---------------------------------------------------------------------------
 

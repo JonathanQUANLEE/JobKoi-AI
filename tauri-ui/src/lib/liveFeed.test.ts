@@ -11,7 +11,7 @@ describe("toLiveFeedItem — 事件转活动流条目", () => {
     const item = toLiveFeedItem(ev("job_processing", { title: "AI 实习", company: "字节" }), 0);
     expect(item?.tone).toBe("live");
     expect(item?.title).toContain("AI 实习");
-    expect(item?.detail).toContain("正在比对");
+    expect(item?.detail).toContain("正在打开详情页");
   });
 
   it("job_skipped 按原因翻译成人话（duplicate=过去已投递过）", () => {

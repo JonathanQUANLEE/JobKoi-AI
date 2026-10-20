@@ -197,9 +197,35 @@ async def _send_greeting_on_detail_page(greeting: str) -> str:
         button_text = await probe_apply_online_button()
         if is_apply_online_button(button_text):
             return "apply_online"
-    contact_xpath = "//a[contains(@class, 'btn-startchat')]"
-    if not await finding_jobs.click_by_xpath(contact_xpath, timeout=10):
-        return "no_button"
+    # 2026-10-20 实测事故修复（朋友测试 15 个岗位全部 no_button 静默空转）：
+    # 旧版只有单条 `a.btn-startchat` xpath——详情页按钮形态稍异（button 标签 /
+    # 类名变体 / 文案渲染）就全军覆没。升级为与 DOM 流 click_contact 同款的
+    # 多级降级链（v0.8.1 修 DOM 流时 API 流漏了这半边，双端对齐）。
+    contact_xpaths = (
+        "//a[contains(@class, 'btn-startchat')]",
+        "//a[contains(@class, 'op-btn-chat')]",
+        "//a[contains(normalize-space(text()), '立即沟通')]",
+        "//button[contains(@class, 'btn-startchat')]",
+        "//button[contains(normalize-space(text()), '立即沟通')]",
+        "//*[contains(@class, 'btn-startchat')]",
+        "//*[contains(@class, 'op-btn-chat')]",
+    )
+    clicked = False
+    for xpath in contact_xpaths:
+        if await finding_jobs.click_by_xpath(xpath, timeout=1.5):
+            clicked = True
+            break
+    if not clicked:
+        fallback_xpath = (
+            "//a[contains(@class, 'btn-startchat') or contains(@class, 'op-btn-chat') or contains(normalize-space(text()), '立即沟通')] "
+            "| //button[contains(@class, 'btn-startchat') or contains(normalize-space(text()), '立即沟通')]"
+        )
+        if not await finding_jobs.click_by_xpath(fallback_xpath, timeout=5):
+            log.warning(
+                "[api-flow] 沟通按钮多级探测均未命中（按钮文案=%r），按 no_button 跳过",
+                button_text,
+            )
+            return "no_button"
     # 拟人化：点完"立即沟通"稍作停顿再检查限额/处理弹窗（固定 1s 是机器签名）
     from boss_zhipin.website_oper.core.browser_session import human_pause
 
@@ -354,6 +380,16 @@ async def _process_single_api_job(
             send_mode="auto",
             reason="detail_open_failed",
             details={"stage": "detail_page", "job_title": job.title},
+        )
+        # 2026-10-20 实测事故修复（朋友测试扫 15/投 0/跳 0 全程无下文）：
+        # 本分支历史上只写磁盘不发前端事件——时间轴上岗位永远停在
+        # 「正在比对去重记录与画像规则」，用户无从知道岗位去向。补齐。
+        events.emit(
+            "job_skipped",
+            platform="boss",
+            title=job.title,
+            reason="detail_open_failed",
+            detail="详情页打开失败，已跳过；下一轮巡航会自动重试该岗位",
         )
         # 回滚内存标记（2026-10-18）：打开失败≠已处理，下一轮应重试
         # （永久 seen 落盘已推迟到打开成功之后，这里只需回滚内存集合）。
@@ -601,7 +637,14 @@ async def _process_single_api_job(
                 detail="点击时才发现该岗位为网申入口，已放弃点击动作并平滑推进下一岗位",
             )
         else:
-            reason = "already_contacted" if status == "already_contacted" else "send_failed"
+            # 2026-10-20 修复：no_button（详情页找不到沟通按钮）作为独立
+            # reason 保留，不再笼统归入 send_failed——按钮 DOM 形态变化
+            # 时用户和我们都要能一眼看出主因。
+            reason = (
+                "already_contacted"
+                if status == "already_contacted"
+                else ("no_button" if status == "no_button" else "send_failed")
+            )
             if status == "already_contacted":
                 _log_seen(seen_jobs_path, job=job, job_key=dedupe_key, send_mode="auto")
             else:
@@ -618,6 +661,23 @@ async def _process_single_api_job(
                 "button_state": status,
                 "job_title": job.title,
             },
+        )
+        # 2026-10-20 实测事故修复（朋友测试扫 15/投 0/跳 0 全程无下文）：
+        # 本分支历史上只写磁盘不发前端事件——岗位在时间轴上静默消失，
+        # 「正在比对去重记录与画像规则」永远没有下文，统计跳过恒 0。
+        # 任何处理完的岗位都必须给用户一个明确去向。
+        skip_detail_by_reason = {
+            "apply_online": "网申岗位（需外部系统投递），已安全跳过",
+            "already_contacted": "该岗位此前已沟通过，自动跳过",
+            "no_button": "详情页未找到「立即沟通」按钮，已跳过；下一轮会自动重试",
+            "send_failed": "发送失败（超时/异常），已跳过；下一轮会自动重试",
+        }
+        events.emit(
+            "job_skipped",
+            platform="boss",
+            title=job.title,
+            reason=reason,
+            detail=skip_detail_by_reason.get(reason, "发送阶段未成功，已跳过"),
         )
         if status == "already_contacted":
             log.info("⏭️ [api-flow] 该岗位此前已沟通过，跳过：%s", job.title)
