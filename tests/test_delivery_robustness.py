@@ -278,6 +278,13 @@ def _patch_loop_browser(monkeypatch):
     monkeypatch.setattr(finding_jobs, "log_in", noop)
     monkeypatch.setattr(finding_jobs, "select_dropdown_option", noop)
     monkeypatch.setattr(finding_jobs, "get_job_by_index", get_job)
+    # 2026-10-20 入口断言（SEO 落地页重定向防护）需要当前页 URL——桩为
+    # 推荐页（含 /web/geek/ 通过断言，且不进 API 直读流，保持 DOM 流）
+    monkeypatch.setattr(
+        finding_jobs,
+        "get_current_url",
+        lambda: "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
+    )
     monkeypatch.setattr(finding_jobs, "get_text_by_css", get_text)
     monkeypatch.setattr(finding_jobs, "scroll_to_load_more_jobs", no_scroll)
     monkeypatch.setattr(finding_jobs, "click_next_page_if_present", no_next_page)
@@ -425,6 +432,63 @@ def test_dry_run_does_not_burn_seen_ledger(monkeypatch, tmp_path):
         kind == "letter_sent" and p.get("status") == "dry_run" for kind, p in events
     )
     assert _read_jsonl(seen_file) == [], "dry-run 演练不得写入 seen_jobs.jsonl"
+
+
+def test_seo_redirect_start_page_stops_cleanly(monkeypatch, tmp_path):
+    """2026-10-20 打包版实测事故：起始搜索页被平台重定向到 SEO 落地页
+    （/shenzhen/...）时，重试仍失败必须明确停机广播——绝不僵尸空转扫 0。
+    """
+    _set_loop_env(monkeypatch, tmp_path)
+    events: list[tuple[str, dict]] = []
+
+    async def noop(*args, **kwargs):
+        return None
+
+    async def fast_sleep(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(finding_jobs, "open_browser_with_options", noop)
+    monkeypatch.setattr(finding_jobs, "log_in", noop)
+    monkeypatch.setattr(finding_jobs, "select_dropdown_option", noop)
+    monkeypatch.setattr(finding_jobs, "get_job_by_index", noop)
+    # 起始页被重定向到 SEO 落地页，重试后仍在落地页
+    monkeypatch.setattr(
+        finding_jobs,
+        "get_current_url",
+        lambda: "https://www.zhipin.com/shenzhen/?city=101280600&seoRefer=index",
+    )
+    monkeypatch.setattr(finding_jobs, "get_tab", lambda: object())
+    monkeypatch.setattr(write_response.asyncio, "sleep", fast_sleep)
+    monkeypatch.setattr(browser_session, "human_pause", fast_sleep)
+    monkeypatch.setattr(browser_session, "sleep_with_browser_guard", fast_sleep)
+
+    async def fake_wait_stable(stable_for=1.5, timeout=20):
+        return True
+
+    monkeypatch.setattr(finding_jobs, "_wait_url_stable", fake_wait_stable)
+    monkeypatch.setattr(
+        gui_events, "emit", lambda kind, **payload: events.append((kind, payload))
+    )
+    monkeypatch.setattr(audit, "log_attempt", lambda **kwargs: None)
+
+    async def scenario():
+        await write_response.send_job_descriptions_to_chat(
+            usr_name="测试",
+            url="https://www.zhipin.com/web/geek/jobs?query=AI&city=101280600",
+            browser_type="chrome",
+            label="",
+            dry_run=False,
+        )
+
+    asyncio.run(scenario())
+
+    kinds = [(k, p) for k, p in events]
+    interventions = [p for k, p in kinds if k == "agent_intervene"]
+    assert any(
+        p.get("action") == "停止本轮巡航" for p in interventions
+    ), "SEO 落地页重定向重试失败必须明确停机广播"
+    # 绝不进入投递循环（不空转）
+    assert not any(kind == "job_processing" for kind, _ in kinds)
 
 
 def test_api_flow_redirect_blocked_falls_back_to_dom_flow(monkeypatch, tmp_path):

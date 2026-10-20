@@ -88,6 +88,11 @@ def test_auto_send_event_includes_match_explanation(monkeypatch):
             write_response.finding_jobs, "open_browser_with_options", noop
         )
         monkeypatch.setattr(write_response.finding_jobs, "log_in", noop)
+        monkeypatch.setattr(
+            write_response.finding_jobs,
+            "get_current_url",
+            lambda: "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
+        )
         monkeypatch.setattr(write_response.finding_jobs, "apply_page_filters", noop)
         monkeypatch.setattr(write_response.finding_jobs, "select_dropdown_option", noop)
         monkeypatch.setattr(write_response.finding_jobs, "get_job_by_index", get_job)
@@ -218,6 +223,12 @@ def _patch_browser(monkeypatch, *, get_jd, sent, sleeps):
     monkeypatch.setattr(write_response.finding_jobs, "select_dropdown_option", noop)
     monkeypatch.setattr(write_response.finding_jobs, "get_job_description_by_index", get_jd)
     monkeypatch.setattr(write_response.finding_jobs, "get_job_by_index", get_job)
+    # 2026-10-20 入口断言（SEO 落地页重定向防护）需要当前页 URL——桩为搜索页
+    monkeypatch.setattr(
+        write_response.finding_jobs,
+        "get_current_url",
+        lambda: "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
+    )
     monkeypatch.setattr(write_response.finding_jobs, "get_text_by_css", get_text)
     monkeypatch.setattr(write_response.finding_jobs, "click_by_xpath", click_contact)
     monkeypatch.setattr(write_response.finding_jobs, "click_stay_on_page_if_present", stay_on_page)
@@ -349,6 +360,11 @@ def test_review_mode_requires_fixed_greeting(monkeypatch):
         monkeypatch.delenv("BOSS_FIXED_GREETING", raising=False)
         monkeypatch.setattr(write_response.finding_jobs, "open_browser_with_options", noop)
         monkeypatch.setattr(write_response.finding_jobs, "log_in", noop)
+        monkeypatch.setattr(
+            write_response.finding_jobs,
+            "get_current_url",
+            lambda: "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
+        )
         monkeypatch.setattr(write_response.finding_jobs, "select_dropdown_option", noop)
         monkeypatch.setattr(write_response.finding_jobs, "get_job_description_by_index", get_jd)
         monkeypatch.setattr(write_response.finding_jobs, "get_text_by_css", get_text)
@@ -449,6 +465,11 @@ def test_auto_send_stops_when_daily_limit_already_reached(monkeypatch, tmp_path)
         monkeypatch.setenv("BOSS_SENT_LOG_FILE", str(sent_file))
         monkeypatch.setattr(write_response.finding_jobs, "open_browser_with_options", noop)
         monkeypatch.setattr(write_response.finding_jobs, "log_in", noop)
+        monkeypatch.setattr(
+            write_response.finding_jobs,
+            "get_current_url",
+            lambda: "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
+        )
         monkeypatch.setattr(write_response.finding_jobs, "apply_page_filters", noop)
         monkeypatch.setattr(write_response.finding_jobs, "select_dropdown_option", noop)
         monkeypatch.setattr(write_response.finding_jobs, "get_job_by_index", get_job)
@@ -480,6 +501,11 @@ def test_stop_on_captcha_raises_before_job_loop(monkeypatch):
         monkeypatch.setenv("BOSS_STOP_ON_CAPTCHA", "1")
         monkeypatch.setattr(write_response.finding_jobs, "open_browser_with_options", noop)
         monkeypatch.setattr(write_response.finding_jobs, "log_in", noop)
+        monkeypatch.setattr(
+            write_response.finding_jobs,
+            "get_current_url",
+            lambda: "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
+        )
         monkeypatch.setattr(write_response.finding_jobs, "apply_page_filters", noop)
         monkeypatch.setattr(write_response.finding_jobs, "select_dropdown_option", noop)
         monkeypatch.setattr(write_response.finding_jobs, "captcha_visible", captcha_visible)
@@ -535,6 +561,11 @@ def test_auto_send_clicks_stay_on_page_before_chat_input(monkeypatch):
         monkeypatch.setenv("BOSS_AUTO_SEND_MAX_SENT", "1")
         monkeypatch.setattr(write_response.finding_jobs, "open_browser_with_options", noop)
         monkeypatch.setattr(write_response.finding_jobs, "log_in", noop)
+        monkeypatch.setattr(
+            write_response.finding_jobs,
+            "get_current_url",
+            lambda: "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
+        )
         monkeypatch.setattr(write_response.finding_jobs, "select_dropdown_option", noop)
         monkeypatch.setattr(write_response.finding_jobs, "get_job_description_by_index", get_jd)
         _patch_job_postings(monkeypatch, {1: ("后端开发实习", "深圳 Go Redis MySQL")})

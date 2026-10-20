@@ -240,6 +240,33 @@ def _build_city_url(current_url: str, cities: list[str]) -> tuple[str, list[str]
     return urlunsplit(parts._replace(query=urlencode(params))), unknown
 
 
+def _canonical_search_url(cities: list[str]) -> str:
+    """从画像岗位词重建规范搜索页基地（2026-10-20 打包版实测事故）。
+
+    平台会把 ``/web/geek/jobs`` 重定向到 SEO 落地页（实测
+    ``/shenzhen/?city=101190400&seoRefer=index`` 形态）。在这种错误基地
+    上做参数手术 = 拼出"落地页+城市码"的无效 URL 还报告筛选成功，巡航
+    随后全程扫 0 像死机。换城/换词前基地不合法时，以 BOSS_LABEL 首个
+    岗位词 + 首个已知城市码重建规范搜索页。
+    无 BOSS_LABEL 时返回空串（调用方保持旧行为兜底）。
+    """
+    import os
+    from urllib.parse import quote
+
+    label = os.getenv("BOSS_LABEL", "").strip()
+    if not label:
+        return ""
+    from boss_zhipin.config.query_fission import split_search_keywords
+
+    keywords = split_search_keywords(label)
+    first_kw = keywords[0] if keywords else label
+    params = [f"query={quote(first_kw)}"]
+    known = [c for c in cities if c in BOSS_CITY_CODES]
+    if known:
+        params.append(f"city={BOSS_CITY_CODES[known[0]]}")
+    return f"https://www.zhipin.com/web/geek/jobs?{'&'.join(params)}"
+
+
 def _build_keyword_url(current_url: str, keyword: str) -> str:
     """把 query 参数整体替换为新岗位词，其余参数（city/degree/ka…）原样保留。
 
@@ -321,12 +348,25 @@ async def apply_city_url_filter(cities: list[str]) -> bool:
     # （/job_detail/xxx.html），直接在详情页 URL 上替换 city 会丢搜索词，
     # 拉回的岗位就不再是画像方向（2026-10-12 第七轮实测）。优先用当前 URL，
     # 不在搜索页时回退到最近一次成功应用的搜索页 URL。
-    current_url = finding_jobs.get_current_url()
+    browser_url = finding_jobs.get_current_url()
+    current_url = browser_url
     if "/web/geek/jobs" not in current_url:
         saved = str(_city_rotation_state.get("search_url") or "")
         if "/web/geek/jobs" in saved:
             current_url = saved
             log.info("当前不在搜索页，用记录的搜索页 URL 作为换城基准：%s", saved)
+        else:
+            # 2026-10-20 打包版实测事故：搜索页被平台重定向到 SEO 落地页
+            # （/shenzhen/?city=...&seoRefer=index）时，旧版在这类基地上做
+            # 参数手术——拼出"落地页+城市码"的无效 URL 还报告筛选成功，
+            # 巡航全程扫 0 像死机。错误基地绝不手术：用画像词重建规范搜索页。
+            canonical = _canonical_search_url(cities)
+            if canonical:
+                log.warning(
+                    "当前页面不是搜索页（%s），改用画像搜索词重建规范搜索页换城",
+                    current_url or "(空)",
+                )
+                current_url = canonical
     new_url, unknown = _build_city_url(current_url, cities)
     known = [c for c in cities if c in BOSS_CITY_CODES]
     if unknown:
@@ -337,7 +377,10 @@ async def apply_city_url_filter(cities: list[str]) -> bool:
     if not known:
         log.warning("城市筛选 URL 直填跳过：全部城市都没有已知代码：%s", ", ".join(cities))
         return False
-    if new_url == current_url:
+    # 2026-10-20 修复：与浏览器**实际停留页**比较，而不是手术基地——
+    # 基地被重建为规范搜索页时 new_url==基地会短路跳过导航，浏览器仍
+    # 停在落地页却报告"筛选成功"（实测事故的直接成因之一）。
+    if new_url == browser_url:
         log.info("城市筛选 URL 无变化（城市组合与当前一致）：%s", ", ".join(known))
         return True
     try:

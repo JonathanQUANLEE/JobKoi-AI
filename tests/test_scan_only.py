@@ -64,6 +64,11 @@ def test_scan_only_does_not_generate_or_send(monkeypatch):
         _patch_no_scroll(monkeypatch)
         monkeypatch.setattr(write_response.finding_jobs, "open_browser_with_options", noop)
         monkeypatch.setattr(write_response.finding_jobs, "log_in", noop)
+        monkeypatch.setattr(
+            write_response.finding_jobs,
+            "get_current_url",
+            lambda: "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
+        )
         monkeypatch.setattr(write_response.finding_jobs, "select_dropdown_option", noop)
         _patch_job_description(monkeypatch, get_jd)
         monkeypatch.setattr(
@@ -128,6 +133,11 @@ def test_scan_only_stops_at_max_jobs(monkeypatch):
         _patch_no_scroll(monkeypatch)
         monkeypatch.setattr(write_response.finding_jobs, "open_browser_with_options", noop)
         monkeypatch.setattr(write_response.finding_jobs, "log_in", noop)
+        monkeypatch.setattr(
+            write_response.finding_jobs,
+            "get_current_url",
+            lambda: "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
+        )
         monkeypatch.setattr(write_response.finding_jobs, "select_dropdown_option", noop)
         _patch_job_description(monkeypatch, get_jd)
         monkeypatch.setattr(write_response.finding_jobs, "get_text_by_css", get_text)
@@ -177,6 +187,11 @@ def test_scan_only_scrolls_when_current_loaded_jobs_end(monkeypatch):
         monkeypatch.setenv("BOSS_SCAN_MAX_JOBS", "2")
         monkeypatch.setattr(write_response.finding_jobs, "open_browser_with_options", noop)
         monkeypatch.setattr(write_response.finding_jobs, "log_in", noop)
+        monkeypatch.setattr(
+            write_response.finding_jobs,
+            "get_current_url",
+            lambda: "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
+        )
         monkeypatch.setattr(write_response.finding_jobs, "select_dropdown_option", noop)
         _patch_job_description(monkeypatch, get_jd)
         monkeypatch.setattr(write_response.finding_jobs, "get_text_by_css", get_text)
@@ -240,6 +255,11 @@ def test_scan_only_retries_sixteenth_card_after_scroll_loads_more(monkeypatch):
         monkeypatch.setenv("BOSS_SCAN_REQUIRED_TERMS", "AI")
         monkeypatch.setattr(write_response.finding_jobs, "open_browser_with_options", noop)
         monkeypatch.setattr(write_response.finding_jobs, "log_in", noop)
+        monkeypatch.setattr(
+            write_response.finding_jobs,
+            "get_current_url",
+            lambda: "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
+        )
         monkeypatch.setattr(write_response.finding_jobs, "select_dropdown_option", noop)
         monkeypatch.setattr(write_response.finding_jobs, "get_job_by_index", get_job)
         monkeypatch.setattr(write_response.finding_jobs, "get_text_by_css", get_text)
@@ -315,6 +335,11 @@ def test_scan_only_waits_at_loaded_boundary_instead_of_skipping_to_next_index(mo
         monkeypatch.setenv("BOSS_SCAN_REQUIRED_TERMS", "AI")
         monkeypatch.setattr(write_response.finding_jobs, "open_browser_with_options", noop)
         monkeypatch.setattr(write_response.finding_jobs, "log_in", noop)
+        monkeypatch.setattr(
+            write_response.finding_jobs,
+            "get_current_url",
+            lambda: "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
+        )
         monkeypatch.setattr(write_response.finding_jobs, "select_dropdown_option", noop)
         monkeypatch.setattr(write_response.finding_jobs, "get_job_by_index", get_job)
         monkeypatch.setattr(write_response.finding_jobs, "get_text_by_css", get_text)
@@ -366,6 +391,11 @@ def test_start_url_skips_label_selection_to_preserve_manual_filters(monkeypatch)
         monkeypatch.setenv("BOSS_SCAN_MAX_JOBS", "1")
         monkeypatch.setattr(write_response.finding_jobs, "open_browser_with_options", noop)
         monkeypatch.setattr(write_response.finding_jobs, "log_in", noop)
+        monkeypatch.setattr(
+            write_response.finding_jobs,
+            "get_current_url",
+            lambda: "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
+        )
         monkeypatch.setattr(write_response.finding_jobs, "select_dropdown_option", select_label)
         monkeypatch.setattr(write_response.finding_jobs, "get_job_by_index", get_job)
         monkeypatch.setattr(write_response.finding_jobs, "scroll_to_load_more_jobs", no_scroll)
@@ -436,6 +466,11 @@ def test_use_current_page_skips_open_url_and_page_filters(monkeypatch):
         monkeypatch.setattr(write_response.finding_jobs, "get_current_url", lambda: "https://www.zhipin.com/web/geek/jobs")
         monkeypatch.setattr(write_response.finding_jobs, "apply_page_filters", apply_filters)
         monkeypatch.setattr(write_response.finding_jobs, "log_in", noop)
+        monkeypatch.setattr(
+            write_response.finding_jobs,
+            "get_current_url",
+            lambda: "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
+        )
         monkeypatch.setattr(write_response.finding_jobs, "select_dropdown_option", noop)
         monkeypatch.setattr(write_response.finding_jobs, "get_job_by_index", get_job)
         monkeypatch.setattr(write_response.finding_jobs, "get_loaded_job_count", get_loaded_job_count)
@@ -487,6 +522,11 @@ def test_already_contacted_job_is_logged_with_button_state(monkeypatch, tmp_path
         monkeypatch.setattr(write_response.finding_jobs, "open_browser_with_options", noop)
         monkeypatch.setattr(write_response.finding_jobs, "get_current_url", lambda: "")
         monkeypatch.setattr(write_response.finding_jobs, "log_in", noop)
+        monkeypatch.setattr(
+            write_response.finding_jobs,
+            "get_current_url",
+            lambda: "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
+        )
         monkeypatch.setattr(write_response.finding_jobs, "apply_page_filters", noop)
         monkeypatch.setattr(write_response.finding_jobs, "select_dropdown_option", noop)
         monkeypatch.setattr(write_response.finding_jobs, "get_job_by_index", get_job)
@@ -555,6 +595,11 @@ def test_scan_only_skips_duplicate_job_keys(monkeypatch):
         monkeypatch.setenv("BOSS_SCAN_REQUIRED_TERMS", "Go")
         monkeypatch.setattr(write_response.finding_jobs, "open_browser_with_options", noop)
         monkeypatch.setattr(write_response.finding_jobs, "log_in", noop)
+        monkeypatch.setattr(
+            write_response.finding_jobs,
+            "get_current_url",
+            lambda: "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
+        )
         monkeypatch.setattr(write_response.finding_jobs, "select_dropdown_option", noop)
         monkeypatch.setattr(write_response.finding_jobs, "get_job_by_index", get_job)
         monkeypatch.setattr(write_response.finding_jobs, "get_text_by_css", get_text)
@@ -637,6 +682,11 @@ def test_scan_only_skips_when_conditions_do_not_match(monkeypatch):
         _patch_no_scroll(monkeypatch)
         monkeypatch.setattr(write_response.finding_jobs, "open_browser_with_options", noop)
         monkeypatch.setattr(write_response.finding_jobs, "log_in", noop)
+        monkeypatch.setattr(
+            write_response.finding_jobs,
+            "get_current_url",
+            lambda: "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
+        )
         monkeypatch.setattr(write_response.finding_jobs, "select_dropdown_option", noop)
         _patch_job_description(monkeypatch, get_jd)
         monkeypatch.setattr(write_response.finding_jobs, "get_text_by_css", get_text)
@@ -697,6 +747,11 @@ def test_profile_state_skips_seen_job_and_logs_skip(monkeypatch, tmp_path):
         monkeypatch.setenv("BOSS_SKIPPED_LOG_FILE", str(skipped_file))
         monkeypatch.setattr(write_response.finding_jobs, "open_browser_with_options", noop)
         monkeypatch.setattr(write_response.finding_jobs, "log_in", noop)
+        monkeypatch.setattr(
+            write_response.finding_jobs,
+            "get_current_url",
+            lambda: "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
+        )
         monkeypatch.setattr(write_response.finding_jobs, "select_dropdown_option", noop)
         monkeypatch.setattr(write_response.finding_jobs, "apply_page_filters", noop)
         monkeypatch.setattr(write_response.finding_jobs, "get_job_by_index", get_job)
@@ -756,6 +811,11 @@ def test_profile_state_logs_seen_and_scan_match(monkeypatch, tmp_path):
         monkeypatch.setenv("BOSS_SENT_LOG_FILE", str(sent_file))
         monkeypatch.setattr(write_response.finding_jobs, "open_browser_with_options", noop)
         monkeypatch.setattr(write_response.finding_jobs, "log_in", noop)
+        monkeypatch.setattr(
+            write_response.finding_jobs,
+            "get_current_url",
+            lambda: "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
+        )
         monkeypatch.setattr(write_response.finding_jobs, "select_dropdown_option", noop)
         monkeypatch.setattr(write_response.finding_jobs, "apply_page_filters", noop)
         monkeypatch.setattr(write_response.finding_jobs, "get_job_by_index", get_job)

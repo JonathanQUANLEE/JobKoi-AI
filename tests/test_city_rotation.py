@@ -56,6 +56,54 @@ def _patch_url_filter_recorder(monkeypatch, result: bool = True) -> list[list[st
 # ---------- 纯函数：分块与洗牌 ----------
 
 
+def test_apply_city_url_filter_rebuilds_canonical_on_seo_base(monkeypatch):
+    """2026-10-20 打包版实测事故：搜索页被平台重定向到 SEO 落地页
+    （/shenzhen/?city=...&seoRefer=index）时，换城绝不能在错误基地上做
+    参数手术——必须用画像词重建规范搜索页（/web/geek/jobs?query=...）。
+    """
+    from boss_zhipin.website_oper import finding_jobs
+
+    _reset_rotation_state()
+    _city_rotation_state["search_url"] = ""  # 无历史基准（新装用户形态）
+    monkeypatch.setenv("BOSS_LABEL", "AI应用工程师，全栈开发")
+
+    navigated: list[str] = []
+
+    class _FakeTab:
+        async def get(self, u):
+            navigated.append(u)
+            return None
+
+    async def fake_wait_stable(stable_for=1.5, timeout=20):
+        return True
+
+    monkeypatch.setattr(finding_jobs, "_tab", _FakeTab())
+    monkeypatch.setattr(finding_jobs, "get_tab", lambda: _FakeTab())
+    monkeypatch.setattr(
+        finding_jobs,
+        "get_current_url",
+        lambda: "https://www.zhipin.com/shenzhen/?city=101280600&seoRefer=index",
+    )
+    monkeypatch.setattr(finding_jobs, "_wait_url_stable", fake_wait_stable)
+
+    ok = asyncio.run(
+        page_filter_ctrl.apply_city_url_filter(["苏州", "昆山"])
+    )
+
+    assert ok is True
+    assert len(navigated) == 1
+    # 规范搜索页基地 + 画像首词 + 苏州码；昆山（不在代码表）不进 URL
+    assert "/web/geek/jobs" in navigated[0]
+    assert "city=101190400" in navigated[0]
+    assert "query=" in navigated[0]
+    assert "shenzhen" not in navigated[0], "绝不能在 SEO 落地页基地上拼 URL"
+    # 成功后记录的基准也是规范搜索页（后续换城的锚点）
+    assert "/web/geek/jobs" in _city_rotation_state["search_url"]
+
+
+
+
+
 def test_get_platform_city_chunks():
     cities_small = ["北京", "上海", "广州"]
     chunks_small = get_platform_city_chunks(cities_small, BOSS_MAX_CITIES_PER_BATCH)

@@ -135,8 +135,50 @@ async def send_job_descriptions_to_chat(
             _page_filters_for_click(cfg.page_filters),
             emit_event=lambda payload: events.emit("page_filter", **payload),
         )
-        # 筛选点击会更新 URL——用最新的 URL 判定走哪条流
-        actual_url = finding_jobs.get_current_url()
+
+    # 2026-10-20 打包版实测事故（图证：浏览器停在 /shenzhen/ SEO 落地页，
+    # 巡航全程扫 0 像死机）：平台会把 /web/geek/jobs 重定向到 SEO 落地页。
+    # 开跑前必须断言站在可解析的求职端页面上——不在就导航回起始页重试
+    # 一次；仍被重定向则明确停机提示，绝不带病僵尸空转。
+    if "/web/geek/" not in (finding_jobs.get_current_url() or ""):
+        log.warning(
+            "当前页面不是求职端页面（%s），疑似被平台重定向到落地页，导航回起始页重试",
+            finding_jobs.get_current_url() or "(空)",
+        )
+        try:
+            from boss_zhipin.website_oper.core.cdp_guard import cdp_call
+
+            retry_tab = finding_jobs.get_tab()
+            if retry_tab is not None:
+                await cdp_call(retry_tab.get(url), timeout=30, label="回起始页重试")
+                await finding_jobs._wait_url_stable(stable_for=1.5, timeout=20)
+        except Exception as e:  # noqa: BLE001
+            log.warning("导航回起始页失败：%s", e)
+        if "/web/geek/" not in (finding_jobs.get_current_url() or ""):
+            events.emit(
+                "agent_intervene",
+                platform="boss",
+                level="error",
+                title="起始页被平台重定向",
+                action="停止本轮巡航",
+                detail=(
+                    "平台把岗位搜索页重定向到了落地页（疑似会话风控）。"
+                    "请先在受控浏览器中手动完成一次职位搜索，或稍后再发起巡航。"
+                ),
+            )
+            log.warning("起始页仍被重定向到落地页，停止本轮巡航（不空转）")
+            return
+        events.emit(
+            "agent_intervene",
+            platform="boss",
+            level="recovered",
+            title="起始页重定向已恢复",
+            action="自动恢复",
+            detail="检测到搜索页被平台重定向到落地页，已自动导航回搜索页继续巡航",
+        )
+
+    # 筛选点击会更新 URL——用最新的 URL 判定走哪条流
+    actual_url = finding_jobs.get_current_url()
 
     if (
         _use_search_api_flow(actual_url)

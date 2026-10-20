@@ -99,6 +99,11 @@ def test_review_mode_uses_gui_decision_without_terminal_input(monkeypatch):
             write_response.finding_jobs, "open_browser_with_options", noop
         )
         monkeypatch.setattr(write_response.finding_jobs, "log_in", noop)
+        monkeypatch.setattr(
+            write_response.finding_jobs,
+            "get_current_url",
+            lambda: "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
+        )
         monkeypatch.setattr(write_response.finding_jobs, "apply_page_filters", noop)
         monkeypatch.setattr(write_response.finding_jobs, "select_dropdown_option", noop)
         monkeypatch.setattr(write_response.finding_jobs, "get_job_by_index", get_job)

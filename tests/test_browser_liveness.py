@@ -55,7 +55,12 @@ def _mock_common_browser_flow(monkeypatch, *, get_job) -> None:
     monkeypatch.setattr(fj, "log_in", noop)
     monkeypatch.setattr(fj, "apply_page_filters", noop)
     monkeypatch.setattr(fj, "select_dropdown_option", noop)
-    monkeypatch.setattr(fj, "get_current_url", lambda: "")
+    # 2026-10-20 入口断言（SEO 落地页重定向防护）：当前页须是求职端搜索页
+    monkeypatch.setattr(
+        fj,
+        "get_current_url",
+        lambda: "https://www.zhipin.com/web/geek/job-recommend?ka=header-job-recommend",
+    )
     monkeypatch.setattr(fj, "get_job_by_index", get_job)
     monkeypatch.setattr(fj, "scroll_to_load_more_jobs", no_scroll)
     monkeypatch.setattr(fj, "click_next_page_if_present", no_next_page)
