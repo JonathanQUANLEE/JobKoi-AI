@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 客户端 LocalStorage 版本隔离守卫
  *
  * 解决问题：
@@ -16,7 +16,7 @@
 
 // 发版时必须同步（由 storageSanitizer.test.ts 的版本守卫测试强制校验，
 // 与 package.json version 不一致时 vitest 会红）。
-export const CURRENT_STORAGE_VERSION = "0.8.2";
+export const CURRENT_STORAGE_VERSION = "0.8.3";
 const VERSION_KEY = "jobkoi_app_storage_version";
 const CLIENT_VERSION_KEY = "jobkoi_client_version";
 
