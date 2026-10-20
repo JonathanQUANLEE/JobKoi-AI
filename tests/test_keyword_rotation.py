@@ -408,7 +408,7 @@ def test_unit_quota_rotates_mid_page(monkeypatch):
         lambda selector, timeout=3: _ret("立即沟通"),
     )
     monkeypatch.setattr(
-        search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _ret(True)
+        search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _ret("ok")
     )
     monkeypatch.setattr(
         search_api_flow, "_extract_detail_jd", lambda: _ret("岗位职责：负责AI应用开发。")

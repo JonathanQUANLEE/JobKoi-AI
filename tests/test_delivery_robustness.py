@@ -23,7 +23,7 @@ from boss_zhipin import audit, cli
 from boss_zhipin.gui import events as gui_events
 from boss_zhipin.website_oper import finding_jobs, write_response
 from boss_zhipin.website_oper.core import browser_session
-from boss_zhipin.website_oper.dispatch import loop_actions, loop_modes
+from boss_zhipin.website_oper.dispatch import loop_actions, loop_modes, runner_loop
 
 FIXED_GREETING = "您好，我是一名计科专业的大三学生，熟悉Go后端和RAG应用开发。"
 
@@ -425,3 +425,64 @@ def test_dry_run_does_not_burn_seen_ledger(monkeypatch, tmp_path):
         kind == "letter_sent" and p.get("status") == "dry_run" for kind, p in events
     )
     assert _read_jsonl(seen_file) == [], "dry-run 演练不得写入 seen_jobs.jsonl"
+
+
+def test_api_flow_redirect_blocked_falls_back_to_dom_flow(monkeypatch, tmp_path):
+    """2026-10-20 朋友实测事故的调度层兜底：API 直读流被详情页重定向熔断后，
+    runner 必须自动降级 DOM 稳妥模式继续投递（广播 agent_intervene，
+    导航回搜索页，DOM 流无缝接管），而不是让整轮巡航空转结束。
+    """
+    _set_loop_env(monkeypatch, tmp_path)
+    events: list[tuple[str, dict]] = []
+
+    _patch_loop_browser(monkeypatch)
+    monkeypatch.setattr(
+        gui_events, "emit", lambda kind, **payload: events.append((kind, payload))
+    )
+    monkeypatch.setattr(audit, "log_attempt", lambda **kwargs: None)
+
+    # API 流进入条件：当前 URL 是搜索页 + tab 存活
+    monkeypatch.setattr(
+        finding_jobs,
+        "get_current_url",
+        lambda: "https://www.zhipin.com/web/geek/jobs?query=AI&city=101280600",
+    )
+    monkeypatch.setattr(finding_jobs, "get_tab", lambda: object())
+    monkeypatch.setattr(finding_jobs, "is_browser_alive", lambda: True)
+
+    async def fake_wait_stable(stable_for=1.5, timeout=20):
+        return True
+
+    monkeypatch.setattr(finding_jobs, "_wait_url_stable", fake_wait_stable)
+
+    # 模拟 API 流被连续重定向熔断
+    async def fake_api_flow(**kwargs):
+        return "detail_redirect_blocked"
+
+    monkeypatch.setattr(runner_loop, "_run_search_api_flow", fake_api_flow)
+
+    # DOM 流接管后的发送动作用桩（本测试只验证降级链路接线）
+    async def success_click(response):
+        return None
+
+    monkeypatch.setattr(loop_actions, "click_contact_and_send_response", success_click)
+
+    async def scenario():
+        await write_response.send_job_descriptions_to_chat(
+            usr_name="测试",
+            url="https://www.zhipin.com/web/geek/jobs?query=AI&city=101280600",
+            browser_type="chrome",
+            label="",
+            dry_run=False,
+        )
+
+    asyncio.run(scenario())
+
+    kinds = [(k, p) for k, p in events]
+    # 用户必须看到明确的降级播报
+    interventions = [p for k, p in kinds if k == "agent_intervene"]
+    assert any(
+        p.get("action") == "自动切换稳妥模式" for p in interventions
+    ), "熔断降级必须广播 agent_intervene（自动切换稳妥模式）"
+    # DOM 流接管后正常收尾（feed_exhausted），而不是直接静默结束
+    assert any(kind == "feed_exhausted" for kind, _ in kinds)

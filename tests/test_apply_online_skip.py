@@ -79,7 +79,7 @@ def _run_single_job(monkeypatch, button_text: str):
         finding_jobs, "click_by_xpath", lambda xp, timeout=10: _async_value(True, clicks, xp)
     )
     monkeypatch.setattr(
-        search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _async_value(True)
+        search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _async_value("ok")
     )
     monkeypatch.setattr(
         search_api_flow, "_extract_detail_jd", lambda: _async_value("岗位职责：负责AI应用开发与落地。")
@@ -151,7 +151,7 @@ def test_api_flow_normal_button_still_sends(monkeypatch):
         finding_jobs, "get_text_by_css", lambda selector, timeout=3: _async_value("立即沟通")
     )
     monkeypatch.setattr(
-        search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _async_value(True)
+        search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _async_value("ok")
     )
     monkeypatch.setattr(
         search_api_flow, "_extract_detail_jd", lambda: _async_value("岗位职责：负责AI应用开发与落地。")
@@ -223,7 +223,7 @@ def test_full_page_apply_online_jobs_do_not_halt_flow(monkeypatch):
         finding_jobs, "get_text_by_css", lambda selector, timeout=3: _async_value("立即网申")
     )
     monkeypatch.setattr(
-        search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _async_value(True)
+        search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _async_value("ok")
     )
     monkeypatch.setattr(
         search_api_flow, "_extract_detail_jd", lambda: _async_value("岗位职责：负责AI应用开发与落地。")
@@ -271,7 +271,7 @@ def _run_single_job_with(button_setup, monkeypatch):
     )
     button_setup(monkeypatch)
     monkeypatch.setattr(
-        search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _async_value(True)
+        search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _async_value("ok")
     )
     monkeypatch.setattr(
         search_api_flow, "_extract_detail_jd", lambda: _async_value("岗位职责：负责AI应用开发与落地。")
@@ -313,6 +313,12 @@ def test_api_flow_no_button_emits_job_skipped_event(monkeypatch):
         ms.setattr(
             finding_jobs, "get_text_by_css", lambda selector, timeout=3: _async_value("")
         )
+        # 停留页确为详情页（排除迟到重定向分支），按钮是"真缺失"
+        ms.setattr(
+            finding_jobs,
+            "get_current_url",
+            lambda: "https://www.zhipin.com/job_detail/e-silent.html",
+        )
         ms.setattr(
             finding_jobs, "_xpath_safe", lambda xp, timeout=1.5: _async_value([])
         )
@@ -348,7 +354,7 @@ def test_api_flow_detail_open_failed_emits_job_skipped_event(monkeypatch):
         gui_events, "emit", lambda kind, **payload: collected.append((kind, payload))
     )
     monkeypatch.setattr(
-        search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _async_value(False)
+        search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _async_value("open_failed")
     )
     from boss_zhipin.website_oper.core import browser_session
 
@@ -381,6 +387,150 @@ def test_api_flow_detail_open_failed_emits_job_skipped_event(monkeypatch):
         k == "job_skipped" and p.get("reason") == "detail_open_failed"
         for k, p in kinds
     ), "detail_open_failed 岗位静默消失——必须广播 job_skipped"
+
+
+# ---------------------------------------------------------------------------
+# 3.6 反爬重定向链路（2026-10-20 朋友实测：详情页直开 2~3s 被踢回官网）
+#
+# 平台对"非点击链路直开详情页"有反爬重定向。契约：
+# 1. _open_job_detail_page 打开后校验停留 URL——被踢离详情页返回
+#    "redirected"（与打不开"open_failed"严格区分）；
+# 2. _process_single_api_job 按 detail_redirect 独立分类广播 job_skipped，
+#    并回滚 seen（降级 DOM 流后仍可投）；
+# 3. _run_search_api_flow 连续 3 个重定向熔断，返回 detail_redirect_blocked
+#    交给调度层自动降级 DOM 稳妥模式。
+# ---------------------------------------------------------------------------
+
+
+def test_open_job_detail_page_detects_redirect(monkeypatch):
+    """打开后停留页不含 job_detail = 被平台重定向，返回 redirected。"""
+
+    class _FakeTab:
+        async def get(self, url):
+            return None
+
+    async def fake_pause(a, b):
+        return None
+
+    monkeypatch.setattr(finding_jobs, "get_tab", lambda: _FakeTab())
+    monkeypatch.setattr(
+        "boss_zhipin.website_oper.core.browser_session.human_pause", fake_pause
+    )
+    # 实测形态：详情页被踢回官网首页（郑州 IP 默认页）
+    monkeypatch.setattr(
+        finding_jobs, "get_current_url", lambda: "https://www.zhipin.com/"
+    )
+    status = asyncio.run(
+        search_api_flow._open_job_detail_page("https://www.zhipin.com/job_detail/x.html")
+    )
+    assert status == "redirected"
+
+    # 对照：停留在详情页 = ok
+    monkeypatch.setattr(
+        finding_jobs,
+        "get_current_url",
+        lambda: "https://www.zhipin.com/job_detail/x.html",
+    )
+    status = asyncio.run(
+        search_api_flow._open_job_detail_page("https://www.zhipin.com/job_detail/x.html")
+    )
+    assert status == "ok"
+
+
+def test_single_api_job_redirect_classified_and_broadcast(monkeypatch):
+    """被重定向的岗位按 detail_redirect 广播（不再是笼统的 no_button）。"""
+    collected: list[tuple[str, dict]] = []
+    monkeypatch.setattr(
+        gui_events, "emit", lambda kind, **payload: collected.append((kind, payload))
+    )
+    monkeypatch.setattr(
+        search_api_flow,
+        "_open_job_detail_page",
+        lambda url, timeout=30: _async_value("redirected"),
+    )
+    monkeypatch.setattr(finding_jobs, "get_current_url", lambda: "https://www.zhipin.com/")
+
+    async def run():
+        return await search_api_flow._process_single_api_job(
+            api_job=job_api.parse_api_job(_api_job("e-redirect")),
+            seen_job_keys=set(),
+            seen_jobs_path=None,
+            sent_log_path=None,
+            skipped_log_path=None,
+            filters={},
+            boss_active_filter_enabled=False,
+            stop_on_captcha=False,
+            scan_only=False,
+            dry_run=False,
+            greeting=GREETING,
+            sent_count=0,
+            daily_sent_count=0,
+            delay_min=0.1,
+            delay_max=0.2,
+        )
+
+    status = asyncio.run(run())
+    assert status == ("detail_redirect", 0, 0)
+    kinds = [(k, p) for k, p in collected]
+    assert any(
+        k == "job_skipped" and p.get("reason") == "detail_redirect" for k, p in kinds
+    ), "重定向必须独立分类广播，让调度层与用户都能看出真实故障"
+
+
+def test_api_flow_halts_after_consecutive_redirects(monkeypatch):
+    """连续 3 个详情页重定向触发熔断，返回 detail_redirect_blocked 降级信号。"""
+    jobs = [job_api.parse_api_job(_api_job(f"e-{i}")) for i in range(8)]
+    collected: list[tuple[str, dict]] = []
+    sleeps: list[float] = []
+
+    async def fake_fetch(tab, query, page):
+        return jobs if page == 1 else []
+
+    monkeypatch.setattr(
+        gui_events, "emit", lambda kind, **payload: collected.append((kind, payload))
+    )
+    monkeypatch.setattr(job_api, "fetch_search_page", fake_fetch)
+    monkeypatch.setattr(finding_jobs, "get_tab", lambda: object())
+    monkeypatch.setattr(search_api_flow, "_state_path", lambda name: None)
+    monkeypatch.setattr(search_api_flow, "_profile_filters", lambda: {})
+    monkeypatch.setattr(search_api_flow, "_page_filters", lambda: {})
+    monkeypatch.setattr(search_api_flow, "_sent_today_count", lambda path, profile: 0)
+    monkeypatch.setattr(search_api_flow, "_auto_send_max_sent", lambda: 10)
+    monkeypatch.setattr(search_api_flow, "_auto_send_daily_limit", lambda: 10)
+    monkeypatch.setattr(
+        search_api_flow.asyncio, "sleep", lambda s: _async_value(None, sleeps, s)
+    )
+    from boss_zhipin.website_oper.core import browser_session
+
+    monkeypatch.setattr(
+        browser_session, "sleep_with_browser_guard", lambda s, chunk=2.0: _async_value(None, sleeps, s)
+    )
+    monkeypatch.setattr(browser_session, "human_pause", lambda a, b: _async_value(None, sleeps, a))
+    # 每个详情页都被平台重定向
+    monkeypatch.setattr(
+        search_api_flow,
+        "_open_job_detail_page",
+        lambda url, timeout=30: _async_value("redirected"),
+    )
+    monkeypatch.setattr(finding_jobs, "get_current_url", lambda: "https://www.zhipin.com/")
+    monkeypatch.delenv("BOSS_LABEL", raising=False)
+
+    async def run():
+        return await search_api_flow._run_search_api_flow(
+            usr_name="测试",
+            url=ENTRY_URL,
+            dry_run=False,
+            scan_only=False,
+            greeting=GREETING,
+        )
+
+    stop_reason = asyncio.run(run())
+    assert stop_reason == "detail_redirect_blocked"
+    summaries = [p for k, p in collected if k == "api_flow_finished"]
+    assert len(summaries) == 1
+    assert summaries[0]["stop_reason"] == "detail_redirect_blocked"
+    # 第 3 个重定向即熔断，绝不满 8 个空烧（阅读停顿 6~15s/岗）
+    assert summaries[0]["skipped_redirects"] == 3
 
 
 # ---------------------------------------------------------------------------

@@ -103,7 +103,7 @@ def test_zero_run_max_runs_without_early_stop(monkeypatch):
     monkeypatch.setenv("BOSS_AUTO_SEND_MAX_SENT", "0")
     monkeypatch.setattr(search_api_flow, "_auto_send_daily_limit", lambda: None)
     monkeypatch.setattr(search_api_flow, "_read_seen_job_keys", lambda path: set())
-    monkeypatch.setattr(search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _ret(True))
+    monkeypatch.setattr(search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _ret("ok"))
     monkeypatch.setattr(search_api_flow, "_extract_detail_jd", lambda: _ret("岗位职责：负责AI应用开发。"))
     monkeypatch.setattr(finding_jobs, "get_text_by_css", lambda s, timeout=3: _ret("立即沟通"))
     monkeypatch.delenv("BOSS_LABEL", raising=False)

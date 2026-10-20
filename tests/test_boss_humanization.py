@@ -77,11 +77,17 @@ def test_open_job_detail_page_reading_pause(monkeypatch):
             return None
 
     monkeypatch.setattr(finding_jobs, "get_tab", lambda: _FakeTab())
+    # 2026-10-20 重定向检测契约：停留页 URL 须含 job_detail 才算打开成功
+    monkeypatch.setattr(
+        finding_jobs,
+        "get_current_url",
+        lambda: "https://www.zhipin.com/job_detail/x.html",
+    )
 
-    ok = asyncio.run(
+    status = asyncio.run(
         search_api_flow._open_job_detail_page("https://www.zhipin.com/job_detail/x.html")
     )
-    assert ok is True
+    assert status == "ok"
     assert len(recorded) == 1
     assert 6.0 <= recorded[0] <= 15.0
 

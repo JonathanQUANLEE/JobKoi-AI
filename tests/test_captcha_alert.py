@@ -59,7 +59,7 @@ def _run_single_job(monkeypatch, *, jd_impl):
         finding_jobs, "get_text_by_css", lambda selector, timeout=3: _ret("立即沟通")
     )
     monkeypatch.setattr(
-        search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _ret(True)
+        search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _ret("ok")
     )
     monkeypatch.setattr(search_api_flow, "_extract_detail_jd", jd_impl)
     monkeypatch.setattr(finding_jobs, "captcha_visible", lambda: _ret(False))

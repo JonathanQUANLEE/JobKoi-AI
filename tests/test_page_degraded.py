@@ -64,7 +64,7 @@ def _run_single_job(monkeypatch, *, jd_text: str, jd_health: dict, captcha: bool
         finding_jobs, "get_text_by_css", lambda selector, timeout=3: _ret("立即沟通")
     )
     monkeypatch.setattr(
-        search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _ret(True)
+        search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _ret("ok")
     )
     monkeypatch.setattr(search_api_flow, "_extract_detail_jd", lambda: _ret(jd_text))
     monkeypatch.setattr(finding_jobs, "captcha_visible", lambda: _ret(captcha))
@@ -175,7 +175,7 @@ def test_flow_halts_on_consecutive_degraded_pages(monkeypatch):
     monkeypatch.setattr(search_api_flow, "_auto_send_max_sent", lambda: None)
     monkeypatch.setattr(search_api_flow, "_auto_send_daily_limit", lambda: None)
     monkeypatch.setattr(search_api_flow, "_read_seen_job_keys", lambda path: set())
-    monkeypatch.setattr(search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _ret(True))
+    monkeypatch.setattr(search_api_flow, "_open_job_detail_page", lambda url, timeout=30: _ret("ok"))
     # 全部详情页取不到 JD（模拟风控降级），验证码探测不命中
     monkeypatch.setattr(search_api_flow, "_extract_detail_jd", lambda: _ret(""))
     monkeypatch.setattr(finding_jobs, "captcha_visible", lambda: _ret(False))

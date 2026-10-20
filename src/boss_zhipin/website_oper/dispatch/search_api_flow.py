@@ -139,14 +139,24 @@ def _can_prescreen_by_title(filters: dict[str, Any]) -> bool:
     return True
 
 
-async def _open_job_detail_page(url: str, timeout: float = 30) -> bool:
+async def _open_job_detail_page(url: str, timeout: float = 30) -> str:
+    """打开岗位详情页，返回打开结果状态。
+
+    返回值（2026-10-20 反爬重定向实测事故改造，原为 bool）：
+    - "ok"           ：成功停留在详情页；
+    - "open_failed"  ：导航本身失败（超时/无 tab）——旧 False 语义；
+    - "redirected"   ：平台把页面重定向走了（实测：详情页直开 2~3 秒被
+                       踢回官网首页/类目页——BOSS 对非点击链路的直开访问
+                       有反爬限制）。此时按钮/JD 都不存在，再探测纯属
+                       空烧，调用方应按重定向分类而非笼统 no_button。
+    """
     from boss_zhipin.website_oper import finding_jobs
     from boss_zhipin.website_oper.core.browser_session import human_pause
     from boss_zhipin.website_oper.core.cdp_guard import cdp_call
 
     tab = finding_jobs.get_tab()
     if tab is None or not url:
-        return False
+        return "open_failed"
     try:
         # 2026-10-18 事故加固：tab.get 内部是 CDP await 链，页面被风控 JS
         # 卡死时挂起不返回；wait_for 版本会被 nodriver 内部清理链拖死，
@@ -154,12 +164,23 @@ async def _open_job_detail_page(url: str, timeout: float = 30) -> bool:
         await cdp_call(tab.get(url), timeout=timeout, label="tab.get 详情页")
     except Exception as e:
         log.warning("打开详情页失败 %s: %s", url, e)
-        return False
+        return "open_failed"
     # 拟人化"阅读"停顿（2026-10-15 三平台封号复盘：JobPilot——人类在
     # 新页面行动前有 reading pause；ApplyGoat——人扫一个岗 30s、细读
     # 3min）。旧固定 sleep(2) 秒开秒关详情页是高频访问画像的直接来源。
     await human_pause(6.0, 15.0)
-    return True
+    # 重定向检测（2026-10-20 朋友实测）：详情页直开后被平台 JS 踢走，
+    # 实测发生在加载后 2~3 秒——阅读停顿（6~15s）结束时重定向早已完成，
+    # 此刻 URL 是可靠的判据。停留页不含 job_detail = 被重定向。
+    current = finding_jobs.get_current_url()
+    if "job_detail" not in current:
+        log.warning(
+            "详情页被平台重定向（疑似反爬限制直开访问）：%s → %s",
+            url,
+            current or "(空)",
+        )
+        return "redirected"
+    return "ok"
 
 
 async def _extract_detail_jd() -> str:
@@ -193,6 +214,11 @@ async def _send_greeting_on_detail_page(greeting: str) -> str:
         # 网申按钮与沟通按钮同类名（btn-startchat）的形态：点击前的最后防线。
         return "apply_online"
     if not button_text:
+        # 2026-10-20 迟到重定向检测：部分重定向发生在打开检查之后（页面
+        # 加载慢/JS 延迟踢人）。按钮读不到时先看 URL——若已被踢离详情页，
+        # 按 detail_redirect 分类，不再误报 no_button。
+        if "job_detail" not in finding_jobs.get_current_url():
+            return "detail_redirect"
         # 沟通按钮读不到：探测是否有网申形态的按钮（不同类名），避免误当 no_button
         button_text = await probe_apply_online_button()
         if is_apply_online_button(button_text):
@@ -374,7 +400,35 @@ async def _process_single_api_job(
             )
             return "filtered", sent_count, daily_sent_count
 
-    if not await _open_job_detail_page(job.detail_url):
+    open_status = await _open_job_detail_page(job.detail_url)
+    if open_status == "redirected":
+        # 2026-10-20 朋友实测事故：平台反爬把直开的详情页重定向到官网/
+        # 类目页——按钮与 JD 都不存在，与"打不开""按钮缺失"是完全不同
+        # 的故障类别。独立分类 + 前端可见，调度层据此触发自动降级。
+        _log_skipped(
+            skipped_log_path,
+            job=job,
+            job_key=dedupe_key,
+            send_mode="auto",
+            reason="detail_redirect",
+            details={
+                "stage": "detail_page",
+                "job_title": job.title,
+                "redirected_to": finding_jobs.get_current_url(),
+            },
+        )
+        events.emit(
+            "job_skipped",
+            platform="boss",
+            title=job.title,
+            reason="detail_redirect",
+            detail="详情页被平台重定向（疑似反爬限制），稍后自动重试或切换稳妥模式",
+        )
+        # 重定向≠已处理：回滚内存标记，降级到 DOM 流后此岗位仍可投
+        if dedupe_key:
+            seen_job_keys.discard(dedupe_key)
+        return "detail_redirect", sent_count, daily_sent_count
+    if open_status != "ok":
         _log_skipped(
             skipped_log_path,
             job=job,
@@ -639,13 +693,17 @@ async def _process_single_api_job(
                 detail="点击时才发现该岗位为网申入口，已放弃点击动作并平滑推进下一岗位",
             )
         else:
-            # 2026-10-20 修复：no_button（详情页找不到沟通按钮）作为独立
-            # reason 保留，不再笼统归入 send_failed——按钮 DOM 形态变化
-            # 时用户和我们都要能一眼看出主因。
+            # 2026-10-20 修复：no_button（详情页找不到沟通按钮）与
+            # detail_redirect（发送途中被平台踢离详情页）作为独立 reason
+            # 保留，不再笼统归入 send_failed——用户和我们都要能一眼看出主因。
             reason = (
                 "already_contacted"
                 if status == "already_contacted"
-                else ("no_button" if status == "no_button" else "send_failed")
+                else (
+                    "no_button"
+                    if status == "no_button"
+                    else ("detail_redirect" if status == "detail_redirect" else "send_failed")
+                )
             )
             if status == "already_contacted":
                 _log_seen(seen_jobs_path, job=job, job_key=dedupe_key, send_mode="auto")
@@ -672,6 +730,7 @@ async def _process_single_api_job(
             "apply_online": "网申岗位（需外部系统投递），已安全跳过",
             "already_contacted": "该岗位此前已沟通过，自动跳过",
             "no_button": "详情页未找到「立即沟通」按钮，已跳过；下一轮会自动重试",
+            "detail_redirect": "详情页被平台重定向（疑似反爬限制），稍后自动重试或切换稳妥模式",
             "send_failed": "发送失败（超时/异常），已跳过；下一轮会自动重试",
         }
         events.emit(
@@ -700,8 +759,13 @@ async def _run_search_api_flow(
     dry_run: bool,
     scan_only: bool,
     greeting: str,
-) -> None:
-    """API 直读搜索结果：按页枚举 → 逐个开详情页 → 本地筛选 → 发送。"""
+) -> str:
+    """API 直读搜索结果：按页枚举 → 逐个开详情页 → 本地筛选 → 发送。
+
+    返回 stop_reason（2026-10-20 反爬重定向事故改造）：调度层据此判断
+    是否自动降级——"detail_redirect_blocked"（平台拦截直开详情页，连续
+    3 个熔断）时 runner_loop 会无缝切换 DOM 稳妥模式继续投递。
+    """
     from boss_zhipin.website_oper import finding_jobs, job_api
 
     if not scan_only:
@@ -772,6 +836,10 @@ async def _run_search_api_flow(
     # 网申岗位跳过数（2026-10-17 守护 Agent）：独立分类，让用户清楚这些
     # 岗位不是"失败"而是平台形态不支持站内直聊。
     skipped_apply_online = 0
+    # 详情页被平台重定向数（2026-10-20 朋友实测事故）：反爬拦截直开访问，
+    # 连续 3 个触发熔断 → 调度层自动降级 DOM 稳妥模式。
+    skipped_redirects = 0
+    consecutive_redirects = 0
     failed_count = 0
     scanned_count = 0
     # 详情页健康度（2026-10-17 二次实测）：连续详情页取不到 JD = 会话被
@@ -845,6 +913,8 @@ async def _run_search_api_flow(
             message += "（平台提示今日上限已安全停止）"
         elif stop == "api_error":
             message += "（搜索接口风控限流，稍后再试）"
+        elif stop == "detail_redirect_blocked":
+            message += "（平台拦截详情页直开访问，自动切换稳妥模式继续投递）"
         per_city = sorted(
             (
                 {"city": city, **counts}
@@ -866,6 +936,7 @@ async def _run_search_api_flow(
             skipped_filtered=skipped_filtered,
             skipped_already_contacted=skipped_already,
             skipped_apply_online=skipped_apply_online,
+            skipped_redirects=skipped_redirects,
             failed=failed_count,
             stop_reason=stop,
             per_city=per_city,
@@ -1101,9 +1172,26 @@ async def _run_search_api_flow(
                         )
                         halt_flow = "api_error"
                         break
+                elif status == "detail_redirect":
+                    # 2026-10-20 朋友实测事故：平台反爬把直开的详情页重定向
+                    # 走（实测踢回官网首页/类目页）。连续 3 个 = 会话级拦截
+                    # 信号——继续硬扫纯属空烧（每个岗位还要吃 6~15s 阅读停顿
+                    # + 节流）。触发熔断交给调度层自动降级 DOM 稳妥模式。
+                    skipped_redirects += 1
+                    consecutive_redirects += 1
+                    consecutive_failures = 0  # 重定向不是"打不开"，独立计数
+                    if consecutive_redirects >= 3:
+                        log.warning(
+                            "[api-flow] 连续 %d 个详情页被平台重定向（反爬拦截直开访问），"
+                            "触发熔断，交由调度层自动切换稳妥模式",
+                            consecutive_redirects,
+                        )
+                        halt_flow = "detail_redirect_blocked"
+                        break
                 elif status == "sent":
                     sends_since_break += 1
                     consecutive_failures = 0
+                    consecutive_redirects = 0
                 if status == "captcha":
                     halt_flow = "captcha"
                     break
@@ -1312,3 +1400,4 @@ async def _run_search_api_flow(
 
     _emit_flow_summary(stop_reason)
     log.info("[api-flow] 结束：本轮发送 %d 条，翻到第 %d 页", sent_count, page)
+    return stop_reason

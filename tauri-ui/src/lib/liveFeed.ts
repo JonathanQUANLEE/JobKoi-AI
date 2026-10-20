@@ -62,6 +62,7 @@ const SKIP_REASON_LABELS: Record<string, string> = {
   // 的缺失 reason：任何处理完的岗位都必须有明确去向，禁止静默消失。
   no_button: "详情页未找到「立即沟通」按钮，下轮自动重试",
   detail_open_failed: "详情页打开失败，下轮自动重试",
+  detail_redirect: "详情页被平台重定向（反爬），稍后自动重试或切换稳妥模式",
   send_failed: "发送失败（超时/异常），下轮自动重试",
 };
 

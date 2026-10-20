@@ -143,14 +143,50 @@ async def send_job_descriptions_to_chat(
         and not cfg.review_before_send
         and finding_jobs.get_tab() is not None
     ):
-        await _run_search_api_flow(
+        api_stop_reason = await _run_search_api_flow(
             usr_name=usr_name,
             url=actual_url,
             dry_run=dry_run,
             scan_only=cfg.scan_only,
             greeting=cfg.fixed_greeting,
         )
-        return
+        if api_stop_reason != "detail_redirect_blocked":
+            return
+        # 2026-10-20 朋友实测事故的自动降级：平台反爬把直开的详情页重定向
+        # 走（连续 3 个熔断）——API 直读流在此会话已不可用。DOM 稳妥模式
+        # 完全在搜索页内点击岗位卡片展开详情面板（无直开导航 = 不触发该
+        # 反爬），按钮链路 v0.8.2 已升级多级探测。导航回搜索页无缝接管，
+        # 用户无需任何手动处理。
+        events.emit(
+            "agent_intervene",
+            platform="boss",
+            level="warn",
+            title="BOSS 平台风控",
+            action="自动切换稳妥模式",
+            detail=(
+                "平台拦截了直接打开岗位详情页（连续重定向），已自动切换为"
+                "搜索页内点击模式继续投递，无需手动处理"
+            ),
+        )
+        log.warning(
+            "[runner] API 直读流被详情页重定向熔断，自动降级 DOM 稳妥模式继续投递"
+        )
+        try:
+            from boss_zhipin.website_oper.core.cdp_guard import cdp_call
+
+            tab = finding_jobs.get_tab()
+            if tab is not None:
+                await cdp_call(tab.get(url), timeout=30, label="降级回搜索页")
+                await finding_jobs._wait_url_stable(stable_for=1.5, timeout=20)
+                events.emit(
+                    "page_opened",
+                    requested_url=url,
+                    actual_url=finding_jobs.get_current_url(),
+                    redirected=False,
+                )
+        except Exception as e:  # noqa: BLE001
+            log.warning("降级回搜索页失败（DOM 流将按当前页继续）：%s", e)
+        # 落入下方 DOM 流继续（页面内点击链路，无直开导航）
 
     if cfg.stop_on_captcha and await finding_jobs.captcha_visible():
         # 2026-10-18 用户需求：验证码必须"强提醒"——强制前置浏览器窗口 +
