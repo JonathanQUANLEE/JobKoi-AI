@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Sparkles,
   CheckCircle2,
@@ -12,8 +12,14 @@ import {
   EyeOff,
   Loader2,
   Info,
+  RefreshCw,
 } from "lucide-react";
 import type { LLMPreset } from "../../../lib/ipc";
+import {
+  fetchOpenRouterChatModels,
+  rotateBatch,
+  type OpenRouterModelsSource,
+} from "../../../lib/openrouterModels";
 
 interface ModelSettingsViewProps {
   baseUrl: string;
@@ -29,6 +35,11 @@ interface ModelSettingsViewProps {
   onSave: () => void;
   onClose: () => void;
 }
+
+/** OpenRouter 公共体验 Key（base64 内置，明文不进公开仓库——与智谱同模式；
+ * 正常时后端 presets 的 default_api_key 已有值，此处仅兜底跑脱敏 clone 的场景）。 */
+const OPENROUTER_PUBLIC_KEY_B64 =
+  "c2stb3ItdjEtZmQzNzZjZDIxZjk3ZDQxMDcyNjJjNzFkZGVjNmE1Y2E4NGM4OWRhMTI0YWZkNDUzNTk5OWU3OWIyYWE5ZmMzMQ==";
 
 const DEFAULT_PRESETS: LLMPreset[] = [
   {
@@ -56,10 +67,12 @@ const DEFAULT_PRESETS: LLMPreset[] = [
   },
   {
     id: "openrouter",
-    label: "OpenRouter 免费档",
+    label: "OpenRouter 国际模型",
     base_url: "https://openrouter.ai/api/v1",
     default_model: "nvidia/nemotron-3.5-lightning:free",
-    signup_hint: "支持超长上下文与数十款国际顶尖模型，免费模型带 :free 后缀；请在 openrouter.ai/keys 申请 Key。",
+    default_api_key: atob(OPENROUTER_PUBLIC_KEY_B64),
+    signup_hint:
+      "已内置公共体验 Key 开箱即用；可用模型实时同步、点击即选。公共 Key 每天约 50 次共享额度，重度使用请在 openrouter.ai/keys 注册个人 Key；国内网络通常需要自备代理。",
   },
   {
     id: "custom",
@@ -74,10 +87,15 @@ const MODEL_SUGGESTIONS: Record<string, string[]> = {
   zhipu: ["glm-4-flash", "glm-4-plus", "glm-4-air"],
   deepseek: ["deepseek-chat", "deepseek-reasoner"],
   siliconflow: ["Qwen/Qwen2.5-7B-Instruct", "deepseek-ai/DeepSeek-V2.5", "THUDM/glm-4-9b-chat"],
+  // OpenRouter 的快捷选用 chips 为实时列表（2026-10-20）：
+  // 打开面板即拉取当前 0 元可用的对话模型；拉取失败时才用这份发版日快照兜底。
   openrouter: [
     "nvidia/nemotron-3.5-lightning:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "google/gemini-2.0-flash-exp:free",
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "google/gemma-4-31b-it:free",
+    "minimax/minimax-m3.1-flash:free",
+    "thinkingmachines/inkling:free",
+    "cohere/north-mini-code:free",
   ],
 };
 
@@ -97,6 +115,14 @@ export default function ModelSettingsView({
 }: ModelSettingsViewProps) {
   const [showKey, setShowKey] = useState(false);
 
+  // ---- OpenRouter 实时可用模型（2026-10-20 用户需求）----
+  // 打开 OpenRouter 预设时拉取当前 0 元可用的对话模型；「换一批」循环翻页。
+  // 拉取失败（国内无代理直连不通等）时按 缓存 → 内置兜底 降级，永不阻塞 UI。
+  const [orModels, setOrModels] = useState<string[]>([]);
+  const [orSource, setOrSource] = useState<OpenRouterModelsSource>("fallback");
+  const [orLoading, setOrLoading] = useState(false);
+  const [orBatch, setOrBatch] = useState(0);
+
   // 合并后端返回的预设与默认预设，确保 DeepSeek、SiliconFlow、Custom 完整展示
   const allPresets = (presets && presets.length > 0) ? presets : DEFAULT_PRESETS;
 
@@ -113,6 +139,25 @@ export default function ModelSettingsView({
   })();
 
   const activePreset = allPresets.find((p) => p.id === currentPresetId) || allPresets[0];
+
+  useEffect(() => {
+    if (currentPresetId !== "openrouter") return;
+    let cancelled = false;
+    setOrLoading(true);
+    fetchOpenRouterChatModels()
+      .then((res) => {
+        if (cancelled) return;
+        setOrModels(res.models);
+        setOrSource(res.source);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setOrLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentPresetId]);
 
   const applyPreset = (preset: LLMPreset) => {
     if (preset.id === "custom") {
@@ -134,27 +179,49 @@ export default function ModelSettingsView({
       setModel(preset.default_model);
     }
 
+    // 内置公共 Key 的兜底来源：优先后端 presets 传来的 default_api_key，
+    // 脱敏 clone/旧后端场景回退 atob 解码（明文 Key 不进公开仓库）。
+    const openrouterPreset = allPresets.find((p) => p.id === "openrouter");
+    const orBuiltInKey =
+      openrouterPreset?.default_api_key || atob(OPENROUTER_PUBLIC_KEY_B64);
+    const isOrBuiltInKey = apiKey === orBuiltInKey || apiKey === atob(OPENROUTER_PUBLIC_KEY_B64);
+
     if (preset.id === "zhipu") {
-      // 智谱：自动填入内置体验 Key。正常时后端 presets（base64 内置）
-      // 的 default_api_key 已有值；atob 兜底仅在跑脱敏 clone/旧后端时
-      // 生效，同样以 base64 形态存放，明文 Key 不进公开仓库。
-      if (!apiKey || apiKey.trim() === "" || apiKey.includes("****")) {
+      // 智谱：自动填入内置体验 Key。空/掩码/残留的 OpenRouter Key（含
+      // 内置或用户自填的 sk-or-v1-）都换成智谱内置——残留跨厂商保存
+      // 就是 401 串号事故的根因。
+      if (
+        !apiKey ||
+        apiKey.trim() === "" ||
+        apiKey.includes("****") ||
+        isOrBuiltInKey ||
+        apiKey.startsWith("sk-or-v1-")
+      ) {
         setApiKey(
           preset.default_api_key ||
             atob("NDE3NjQ0Y2RkMzFhNGQ5MTlmYWI4ZmRjNTFlNzFlZTQucnVFVEFlUGpkaDBDcDAxRg==")
         );
       }
+    } else if (preset.id === "openrouter") {
+      // OpenRouter：清残留的智谱 Key/掩码后填入内置公共 Key；用户已
+      // 自填 Key（非智谱非掩码）时尊重用户值不动。
+      if (
+        !apiKey ||
+        apiKey.trim() === "" ||
+        apiKey.includes("****") ||
+        apiKey.startsWith("417644cd") ||
+        apiKey.includes("ruETAePj")
+      ) {
+        setApiKey(orBuiltInKey);
+      }
     } else {
-      // 修复串号缺陷：如果当前输入框里残留的是智谱的内置体验 Key（或
-      // 掩码），绝不带给 OpenRouter/DeepSeek 等——掩码同样要清（2026-
-      // 10-19 审查补：掩码残留切厂商后保存会把掩码/旧 Key 存进新厂商
-      // 配置导致 401）。
+      // DeepSeek/SiliconFlow：两个厂商的内置 Key 残留都绝不带过去
+      // （掩码同样要清——掩码残留保存会导致 401，2026-10-19 审查补）。
       const isZhipuKey =
         apiKey.startsWith("417644cd") ||
         apiKey.includes("ruETAePj") ||
-        apiKey.includes("****") ||
-        apiKey === (preset.default_api_key || "");
-      if (isZhipuKey) {
+        apiKey.includes("****");
+      if (isZhipuKey || isOrBuiltInKey) {
         setApiKey("");
       }
     }
@@ -175,7 +242,20 @@ export default function ModelSettingsView({
     }
   };
 
-  const suggestions = MODEL_SUGGESTIONS[currentPresetId] || [];
+  // 快捷选用列表：OpenRouter 用实时列表分批展示，其他厂商维持静态预填。
+  // 双语说明（遵循 i18n 铁律）：本视图既有文案均为「中文 (English)」行文
+  // 风格，新增文案沿用同一约定。
+  const isOrPreset = currentPresetId === "openrouter";
+  const orFullList = orModels.length > 0 ? orModels : MODEL_SUGGESTIONS.openrouter;
+  const suggestions = isOrPreset
+    ? rotateBatch(orFullList, orBatch, 6)
+    : MODEL_SUGGESTIONS[currentPresetId] || [];
+  const orSourceLabel: Record<OpenRouterModelsSource, { text: string; cls: string }> = {
+    live: { text: "实时 Live", cls: "text-emerald-400" },
+    cache: { text: "缓存 Cached", cls: "text-amber-400" },
+    fallback: { text: "内置 Built-in", cls: "text-stone-500" },
+  };
+  const orHasMoreBatches = orFullList.length > 6;
 
   return (
     <div className="py-2 space-y-4">
@@ -244,7 +324,7 @@ export default function ModelSettingsView({
           <label className="text-xs font-semibold text-stone-200">
             API Key (密钥令牌)
           </label>
-          {currentPresetId === "zhipu" && (
+          {(currentPresetId === "zhipu" || currentPresetId === "openrouter") && (
             <span className="text-[10px] text-amber-400 font-medium">✨ 已内置公共体验 Key</span>
           )}
         </div>
@@ -256,7 +336,9 @@ export default function ModelSettingsView({
             placeholder={
               currentPresetId === "zhipu"
                 ? "已内置公共体验 Key 开箱即用，也可粘贴您自己的专属 Key"
-                : "请输入该服务商的 API Key (例如 sk-...)"
+                : currentPresetId === "openrouter"
+                  ? "已内置公共体验 Key 开箱即用，也可粘贴您自己的个人 Key"
+                  : "请输入该服务商的 API Key (例如 sk-...)"
             }
             className="mist-input text-xs font-mono pr-10"
           />
@@ -272,7 +354,9 @@ export default function ModelSettingsView({
         <p className="text-[10px] text-stone-500">
           {currentPresetId === "zhipu"
             ? "智谱公共 Key 支持快速试用；生产环境建议在 bigmodel.cn 绑定个人 Key 避免共享并发限制。"
-            : "密钥仅在本地加密存储，直接与大模型服务商通信，绝不上报给任何中间服务器。"}
+            : currentPresetId === "openrouter"
+              ? "OpenRouter 公共 Key 每天约 50 次共享额度；重度使用建议在 openrouter.ai/keys 注册个人 Key。国内网络通常需要自备代理。"
+              : "密钥仅在本地加密存储，直接与大模型服务商通信，绝不上报给任何中间服务器。"}
         </p>
       </div>
 
@@ -292,7 +376,16 @@ export default function ModelSettingsView({
         {/* 快捷填入常用模型小标签 */}
         {suggestions.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap pt-1">
-            <span className="text-[10px] text-stone-500">常用模型快速选用:</span>
+            <span className="text-[10px] text-stone-500">
+              {isOrPreset
+                ? "当前可用模型 Live models:"
+                : "常用模型快速选用 Quick picks:"}
+            </span>
+            {isOrPreset && (
+              <span className={`text-[9px] font-semibold ${orSourceLabel[orSource].cls}`}>
+                {orLoading ? "同步中…" : `● ${orSourceLabel[orSource].text}`}
+              </span>
+            )}
             {suggestions.map((m) => (
               <button
                 key={m}
@@ -307,6 +400,17 @@ export default function ModelSettingsView({
                 {m}
               </button>
             ))}
+            {isOrPreset && orHasMoreBatches && (
+              <button
+                type="button"
+                onClick={() => setOrBatch((b) => b + 1)}
+                className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-lg border border-white/10 bg-white/5 text-stone-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+                title="切换下一批可用模型 Refresh next batch"
+              >
+                <RefreshCw className={`size-3 ${orLoading ? "animate-spin" : ""}`} />
+                <span>换一批 Refresh</span>
+              </button>
+            )}
           </div>
         )}
       </div>

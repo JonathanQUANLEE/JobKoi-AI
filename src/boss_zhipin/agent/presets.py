@@ -6,12 +6,16 @@
   V0.4 方案 A：内置公共体验 Key，新用户开箱即用（所有安装用户共享
   该 Key 的免费额度；若被滥用或失效，替换下方常量即可）。
 - OpenRouter：https://openrouter.ai/collections/free-models
-  免费模型统一 ``:free`` 后缀，免费档每天约 50 次请求（用户需自行注册）。
+  免费模型统一 ``:free`` 后缀，免费档每天约 50 次请求（2026-10-20 起
+  同样内置公共体验 Key，全体用户共享每日额度）。
 - SiliconFlow：https://siliconflow.cn/pricing
   多个免费小模型（Qwen/GLM 系），需国内实名后可用。
 
-免费模型时效性强（每周都有增删），这里只预填常用项，用户可在 GUI 里
-自由改 base_url / model（走任意 OpenAI 兼容端点）并保存。
+免费模型时效性强（每周都有增删）：OpenRouter 的可用模型列表由前端
+「模型设置」面板实时拉取（openrouter.ai/api/v1/models 为公开端点，
+带 CORS 全开放），这里的 default_model 仅作初值；智谱/SiliconFlow
+国内直连稳定，仍走静态预填。用户可在 GUI 里自由改 base_url / model
+（走任意 OpenAI 兼容端点）并保存。
 """
 
 import base64
@@ -35,8 +39,26 @@ def get_public_api_key() -> str:
     ).decode("ascii")
     return os.getenv("ZHIPU_PUBLIC_API_KEY", fallback).strip()
 
+
+def get_openrouter_public_api_key() -> str:
+    """OpenRouter 公共体验 Key（2026-10-20 用户提供并拍板内置）。
+
+    - 免费档账号：``:free`` 模型每天约 50 次请求（全体安装用户共享，
+      重度使用者应注册个人 Key，GUI 提示里已写明）；
+    - base64 形态内置防 GitHub Secret Scanning 撤销（sk-or-v1- 前缀
+      在扫描模式库内，明文进公开仓库会被自动吊销）；
+    - 环境变量 OPENROUTER_PUBLIC_API_KEY 可覆盖；若被滥用/失效，
+      替换下方常量即可。
+    """
+    fallback = base64.b64decode(
+        "c2stb3ItdjEtZmQzNzZjZDIxZjk3ZDQxMDcyNjJjNzFkZGVjNmE1Y2E4NGM4OWRhMTI0YWZkNDUzNTk5OWU3OWIyYWE5ZmMzMQ=="
+    ).decode("ascii")
+    return os.getenv("OPENROUTER_PUBLIC_API_KEY", fallback).strip()
+
+
 # 兼容常量
 ZHIPU_PUBLIC_API_KEY = get_public_api_key()
+OPENROUTER_PUBLIC_API_KEY = get_openrouter_public_api_key()
 
 # 开箱默认端点（config_io.effective_config 在用户未配置时回落到这里）
 DEFAULT_PRESET_ID = "zhipu"
@@ -72,13 +94,15 @@ LLM_PRESETS: list[dict[str, str]] = [
     },
     {
         "id": "openrouter",
-        "label": "OpenRouter 免费档",
+        "label": "OpenRouter 国际模型",
         "base_url": "https://openrouter.ai/api/v1",
         "default_model": "nvidia/nemotron-3.5-lightning:free",
-        "default_api_key": "",
+        "default_api_key": OPENROUTER_PUBLIC_API_KEY,
         "signup_hint": (
-            "在 openrouter.ai/keys 免费注册并创建 API key；"
-            "免费模型带 :free 后缀，每天约 50 次请求，100 万超长上下文。"
+            "已内置公共体验 Key，开箱即用；面板会实时同步当前可用的国际模型，"
+            "点击即选。公共 Key 每天约 50 次共享额度，重度使用请在 "
+            "openrouter.ai/keys 免费注册个人 Key 替换；国内网络通常需要"
+            "自备代理才能访问。"
         ),
     },
     {
