@@ -11,7 +11,7 @@
 # 三项双模式必须一致，由 tests/test_standalone_sync.py 守卫。
 "$schema" = "https://schema.tauri.app/config/2"
 productName = "JobKoi-AI · 全智能求职锦鲤助手"
-version = "0.8.1"
+version = "0.8.2"
 identifier = "com.jonathanquanlee.jobkoi-ai"
 
 [build]
