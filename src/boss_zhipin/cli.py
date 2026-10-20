@@ -74,32 +74,68 @@ def get_label() -> str:
     return os.getenv("BOSS_LABEL", "").strip()
 
 
+def _get_start_city_code() -> str:
+    """从 BOSS_START_CITY 或 BOSS_PAGE_FILTERS_JSON 获取首个意向城市的 BOSS 城市代码。"""
+    from boss_zhipin.website_oper.core.page_filter_ctrl import (
+        BOSS_CITY_CODES,
+        expand_nationwide_cities,
+    )
+
+    city_name = os.getenv("BOSS_START_CITY", "").strip()
+    if not city_name:
+        raw_filters = os.getenv("BOSS_PAGE_FILTERS_JSON", "").strip()
+        if raw_filters:
+            try:
+                import json
+
+                filters_data = json.loads(raw_filters)
+                city_cfg = filters_data.get("city")
+                if isinstance(city_cfg, dict) and bool(city_cfg.get("enabled", True)):
+                    raw_values = [
+                        str(c).strip()
+                        for c in city_cfg.get("values") or []
+                        if str(c).strip()
+                    ]
+                    expanded = expand_nationwide_cities(raw_values)
+                    if expanded:
+                        city_name = expanded[0]
+            except Exception:
+                pass
+    if city_name and city_name in BOSS_CITY_CODES:
+        return BOSS_CITY_CODES[city_name]
+    return ""
+
+
 def get_start_url() -> str:
     """BOSS 起始页。
 
-    优先级（2026-10-11 语义升级）：
+    优先级（2026-10-11 语义升级 + 2026-10-20 城市直链增强）：
     1. ``BOSS_START_URL`` 显式指定（旧 CLI/bat 流程）；
-    2. **画像搜索词构造搜索页 URL**（``BOSS_LABEL`` 存在时）——GUI 巡航
-       的关键：启动后直接导航到 ``/web/geek/jobs?query=<搜索词>``，
-       搜出来的岗位与画像强相关；否则会落在推荐页，搜出什么全凭账号
-       记忆（实测出现过「郑州爬虫工程师」这种与画像完全无关的 feed）；
+    2. **画像搜索词与城市构造搜索页 URL**（``BOSS_LABEL`` / 城市存在时）——GUI 巡航
+       的关键：启动后直接导航到 ``/web/geek/jobs?query=<搜索词>&city=<代码>``，
+       搜出来的岗位与画像强相关且直达目标城市（防止因缺失 city 跑去 IP 属地或
+       郑州等浏览器缓存历史城市）；
     3. 都没有 → 默认推荐 feed。
     """
     explicit = os.getenv("BOSS_START_URL", "").strip()
     if explicit:
         return explicit
     label = os.getenv("BOSS_LABEL", "").strip()
-    if label:
+    city_code = _get_start_city_code()
+
+    if label or city_code:
         from urllib.parse import quote
 
         from boss_zhipin.config.query_fission import split_search_keywords
 
-        # 多岗位输入只取第一个词构造起始 URL（2026-10-15）：旧逻辑把整串
-        # "A, B," 塞进 query 参数，BOSS 按全文匹配搜出的岗位与画像无关。
-        # 其余关键词由猎聘/51job 裂变链路消化；BOSS 多词轮换属 Phase 2。
-        keywords = split_search_keywords(label)
-        first_kw = keywords[0] if keywords else label
-        return f"https://www.zhipin.com/web/geek/jobs?query={quote(first_kw)}"
+        params = []
+        if label:
+            keywords = split_search_keywords(label)
+            first_kw = keywords[0] if keywords else label
+            params.append(f"query={quote(first_kw)}")
+        if city_code:
+            params.append(f"city={city_code}")
+        return f"https://www.zhipin.com/web/geek/jobs?{'&'.join(params)}"
     return RECOMMEND_URL
 
 

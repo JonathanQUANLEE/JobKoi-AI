@@ -8,6 +8,21 @@ import os
 log = logging.getLogger(__name__)
 
 
+class ContactSkipped(RuntimeError):
+    """按钮状态表明岗位不可直聊（已沟通过 / 网申岗）。
+
+    调用方（loop_modes）必须按「跳过」记账：不计数、不落 sent、
+    不触发聊天链路自愈——与「发送失败需自愈」是完全不同的语义。
+    2026-10-20 审查修复：旧版此处静默 return，调用方无法区分
+    「已发送」与「安全跳过」，导致跳过岗位被虚记为已投递。
+    """
+
+    def __init__(self, reason: str, button_text: str = ""):
+        super().__init__(f"{reason}: {button_text}" if button_text else reason)
+        self.reason = reason
+        self.button_text = button_text
+
+
 async def send_response_and_go_back(response: str) -> None:
     """在 BOSS 沟通页发送 ``response`` 然后退回到列表。"""
     from boss_zhipin.website_oper import finding_jobs
@@ -28,9 +43,40 @@ async def click_contact_and_send_response(response: str) -> None:
     from boss_zhipin.website_oper import finding_jobs
     from boss_zhipin.website_oper.core.limit_guard import check_platform_limit
 
-    contact_xpath = "//a[contains(@class, 'op-btn-chat')]"
-    if not await finding_jobs.click_by_xpath(contact_xpath, timeout=10):
-        raise RuntimeError("立即沟通按钮未找到")
+    button_text = (
+        await finding_jobs.get_text_by_css(
+            "a.btn-startchat, a.op-btn-chat, .btn-startchat, .op-btn-chat"
+        )
+        or ""
+    ).strip()
+    if "继续沟通" in button_text or "继续聊天" in button_text:
+        log.info("BOSS 显示「%s」，该岗位此前已沟通，安全跳过", button_text)
+        raise ContactSkipped("already_contacted", button_text)
+    if is_apply_online_button(button_text):
+        log.info("BOSS 按钮为「%s」，该岗位需外部系统网申，安全跳过", button_text)
+        raise ContactSkipped("apply_online", button_text)
+
+    contact_xpaths = (
+        "//a[contains(@class, 'btn-startchat')]",
+        "//a[contains(@class, 'op-btn-chat')]",
+        "//a[contains(normalize-space(text()), '立即沟通')]",
+        "//button[contains(@class, 'btn-startchat')]",
+        "//button[contains(normalize-space(text()), '立即沟通')]",
+        "//*[contains(@class, 'btn-startchat')]",
+        "//*[contains(@class, 'op-btn-chat')]",
+    )
+    clicked = False
+    for xpath in contact_xpaths:
+        if await finding_jobs.click_by_xpath(xpath, timeout=1.5):
+            clicked = True
+            break
+    if not clicked:
+        fallback_xpath = (
+            "//a[contains(@class, 'btn-startchat') or contains(@class, 'op-btn-chat') or contains(normalize-space(text()), '立即沟通')] "
+            "| //button[contains(@class, 'btn-startchat') or contains(normalize-space(text()), '立即沟通')]"
+        )
+        if not await finding_jobs.click_by_xpath(fallback_xpath, timeout=5):
+            raise RuntimeError("立即沟通按钮未找到")
 
     await asyncio.sleep(1)
     await check_platform_limit()

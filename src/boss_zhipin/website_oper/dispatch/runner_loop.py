@@ -332,9 +332,6 @@ async def send_job_descriptions_to_chat(
 
                 if dedupe_key:
                     seen_job_keys.add(dedupe_key)
-                    _log_seen(
-                        cfg.seen_jobs_path, job=job, job_key=dedupe_key, send_mode=cfg.send_mode
-                    )
                     barren_reloads = 0
                 consecutive_duplicates = 0
 
@@ -346,7 +343,9 @@ async def send_job_descriptions_to_chat(
                     jd_preview=job_description[:80],
                 )
 
-                element = await finding_jobs.get_text_by_css(".op-btn.op-btn-chat")
+                element = await finding_jobs.get_text_by_css(
+                    "a.btn-startchat, a.op-btn-chat, .btn-startchat, .op-btn-chat"
+                )
                 log.info("chat 按钮文字: %r", element)
                 button_text = (element or "").strip()
                 if not button_text:
@@ -372,6 +371,13 @@ async def send_job_descriptions_to_chat(
                             "button_text": button_text,
                         },
                     )
+                    if dedupe_key:
+                        _log_seen(
+                            cfg.seen_jobs_path,
+                            job=job,
+                            job_key=dedupe_key,
+                            send_mode=cfg.send_mode,
+                        )
                     events.emit(
                         "job_skipped",
                         platform="boss",
@@ -394,8 +400,11 @@ async def send_job_descriptions_to_chat(
                     advance_position()
                     await asyncio.sleep(3)
                     continue
-                if button_text != "立即沟通":
-                    already_contacted = "沟通" in button_text
+                if "立即沟通" not in button_text:
+                    # 2026-10-20 审查修复：旧版严格相等（!= "立即沟通"）会把
+                    # 「立即沟通+多余文案」误判进本分支，且「继续聊天」（不含
+                    # "沟通"二字）识别不出已沟通态——改为包含判定 + 聊天兜底。
+                    already_contacted = "沟通" in button_text or "聊天" in button_text
                     skip_reason = (
                         "already_contacted" if already_contacted else "contact_unavailable"
                     )
@@ -417,6 +426,16 @@ async def send_job_descriptions_to_chat(
                             "button_text": button_text,
                         },
                     )
+                    if already_contacted and dedupe_key:
+                        _log_seen(
+                            cfg.seen_jobs_path,
+                            job=job,
+                            job_key=dedupe_key,
+                            send_mode=cfg.send_mode,
+                        )
+                    elif not already_contacted and dedupe_key:
+                        # 按钮暂不可用/DOM异常：回滚内存标记，允许后续重试
+                        seen_job_keys.discard(dedupe_key)
                     events.emit(
                         "job_skipped",
                         platform="boss",
@@ -429,7 +448,7 @@ async def send_job_descriptions_to_chat(
                     await asyncio.sleep(3)
                     continue
 
-                if element == "立即沟通":
+                if "立即沟通" in button_text:
                     matched, reason, stage_name, details = evaluate_job_match(
                         job,
                         job_description,
@@ -461,6 +480,13 @@ async def send_job_descriptions_to_chat(
                             reason=stage_name,
                             details=details,
                         )
+                        if dedupe_key:
+                            _log_seen(
+                                cfg.seen_jobs_path,
+                                job=job,
+                                job_key=dedupe_key,
+                                send_mode=cfg.send_mode,
+                            )
                         events.emit(
                             "job_skipped",
                             platform="boss",
@@ -483,11 +509,19 @@ async def send_job_descriptions_to_chat(
                             send_mode=cfg.send_mode,
                             details=details,
                         )
+                        if dedupe_key:
+                            _log_seen(
+                                cfg.seen_jobs_path,
+                                job=job,
+                                job_key=dedupe_key,
+                                send_mode=cfg.send_mode,
+                            )
                         advance_position()
                         await asyncio.sleep(3)
                         continue
 
                     if cfg.auto_send_fixed_greeting:
+                        prev_sent_count = sent_count
                         should_stop, sent_count, daily_sent_count = await handle_auto_send_job(
                             job_index=job_index,
                             job=job,
@@ -505,6 +539,23 @@ async def send_job_descriptions_to_chat(
                             sent_count=sent_count,
                             daily_sent_count=daily_sent_count,
                         )
+                        if sent_count > prev_sent_count:
+                            # 真实发送成功才落 seen。dry-run 不落（2026-10-20
+                            # 审查修复）：演练是彩排，若把岗位烧进 seen 账本，
+                            # 后续真实巡航会全部误判 duplicate 跳过——正是用户
+                            # 反馈的「重启循环全报已投递」缺陷的另一种触发形态。
+                            # 演练的去重由内存 seen_job_keys 在本轮内兜底。
+                            if dedupe_key:
+                                _log_seen(
+                                    cfg.seen_jobs_path,
+                                    job=job,
+                                    job_key=dedupe_key,
+                                    send_mode=cfg.send_mode,
+                                )
+                        else:
+                            # 发送未成功（自愈跳过/异常）：回滚内存标记，不落盘 seen_jobs，防止下一轮误判为已投递过
+                            if dedupe_key:
+                                seen_job_keys.discard(dedupe_key)
                         if should_stop:
                             break
                         advance_position()
@@ -525,6 +576,18 @@ async def send_job_descriptions_to_chat(
                             send_mode=cfg.send_mode,
                             details=details,
                         )
+                        if status in ("sent", "skip") and not dry_run and dedupe_key:
+                            # dry-run 的 "sent" 是演练记账，不落 seen（同 auto
+                            # 分支：彩排绝不能烧掉真实巡航的岗位池）
+                            _log_seen(
+                                cfg.seen_jobs_path,
+                                job=job,
+                                job_key=dedupe_key,
+                                send_mode=cfg.send_mode,
+                            )
+                        elif status not in ("sent", "skip") or dry_run:
+                            if dedupe_key:
+                                seen_job_keys.discard(dedupe_key)
                         if status == "quit":
                             break
                         await asyncio.sleep(3)

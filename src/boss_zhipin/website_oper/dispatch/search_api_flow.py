@@ -360,9 +360,9 @@ async def _process_single_api_job(
         seen_job_keys.discard(dedupe_key)
         return "failed", sent_count, daily_sent_count
 
-    # 详情页打开成功：此刻才把岗位永久记入已见（2026-10-18 审查修复——
-    # 打开失败的岗位不再被"烧掉"，见上方内存级去重注释）。
-    _log_seen(seen_jobs_path, job=job, job_key=dedupe_key, send_mode="auto")
+    # 详情页打开成功：此时仅在内存集合标记，等实际投递结果确定后再落盘 seen_jobs，
+    # 避免发送异常的岗位被提前永久记为已处理，导致下轮误判为"过去已投递过"
+
 
     if stop_on_captcha and await finding_jobs.captcha_visible():
         log.warning("详情页检测到验证码/安全验证，按 BOSS_STOP_ON_CAPTCHA 停止")
@@ -441,6 +441,7 @@ async def _process_single_api_job(
                 "job_title": job.title,
             },
         )
+        _log_seen(seen_jobs_path, job=job, job_key=dedupe_key, send_mode="auto")
         events.emit(
             "job_skipped",
             platform="boss",
@@ -466,6 +467,7 @@ async def _process_single_api_job(
                 "job_title": job.title,
             },
         )
+        _log_seen(seen_jobs_path, job=job, job_key=dedupe_key, send_mode="auto")
         return "already_contacted", sent_count, daily_sent_count
 
     if not button_text:
@@ -493,6 +495,7 @@ async def _process_single_api_job(
                 "job_title": job.title,
             },
         )
+        _log_seen(seen_jobs_path, job=job, job_key=dedupe_key, send_mode="auto")
         events.emit(
             "job_skipped",
             platform="boss",
@@ -526,6 +529,11 @@ async def _process_single_api_job(
         )
         sent_count += 1
         log.info("[DRY-RUN] 命中 %s（%s），不真实发送", job.title, job.company)
+        if scan_only:
+            # scan_only 是真实终态（扫描命中已落 sent 账本）：与 DOM 流一致
+            # 落 seen，下轮不重复扫描。dry_run 是彩排则绝不落 seen——否则
+            # 真实巡航会把演练过的岗位全部误判 duplicate（2026-10-20 审查对齐）。
+            _log_seen(seen_jobs_path, job=job, job_key=dedupe_key, send_mode="auto")
         return "dry_run", sent_count, daily_sent_count
 
     try:
@@ -578,10 +586,12 @@ async def _process_single_api_job(
             job.title,
             job.company,
         )
+        _log_seen(seen_jobs_path, job=job, job_key=dedupe_key, send_mode="auto")
     else:
         if status == "apply_online":
             # 点击瞬间按钮文案才渲染成网申的罕见形态：与点击前识别同语义处理
             reason = "apply_online"
+            _log_seen(seen_jobs_path, job=job, job_key=dedupe_key, send_mode="auto")
             events.emit(
                 "agent_intervene",
                 platform="boss",
@@ -592,6 +602,11 @@ async def _process_single_api_job(
             )
         else:
             reason = "already_contacted" if status == "already_contacted" else "send_failed"
+            if status == "already_contacted":
+                _log_seen(seen_jobs_path, job=job, job_key=dedupe_key, send_mode="auto")
+            else:
+                # 发送失败（超时/按钮未找到/异常）：回滚内存标记，不落盘 seen_jobs，防止下一轮巡航误判为已投递过
+                seen_job_keys.discard(dedupe_key)
         _log_skipped(
             skipped_log_path,
             job=job,

@@ -9,6 +9,7 @@ from typing import Any
 from boss_zhipin import audit
 from boss_zhipin.gui import events
 from boss_zhipin.website_oper.dispatch import loop_actions, rule_matcher
+from boss_zhipin.website_oper.dispatch.loop_actions import ContactSkipped
 from boss_zhipin.website_oper.dispatch.history_logger import (
     _log_sent,
     _log_skipped,
@@ -153,13 +154,46 @@ async def handle_auto_send_job(
     log.info("自动发送固定招呼语：%s", response)
     try:
         await loop_actions.click_contact_and_send_response(response)
+    except ContactSkipped as e:
+        # 按钮状态安全网（正常由 runner 预检拦截，这里兜点击瞬间的状态
+        # 漂移）：按跳过记账——不计数、不落 sent，绝不虚记已发送。
+        detail = (
+            f"BOSS 显示“{e.button_text}”，该岗位此前已沟通，自动跳过"
+            if e.reason == "already_contacted"
+            else f"BOSS 按钮为「{e.button_text}」，该岗位需外部系统网申，自动跳过"
+        )
+        log.info("⏭️ [按钮状态跳过 #%d] %s", job_index, detail)
+        _log_skipped(
+            skipped_log_path,
+            job=job,
+            job_key=dedupe_key,
+            send_mode=send_mode,
+            reason=e.reason,
+            details={
+                "stage": "contact_status",
+                "button_text": e.button_text,
+                "job_title": getattr(job, "title", ""),
+            },
+        )
+        events.emit(
+            "job_skipped",
+            platform="boss",
+            index=job_index,
+            reason=e.reason,
+            detail=detail,
+            title=getattr(job, "title", ""),
+        )
+        return False, sent_count, daily_sent_count
     except RuntimeError as e:
         # 聊天链路异常（#chat-input 未出现/发送后回不到列表/按钮未找到）：
         # 守护 Agent 自愈——清理弹窗、尽力回到岗位列表。恢复成功记跳过
         # 继续下一岗位；恢复失败才让异常传播（真·浏览器级故障停机是正确
         # 行为）。PlatformLimitReached 不在捕获范围（它必须穿透到主循环
-        # 触发安全停机）。注：若消息已实际发出但回列表失败，该岗位已在
-        # seen 账本，下轮自动按 duplicate/继续沟通 兜底，不会重复投递。
+        # 触发安全停机）。注：若消息已实际发出但回列表失败，本函数按
+        # 未发送回滚 seen 标记（runner 层）；下轮重扫时按钮会显示
+        # 「继续沟通」，由预检兜底记入 seen——按钮状态是防重复投递的
+        # 最终防线（2026-10-20 审查勘误：旧注释声称 seen 账本兜底，
+        # 在事务性去重改造后已不成立）。
         if not await loop_actions.recover_from_chat_failure():
             raise
         log.warning("岗位 #%d 聊天链路异常已自愈（%s），跳过该岗位继续", job_index, e)
@@ -373,6 +407,35 @@ async def handle_review_send_job(
         log.info("审核通过，发送固定招呼语：%s", response)
         try:
             await loop_actions.click_contact_and_send_response(response)
+        except ContactSkipped as e:
+            # 按钮状态安全网：与 auto 模式同语义——按跳过记账，不虚记已发送
+            detail = (
+                f"BOSS 显示“{e.button_text}”，该岗位此前已沟通，自动跳过"
+                if e.reason == "already_contacted"
+                else f"BOSS 按钮为「{e.button_text}」，该岗位需外部系统网申，自动跳过"
+            )
+            log.info("⏭️ [审核发送-按钮状态跳过 #%d] %s", job_index, detail)
+            _log_skipped(
+                skipped_log_path,
+                job=job,
+                job_key=dedupe_key,
+                send_mode=send_mode,
+                reason=e.reason,
+                details={
+                    "stage": "contact_status",
+                    "button_text": e.button_text,
+                    "job_title": getattr(job, "title", ""),
+                },
+            )
+            events.emit(
+                "job_skipped",
+                platform="boss",
+                index=job_index,
+                reason=e.reason,
+                detail=detail,
+                title=getattr(job, "title", ""),
+            )
+            return "skip"
         except RuntimeError as e:
             # 与 auto 模式同款守护 Agent 自愈：恢复成功记跳过继续，失败才传播
             if not await loop_actions.recover_from_chat_failure():
