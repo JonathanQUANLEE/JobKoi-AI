@@ -54,6 +54,7 @@ where = ["src"]
 # 兜底：没做 editable install（裸 venv + pip install pytest）也能跑测试。
 # uv sync 流程不依赖这行，但贡献者用别的环境管理时少踩一个坑。
 pythonpath = ["src"]
+testpaths = ["tests"]
 
 [dependency-groups]
 dev = [

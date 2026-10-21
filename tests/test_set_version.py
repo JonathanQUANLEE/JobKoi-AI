@@ -49,6 +49,7 @@ def _run(repo: Path, version_arg: str) -> subprocess.CompletedProcess:
         [sys.executable, str(repo / "scripts" / "set_version.py"), version_arg],
         capture_output=True,
         text=True,
+        encoding="utf-8"
     )
 
 
